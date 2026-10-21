@@ -12,6 +12,24 @@ export function conservationHolds(
   return Math.abs(s.offered - (s.admitted + s.rejected + s.networkDrop)) <= eps
 }
 
+export function requestConservationHolds(
+  s: {
+    created: number
+    completed: number
+    rejected: number
+    dropped: number
+    expired: number
+    inFlight: number
+  },
+  eps = EPS,
+): boolean {
+  return (
+    Math.abs(
+      s.created - (s.completed + s.rejected + s.dropped + s.expired + s.inFlight),
+    ) <= eps
+  )
+}
+
 export function backlogDeltaHolds(
   admitted: number,
   completed: number,

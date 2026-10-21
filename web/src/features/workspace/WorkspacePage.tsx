@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material'
-import { useNodesState } from '@xyflow/react'
+import { useEdgesState, useNodesState } from '@xyflow/react'
 import { TopNav } from '../../components/TopNav.tsx'
 import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
 import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
-import { initialNodes } from './graph.ts'
-import { aksRunPlan, useLibrary } from '../calibration/library.ts'
+import { WorkloadEditor } from './WorkloadEditor.tsx'
+import { initialEdges, initialNodes } from './graph.ts'
+import { getFault, getProfiles, useLibrary } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
-import { idleKpis, simulateAksBottleneck } from './simulate.ts'
+import { idleKpis, runWorkspace } from './simulate.ts'
+import { getWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import type { Bottleneck, KpiState, ServiceNodeData } from './types.ts'
 
 const seedBottlenecks: Bottleneck[] = [
@@ -60,40 +62,48 @@ export function WorkspacePage() {
   const [selected, setSelected] = useState<{ id: string; title: string; catalogId?: string }>()
   const [ran, setRan] = useState(false)
   const [runError, setRunError] = useState<string>()
+  const [runHint, setRunHint] = useState<string>()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const library = useLibrary()
-  const plan = aksRunPlan()
+  const draft = useWorkloadDraft()
 
   useEffect(() => {
     setCanvasReady(true)
   }, [])
 
   const kpisToShow = useMemo(() => kpis, [kpis])
+  const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
 
   function onRun() {
-    if (!plan.ok) {
-      setRunError(plan.reason)
+    const result = runWorkspace(nodes, edges, getWorkloadDraft(), getProfiles(), getFault())
+    if (!result.ok) {
+      setRunError(result.reason)
       return
     }
-    const result = simulateAksBottleneck()
     setRan(true)
     setRunError(undefined)
-    setKpis(result.kpis)
-    setBottlenecks([
-      result.bottleneck,
-      seedBottlenecks[1] as Bottleneck,
-    ])
+    setKpis(result.run.kpis)
+    setBottlenecks(result.run.bottlenecks)
+    setRunHint(result.run.hint)
     setNodes((current) =>
       current.map((node) => {
-        if (node.id !== 'aks') return node
+        if (node.type === 'zone') return node
         const data = node.data as ServiceNodeData
+        const stat = result.run.nodeStats[node.id]
+        if (!stat) {
+          return {
+            ...node,
+            data: { ...data, util: 0, p99: 'no traffic', meta: `${result.run.mode} · not on path` },
+          }
+        }
         return {
           ...node,
           data: {
             ...data,
-            util: result.util,
-            p99: `${result.mu.toFixed(1)} /s`,
-            meta: 'Azure · engine fluid mode',
+            util: stat.util,
+            p99: stat.p99,
+            meta: stat.meta,
           },
         }
       }),
@@ -113,9 +123,9 @@ export function WorkspacePage() {
         <Chip label="Saved" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', height: 20 }} />
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          Fluid-flow · 60 s · seed 4821
+          {modeLabel} · {draft.durationSec} s · seed {draft.seed}
         </Typography>
-        <Button variant="contained" onClick={onRun} disabled={!plan.ok}>
+        <Button variant="contained" onClick={onRun}>
           Run
         </Button>
       </Stack>
@@ -149,17 +159,12 @@ export function WorkspacePage() {
           <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'text.secondary' }}>
             Last run from @sds/engine
             {library.fault !== 'none' ? ` · fault ${library.fault}` : ''}
-            {plan.ok ? ` · slots ${plan.servers} ${plan.serversConfidence}` : ''}
+            {runHint ? ` · ${runHint}` : ''}
           </Typography>
         ) : null}
         {runError ? (
           <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'error.main' }}>
             {runError}
-          </Typography>
-        ) : null}
-        {!plan.ok ? (
-          <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'error.main' }}>
-            {plan.reason}
           </Typography>
         ) : null}
       </Stack>
@@ -170,7 +175,10 @@ export function WorkspacePage() {
             {canvasReady ? (
               <ArchitectureCanvas
                 nodes={nodes}
+                edges={edges}
                 onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                setEdges={setEdges}
                 onSelect={setSelected}
               />
             ) : (
@@ -190,15 +198,7 @@ export function WorkspacePage() {
             <Inspector bottlenecks={bottlenecks} selected={selected} />
           </>
         )}
-        {tab === 1 && (
-          <Box sx={{ p: 3 }}>
-            <Typography variant="h2">Workload</Typography>
-            <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-              Constant, Poisson, step and spike editors ship in a later phase. This run uses Peak
-              evening: 51,200 rps.
-            </Typography>
-          </Box>
-        )}
+        {tab === 1 && <WorkloadEditor />}
         {tab === 2 && <FaultsPanel />}
       </Box>
     </Box>

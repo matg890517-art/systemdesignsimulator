@@ -77,3 +77,22 @@ export type ResultsReport = {
   bottlenecks: Bottleneck[]
   kpis: KpiState
 }
+
+export type NodeRunStat = {
+  util: number
+  completed: number
+  rejected: number
+  offered: number
+  mu: number
+  capped: boolean
+  p99: string
+  meta: string
+}
+
+export type WorkspaceRun = {
+  mode: 'fluid' | 'discrete'
+  kpis: KpiState
+  bottlenecks: Bottleneck[]
+  nodeStats: Record<string, NodeRunStat>
+  hint: string
+}

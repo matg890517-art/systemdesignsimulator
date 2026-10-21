@@ -67,7 +67,17 @@ describe('catalog data', () => {
       'Elastic Beanstalk',
       'Lightsail',
     ])
-    expect(paletteGroupsFor('generic')[0]?.tiles[0]?.name).toBe('Traffic generator')
+    expect(paletteGroupsFor('generic')[0]?.tiles.map((tile) => tile.name)).toEqual([
+      'Clients',
+      'Load balancer',
+      'Service',
+      'Cache',
+      'Database',
+      'Queue',
+      'Worker pool',
+      'CDN',
+      'Object store',
+    ])
   })
 
   it('does not live in the engine package', () => {

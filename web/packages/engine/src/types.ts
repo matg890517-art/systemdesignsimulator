@@ -65,6 +65,8 @@ export interface ComponentBehavior {
   throughputLimitRps: Value<number>
   scaling: Value<{ min: number; max: number; delaySec: number } | 'fixed'>
   cacheHitRate?: Value<number>
+  /** Application fail probability. Absent means the component does not fail itself. */
+  failProb?: Value<number>
 }
 
 export interface ProviderBinding {
@@ -112,6 +114,13 @@ export interface Edge {
     budget: number
     onlyIdempotent: boolean
   }
+  breaker?: {
+    errorThreshold: number
+    windowMs: number
+    openMs: number
+    probes: number
+    minRequests: number
+  }
 }
 
 export interface Topology {
@@ -119,12 +128,26 @@ export interface Topology {
   edges: Edge[]
 }
 
+export type DiscreteFault =
+  | { tSec: number; kind: 'crash'; componentId: string }
+  | { tSec: number; kind: 'link-cut'; edgeId: string }
+  | { tSec: number; kind: 'packet-loss'; edgeId: string; lossProb: number }
+  | { tSec: number; kind: 'latency-spike'; edgeId: string; addMs: number }
+
+export type LoadShape =
+  | { kind: 'constant' }
+  | { kind: 'poisson' }
+  | { kind: 'step'; atSec: number; factor: number }
+  | { kind: 'spike'; atSec: number; durationSec: number; factor: number }
+
 export interface Workload {
   durationSec: number
   dtSec: number
   seed: number
-  /** Offered rps at each traffic generator, per request class. */
+  /** Baseline offered rps at each traffic generator, per request class. */
   offered: Record<string, Record<RequestClassId, number>>
+  shape?: LoadShape
+  faults?: DiscreteFault[]
 }
 
 /** Fluid mode: rates per second, one record per edge and class. */
@@ -156,4 +179,51 @@ export interface FluidRunResult {
   seed: number
   dtSec: number
   steps: FluidState[]
+}
+
+/** Discrete-event mode. */
+export interface SimRequest {
+  id: string
+  traceId: string
+  classId: RequestClassId
+  requestBytes: number
+  responseBytes: number
+  createdAtMs: number
+  deadlineMs?: number
+  attempt: number
+  path: string[]
+  edgeId?: string
+  arrivedAtMs?: number
+}
+
+export type BreakerState = 'closed' | 'open' | 'half_open'
+
+export type SimEvent =
+  | { t: number; seq: number; type: 'arrive'; req: SimRequest; at: string }
+  | { t: number; seq: number; type: 'finish-service'; req: SimRequest; at: string }
+  | { t: number; seq: number; type: 'timeout'; req: SimRequest; edge: string }
+  | { t: number; seq: number; type: 'retry'; req: SimRequest; edge: string }
+  | { t: number; seq: number; type: 'breaker-change'; edge: string; to: BreakerState }
+  | { t: number; seq: number; type: 'fault'; fault: DiscreteFault }
+
+export interface DiscreteCounts {
+  created: number
+  completed: number
+  rejected: number
+  dropped: number
+  expired: number
+  inFlight: number
+  breakerRejected: number
+  attempts: number
+}
+
+export interface DiscreteRunResult {
+  seed: number
+  events: SimEvent[]
+  counts: DiscreteCounts
+  meanWaitMs: number
+  meanAttempts: number
+  measuredLoss: number
+  meanNetworkMs: number
+  affectedComponentIds: string[]
 }

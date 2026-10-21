@@ -1,5 +1,8 @@
+import { replayDiscreteLog, runDiscrete } from './discrete.ts'
 import { assertConservation, fluidStep, initialFluidState } from './fluid.ts'
 import type { FluidRunResult, Topology, Workload } from './types.ts'
+
+export { replayDiscreteLog, runDiscrete }
 
 export function runFluid(
   topology: Topology,

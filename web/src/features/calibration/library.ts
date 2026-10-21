@@ -207,4 +207,9 @@ export const FAULT_OPTIONS: { id: FaultMode; label: string; body: string }[] = [
     label: 'AKS crash',
     body: 'Run with 0 slots. Calibration is unchanged; this is a temporary fault.',
   },
+  {
+    id: 'latency-spike',
+    label: 'Upload latency spike',
+    body: 'Adds 200 ms on the uploaders → AKS edge in discrete-event mode. Fluid ignores it.',
+  },
 ]

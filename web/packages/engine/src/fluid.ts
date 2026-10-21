@@ -1,6 +1,7 @@
 import { backlogDeltaHolds, conservationHolds } from './conservation.ts'
 import { meanMs, unwrap } from './values.ts'
 import { offeredRate } from './routing.ts'
+import { offeredAt } from './workload.ts'
 import type {
   Component,
   Edge,
@@ -71,7 +72,7 @@ function sourceOutput(
   workload: Workload,
 ): number {
   if (component.kind === 'traffic_generator') {
-    return workload.offered[component.id]?.[classId] ?? 0
+    return offeredAt(workload, component.id, classId, state.t)
   }
   const row = state.components[component.id]?.[classId]
   if (!row) return 0
@@ -138,9 +139,13 @@ function processComponent(
     }
   }
 
-  const servers = unwrap(component.behavior.servers)
+  const servers =
+    component.behavior.servers.state === 'set'
+      ? unwrap(component.behavior.servers)
+      : Number.POSITIVE_INFINITY
   const service = component.behavior.serviceTime[classId]
-  const serviceSec = service ? meanMs(unwrap(service)) / 1000 : 0
+  const serviceSec =
+    service && service.state === 'set' ? meanMs(unwrap(service)) / 1000 : 0
   const mu = serviceSec > 0 ? servers / serviceSec : Number.POSITIVE_INFINITY
   const cap = unwrap(component.behavior.throughputLimitRps, mu)
   const serviceCap = Math.min(mu, cap)
@@ -218,7 +223,7 @@ export function fluidStep(
   for (const classId of classes) {
     for (const component of order) {
       if (component.kind === 'traffic_generator') {
-        const offered = workload.offered[component.id]?.[classId] ?? 0
+        const offered = offeredAt(workload, component.id, classId, next.t)
         next.components[component.id][classId] = processComponent(
           component,
           classId,

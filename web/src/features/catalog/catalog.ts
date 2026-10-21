@@ -1,4 +1,4 @@
-import type { ProviderBinding } from '@sds/engine'
+import { genericBlocks, type ProviderBinding } from '@sds/engine'
 import { catalogEntries, catalogReadOn } from './entries.ts'
 import type {
   CatalogEntry,
@@ -55,12 +55,13 @@ export const exampleNodeCatalogIds: Record<string, string> = {
 
 const genericGroups: PaletteGroup[] = [
   {
-    category: 'TRAFFIC',
-    count: 2,
-    tiles: [
-      { name: 'Traffic generator', provider: 'generic' },
-      { name: 'Fan-out', provider: 'generic' },
-    ],
+    category: 'GENERIC',
+    count: genericBlocks.length,
+    tiles: genericBlocks.map((block) => ({
+      name: block.name,
+      catalogId: block.id,
+      provider: 'generic' as const,
+    })),
   },
 ]
 

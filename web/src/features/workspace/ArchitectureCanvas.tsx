@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type DragEvent } from 'react'
+import { useCallback, useMemo, type Dispatch, type DragEvent, type SetStateAction } from 'react'
 import {
   Background,
   Controls,
@@ -6,19 +6,19 @@ import {
   ReactFlow,
   ReactFlowProvider,
   addEdge,
-  useEdgesState,
   useReactFlow,
   type Connection,
+  type Edge,
   type Node,
+  type OnEdgesChange,
   type OnNodesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Box } from '@mui/material'
 import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
-import { initialEdges } from './graph.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
-type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
+export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
 
 const nodeTypes = {
   service: ServiceNodeView,
@@ -27,14 +27,19 @@ const nodeTypes = {
 
 function CanvasInner({
   nodes,
+  edges,
   onNodesChange,
+  onEdgesChange,
+  setEdges,
   onSelect,
 }: {
   nodes: WorkspaceNode[]
+  edges: Edge[]
   onNodesChange: OnNodesChange<WorkspaceNode>
+  onEdgesChange: OnEdgesChange<Edge>
+  setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
 }) {
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const { screenToFlowPosition } = useReactFlow()
 
   const onConnect = useCallback(
@@ -136,7 +141,10 @@ function CanvasInner({
 
 export function ArchitectureCanvas(props: {
   nodes: WorkspaceNode[]
+  edges: Edge[]
   onNodesChange: OnNodesChange<WorkspaceNode>
+  onEdgesChange: OnEdgesChange<Edge>
+  setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
 }) {
   return (
