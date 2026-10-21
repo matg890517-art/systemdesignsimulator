@@ -8,6 +8,31 @@ export type Value<T> =
   | { state: 'unknown' }
   | { state: 'not_applicable' }
 
+export type FieldRole =
+  | 'servers'
+  | 'serviceMs'
+  | 'queue'
+  | 'lossProb'
+  | 'bandwidthBps'
+  | 'latencyP95Ms'
+  | 'cacheHitRate'
+
+export type CalibrationField = {
+  id: string
+  label: string
+  unit: string
+  role: FieldRole
+  value: Value<number>
+}
+
+export type CalibrationProfile = {
+  id: string
+  name: string
+  bindsTo?: string
+  notes: string
+  fields: CalibrationField[]
+}
+
 export type Distribution =
   | { kind: 'constant'; ms: number }
   | { kind: 'exponential'; meanMs: number }
