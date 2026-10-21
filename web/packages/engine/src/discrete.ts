@@ -1,3 +1,4 @@
+import { blastRadius } from './blast.ts'
 import { requestConservationHolds } from './conservation.ts'
 import { createRng } from './rng.ts'
 import { sampleDistribution } from './values.ts'
@@ -93,21 +94,6 @@ class MinHeap {
   }
 }
 
-function descendants(topology: Topology, rootId: string): string[] {
-  const out = new Set<string>([rootId])
-  let grew = true
-  while (grew) {
-    grew = false
-    for (const edge of topology.edges) {
-      if (out.has(edge.from) && !out.has(edge.to)) {
-        out.add(edge.to)
-        grew = true
-      }
-    }
-  }
-  return [...out]
-}
-
 function serversOf(component: Component): number {
   const value = component.behavior.servers
   return value.state === 'set' ? value.value : Number.POSITIVE_INFINITY
@@ -122,6 +108,12 @@ function failProbOf(component: Component): number {
 function queueCapOf(component: Component): number | 'unbounded' {
   const value = component.behavior.queueCapacity
   return value.state === 'set' ? value.value : 'unbounded'
+}
+
+function hitRateOf(component: Component): number | undefined {
+  const value = component.behavior.cacheHitRate
+  if (!value || value.state !== 'set') return undefined
+  return value.value
 }
 
 function backoffMs(edge: Edge, attempt: number): number {
@@ -213,6 +205,7 @@ export function runDiscrete(topology: Topology, workload: Workload): DiscreteRun
     breakerRejected: 0,
     attempts: 0,
   }
+  const cacheLookups = new Map<string, { lookups: number; hits: number }>()
   const live = new Set<string>()
   const waits: number[] = []
   const networkMs: number[] = []
@@ -468,7 +461,22 @@ export function runDiscrete(topology: Topology, workload: Workload): DiscreteRun
         const edge = topology.edges.find((item) => item.id === req.edgeId)
         if (edge) breakerObserve(edge, t, false)
       }
-      route(component, req, t)
+      const hitRate = hitRateOf(component)
+      if (hitRate !== undefined) {
+        const row = cacheLookups.get(component.id) ?? { lookups: 0, hits: 0 }
+        row.lookups += 1
+        if (rng() < hitRate) {
+          row.hits += 1
+          cacheLookups.set(component.id, row)
+          retire('completed')
+          markDone(req.id)
+        } else {
+          cacheLookups.set(component.id, row)
+          route(component, req, t)
+        }
+      } else {
+        route(component, req, t)
+      }
     }
     const next = runtime.queue.shift()
     if (next && !runtime.crashed && serversOf(component) > runtime.busy) {
@@ -483,7 +491,7 @@ export function runDiscrete(topology: Topology, workload: Workload): DiscreteRun
       const runtime = comps.get(fault.componentId)
       if (!runtime) return
       runtime.crashed = true
-      for (const id of descendants(topology, fault.componentId)) affected.add(id)
+      for (const id of blastRadius(topology, fault.componentId)) affected.add(id)
       while (runtime.queue.length) {
         const row = runtime.queue.shift()
         if (row) retryOrReject(row.req, fault.componentId, t, true)
@@ -563,6 +571,15 @@ export function runDiscrete(topology: Topology, workload: Workload): DiscreteRun
   const measuredLoss = sent === 0 ? 0 : counts.dropped / sent
   const meanAttempts = counts.created === 0 ? 0 : counts.attempts / counts.created
 
+  const cacheStats: DiscreteRunResult['cacheStats'] = {}
+  for (const [id, row] of cacheLookups) {
+    cacheStats[id] = {
+      lookups: row.lookups,
+      hits: row.hits,
+      measuredHitRate: row.lookups === 0 ? 0 : row.hits / row.lookups,
+    }
+  }
+
   return {
     seed: workload.seed,
     events,
@@ -572,6 +589,7 @@ export function runDiscrete(topology: Topology, workload: Workload): DiscreteRun
     measuredLoss,
     meanNetworkMs,
     affectedComponentIds: [...affected],
+    cacheStats,
   }
 }
 

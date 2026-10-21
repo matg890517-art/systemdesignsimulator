@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CalibrationField, CalibrationProfile, Confidence, Value } from '@sds/engine'
+import { referenceBindings, type MappedProvider, type ReferenceRole } from '../catalog/provider-maps.ts'
 import { defaultWorkloadDraft, type WorkloadDraft } from './compile.ts'
 import type { ServiceNodeData } from './types.ts'
 
@@ -28,6 +29,7 @@ function service(
   x: number,
   y: number,
   meta: string,
+  provider: ServiceNodeData['provider'] = 'generic',
 ): Node<ServiceNodeData> {
   return {
     id,
@@ -38,7 +40,7 @@ function service(
       util: 0,
       p99: 'not run',
       meta,
-      provider: 'generic',
+      provider,
       catalogId,
     },
   }
@@ -91,22 +93,48 @@ function capacity(
   }
 }
 
-/** All 9 generic tiles, wired as the Phase 2 reference stack. */
-export function referenceStackGraph(): {
+const LAYOUT: Record<ReferenceRole, { x: number; y: number; meta: string }> = {
+  clients: { x: 16, y: 120, meta: 'generator' },
+  cdn: { x: 200, y: 48, meta: 'estimated hit 0.9' },
+  lb: { x: 384, y: 48, meta: '4 servers' },
+  service: { x: 568, y: 48, meta: '8 servers' },
+  cache: { x: 752, y: 16, meta: 'estimated hit 0.8' },
+  db: { x: 752, y: 120, meta: '4 servers' },
+  queue: { x: 200, y: 216, meta: '2 servers' },
+  worker: { x: 384, y: 216, meta: '8 servers' },
+  object: { x: 568, y: 216, meta: '4 servers' },
+}
+
+/** Same 9-block wiring. Provider maps catalog ids only; capacities stay Estimated. */
+export function referenceStackGraph(provider: MappedProvider = 'generic'): {
   nodes: Node<ServiceNodeData>[]
   edges: Edge[]
 } {
+  const map = referenceBindings[provider]
+  const node = (role: ReferenceRole) => {
+    const bind = map[role]
+    const layout = LAYOUT[role]
+    return service(
+      role,
+      bind.catalogId,
+      bind.title,
+      layout.x,
+      layout.y,
+      `${bind.provider} · ${layout.meta}`,
+      bind.provider,
+    )
+  }
   return {
     nodes: [
-      service('clients', 'generic-clients', 'Clients', 16, 120, 'Generic · generator'),
-      service('cdn', 'generic-cdn', 'CDN', 200, 48, 'Generic · estimated hit 0.9'),
-      service('lb', 'generic-lb', 'Load balancer', 384, 48, 'Generic · 4 servers'),
-      service('service', 'generic-service', 'Service', 568, 48, 'Generic · 8 servers'),
-      service('cache', 'generic-cache', 'Cache', 752, 16, 'Generic · estimated hit 0.8'),
-      service('db', 'generic-db', 'Database', 752, 120, 'Generic · 4 servers'),
-      service('queue', 'generic-queue', 'Queue', 200, 216, 'Generic · 2 servers'),
-      service('worker', 'generic-worker', 'Worker pool', 384, 216, 'Generic · 8 servers'),
-      service('object', 'generic-object', 'Object store', 568, 216, 'Generic · 4 servers'),
+      node('clients'),
+      node('cdn'),
+      node('lb'),
+      node('service'),
+      node('cache'),
+      node('db'),
+      node('queue'),
+      node('worker'),
+      node('object'),
     ],
     edges: [
       weighted('c-cdn', 'clients', 'cdn', 'R/W'),

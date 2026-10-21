@@ -1,4 +1,5 @@
 import {
+  blastRadius,
   expectedArrivals,
   meanMs,
   runDiscrete,
@@ -8,8 +9,10 @@ import {
   type Component,
   type DiscreteRunResult,
   type FluidState,
+  type SimEvent,
   type Topology,
 } from '@sds/engine'
+import { profileCitation } from '../calibration/citation.ts'
 import {
   compileCanvas,
   DISCRETE_EVENT_GUARD,
@@ -99,6 +102,7 @@ function statFor(
   rejected: number,
   mode: 'fluid' | 'discrete',
   classIds?: string[],
+  profiles: CalibrationProfile[] = [],
 ): NodeRunStat {
   const mu = muOf(component, classIds ?? Object.keys(component.behavior.serviceTime))
   const capped = Number.isFinite(mu)
@@ -114,12 +118,14 @@ function statFor(
           : rejected > 0 || offered > 0
             ? 1
             : 0
+  const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
+  const citation = profileCitation(profile)
   const meta =
     component.kind === 'traffic_generator'
       ? `${mode} · generator`
       : capped
-        ? `${mode} · μ ${mu.toFixed(1)} /s`
-        : `${mode} · unknown capacity (no cap)`
+        ? `${mode} · μ ${mu.toFixed(1)} /s · ${citation}`
+        : `${mode} · unknown capacity (no cap) · ${citation}`
   return {
     util,
     completed,
@@ -129,6 +135,7 @@ function statFor(
     capped,
     p99: component.kind === 'traffic_generator' ? formatRps(offered) : `${completed.toFixed(1)} /s`,
     meta,
+    citation,
   }
 }
 
@@ -138,6 +145,7 @@ function kpisFromStats(
   draft: WorkloadDraft,
   mode: 'fluid' | 'discrete',
   extra: { errors: number; latency: string; latencyHint: string },
+  profiles: CalibrationProfile[],
 ): { kpis: KpiState; bottlenecks: Bottleneck[] } {
   const bottlenecks: Bottleneck[] = []
   for (const component of topology.components) {
@@ -145,6 +153,7 @@ function kpisFromStats(
     const row = stats[component.id]
     if (!row) continue
     if (row.util < 0.85 && row.rejected <= Math.max(0.01, row.offered * 0.01)) continue
+    const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
     bottlenecks.push({
       id: component.id,
       title: component.name,
@@ -154,6 +163,7 @@ function kpisFromStats(
         ? 'Raise calibrated servers or service rate, then run again.'
         : 'Capacity is unknown, so this is not a hard engine cap. Set servers and service time in Calibration to measure utilization.',
       fromEngine: true,
+      citation: profileCitation(profile),
     })
   }
   const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
@@ -176,13 +186,26 @@ function kpisFromStats(
   }
 }
 
-function statsFromFluid(topology: Topology, last: FluidState, mode: 'fluid' | 'discrete') {
+function statsFromFluid(
+  topology: Topology,
+  last: FluidState,
+  mode: 'fluid' | 'discrete',
+  profiles: CalibrationProfile[] = [],
+) {
   const stats: Record<string, NodeRunStat> = {}
   const classStats: Record<string, Record<string, NodeRunStat>> = {}
   for (const component of topology.components) {
     const row = last.components[component.id] ?? {}
     const totals = classTotals(row)
-    stats[component.id] = statFor(component, totals.offered, totals.completed, totals.rejected, mode)
+    stats[component.id] = statFor(
+      component,
+      totals.offered,
+      totals.completed,
+      totals.rejected,
+      mode,
+      undefined,
+      profiles,
+    )
     classStats[component.id] = {}
     for (const [classId, item] of Object.entries(row)) {
       classStats[component.id][classId] = statFor(
@@ -192,13 +215,19 @@ function statsFromFluid(topology: Topology, last: FluidState, mode: 'fluid' | 'd
         item.rejected,
         mode,
         [classId],
+        profiles,
       )
     }
   }
   return { stats, classStats }
 }
 
-function statsFromDiscrete(topology: Topology, result: DiscreteRunResult, durationSec: number) {
+function statsFromDiscrete(
+  topology: Topology,
+  result: DiscreteRunResult,
+  durationSec: number,
+  profiles: CalibrationProfile[] = [],
+) {
   const completed: Record<string, number> = {}
   const arrived: Record<string, number> = {}
   const completedClass: Record<string, Record<string, number>> = {}
@@ -221,7 +250,7 @@ function statsFromDiscrete(topology: Topology, result: DiscreteRunResult, durati
     const done = (completed[component.id] ?? 0) / durationSec
     const offered = (arrived[component.id] ?? 0) / durationSec
     const rejected = Math.max(0, offered - done)
-    stats[component.id] = statFor(component, offered, done, rejected, 'discrete')
+    stats[component.id] = statFor(component, offered, done, rejected, 'discrete', undefined, profiles)
     classStats[component.id] = {}
     const classIds = new Set([
       ...Object.keys(completedClass[component.id] ?? {}),
@@ -237,10 +266,39 @@ function statsFromDiscrete(topology: Topology, result: DiscreteRunResult, durati
         Math.max(0, classOffered - classDone),
         'discrete',
         [classId],
+        profiles,
       )
     }
   }
   return { stats, classStats }
+}
+
+export function blastFromRun(
+  topology: Topology,
+  fault: FaultMode,
+  discrete?: DiscreteRunResult,
+): { affectedComponentIds: string[]; blastOriginId?: string; breakerOpenEdges: string[] } {
+  const origin =
+    fault === 'crash'
+      ? topology.components.find((item) => item.id === 'aks')?.id ??
+        topology.components.find((item) => item.kind === 'worker')?.id
+      : undefined
+  const affectedComponentIds =
+    discrete?.affectedComponentIds ??
+    (origin ? blastRadius(topology, origin) : [])
+  const breakerOpenEdges = discrete
+    ? [
+        ...new Set(
+          discrete.events
+            .filter(
+              (event): event is Extract<SimEvent, { type: 'breaker-change' }> =>
+                event.type === 'breaker-change' && event.to === 'open',
+            )
+            .map((event) => event.edge),
+        ),
+      ]
+    : []
+  return { affectedComponentIds, blastOriginId: origin, breakerOpenEdges }
 }
 
 export function pickNodeStat(
@@ -274,15 +332,16 @@ export function runWorkspace(
 
   if (draft.mode === 'discrete') {
     const result = runDiscrete(topology, workload)
-    const { stats, classStats } = statsFromDiscrete(topology, result, workload.durationSec)
+    const { stats, classStats } = statsFromDiscrete(topology, result, workload.durationSec, profiles)
     const sent = result.counts.created
     const errors = sent === 0 ? 0 : (result.counts.rejected + result.counts.dropped) / sent
     const { kpis, bottlenecks } = kpisFromStats(stats, topology, draft, 'discrete', {
       errors,
       latency: `${result.meanWaitMs.toFixed(0)} ms`,
       latencyHint: 'Mean wait from discrete-event. P99 needs more samples.',
-    })
+    }, profiles)
     onProgress?.({ t: workload.durationSec, fraction: 1, nodeStats: stats })
+    const blast = blastFromRun(topology, fault, result)
     return {
       ok: true,
       run: {
@@ -291,7 +350,8 @@ export function runWorkspace(
         bottlenecks,
         nodeStats: stats,
         classStats,
-        hint: `discrete · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}`,
+        hint: `discrete · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}${blast.breakerOpenEdges.length ? ` · breaker open ${blast.breakerOpenEdges.join(',')}` : ''}`,
+        ...blast,
       },
     }
   }
@@ -303,13 +363,13 @@ export function runWorkspace(
     onStep: (state, stepIndex, total) => {
       if (!onProgress) return
       if (stepIndex !== total && stepIndex % emitEvery !== 0) return
-      const { stats } = statsFromFluid(topology, state, 'fluid')
+      const { stats } = statsFromFluid(topology, state, 'fluid', profiles)
       onProgress({ t: state.t, fraction: stepIndex / total, nodeStats: stats })
     },
   })
   const last = result.steps.at(-1)
   if (!last) return { ok: false, reason: 'Fluid run produced no steps.' }
-  const { stats, classStats } = statsFromFluid(topology, last, 'fluid')
+  const { stats, classStats } = statsFromFluid(topology, last, 'fluid', profiles)
   let offered = 0
   let rejected = 0
   for (const component of topology.components) {
@@ -323,7 +383,8 @@ export function runWorkspace(
     errors: offered > 0 ? rejected / offered : 0,
     latency: idleKpis.latency,
     latencyHint: 'P50 / P99 still Estimated — fluid mode has no tails',
-  })
+  }, profiles)
+  const blast = blastFromRun(topology, fault)
   return {
     ok: true,
     run: {
@@ -333,6 +394,7 @@ export function runWorkspace(
       nodeStats: stats,
       classStats,
       hint: `fluid · ${workload.durationSec}s · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}`,
+      ...blast,
     },
   }
 }

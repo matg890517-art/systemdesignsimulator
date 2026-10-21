@@ -5,8 +5,11 @@ import { aksRunPlan, useLibrary } from '../calibration/library.ts'
 import { aksScenario, buildResultsReport, idleKpis } from '../workspace/simulate.ts'
 import type { KpiState, ResultsReport } from '../workspace/types.ts'
 import { Explainer } from './Explainer.tsx'
+import { FidelityPanel } from './FidelityPanel.tsx'
 import { LineChart } from './LineChart.tsx'
 import { RankingTable } from './RankingTable.tsx'
+import { absentRecordedTest, parseRecordedTest } from './recorded-test.ts'
+import { scoreReferenceFidelity } from './score-reference.ts'
 
 function Kpi({
   label,
@@ -41,6 +44,8 @@ export function ResultsPage() {
     }
   })
   const [ran, setRan] = useState(Boolean(report))
+  const [recorded, setRecorded] = useState(absentRecordedTest)
+  const fidelity = useMemo(() => scoreReferenceFidelity(recorded), [recorded])
   const kpis: KpiState = report?.kpis ?? idleKpis
 
   const utilLines = useMemo(
@@ -169,7 +174,16 @@ export function ResultsPage() {
               {idleKpis.latency}.
             </Typography>
           </Stack>
-          <Explainer report={report} />
+          <Stack spacing={1.5} sx={{ width: 320, flexShrink: 0, minHeight: 0, overflow: 'auto' }}>
+            <FidelityPanel
+              report={fidelity}
+              onLoadFile={(text) => {
+                const next = parseRecordedTest(text)
+                if (next) setRecorded(next)
+              }}
+            />
+            <Explainer report={report} />
+          </Stack>
         </Box>
       ) : (
         <Typography sx={{ p: 3, color: 'text.secondary' }}>

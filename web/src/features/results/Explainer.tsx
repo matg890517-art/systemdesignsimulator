@@ -44,6 +44,11 @@ export function Explainer({ report }: { report: ResultsReport }) {
           sits at {formatPct(baseline.util)} of capacity. Queue stays near{' '}
           {baseline.backlog.toFixed(1)}; rejected {baseline.rejected.toFixed(2)} /s.
         </Typography>
+        {bottlenecks[0]?.citation ? (
+          <Typography sx={{ fontSize: 11, mt: 0.75, color: 'text.secondary' }}>
+            {bottlenecks[0].citation}
+          </Typography>
+        ) : null}
       </Box>
       <Box
         sx={{

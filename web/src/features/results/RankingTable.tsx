@@ -79,10 +79,11 @@ const columns = helper.columns([
       return (
         <Chip
           size="small"
-          label={source === 'engine' ? 'Engine' : 'Est.'}
+          label={info.row.original.citation ?? (source === 'engine' ? 'Engine' : 'Est.')}
           sx={{
             height: 20,
             fontSize: 11,
+            maxWidth: 140,
             bgcolor: source === 'engine' ? 'primary.light' : 'background.default',
             color: source === 'engine' ? 'primary.dark' : 'text.secondary',
           }}
@@ -114,8 +115,8 @@ export function RankingTable({ rows }: { rows: RankRow[] }) {
         Utilization ranking
       </Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
-        AKS is from the fluid engine. Other rows stay Estimated from the example
-        topology — not catalog measurements.
+        Each row cites a profile. AKS util is from the fluid engine on Estimated ·
+        AKS transcode workers. Other rows stay Estimated — not catalog measurements.
       </Typography>
       <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
         <Box component="thead">

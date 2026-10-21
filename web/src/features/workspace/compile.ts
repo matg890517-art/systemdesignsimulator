@@ -1,4 +1,6 @@
 import {
+  applyCatalogCeilings,
+  documentedBreaker,
   genericBlocks,
   type CalibrationProfile,
   type CanonicalKind,
@@ -13,7 +15,7 @@ import {
   type Value,
   type Workload,
 } from '@sds/engine'
-import { catalogEntryById } from '../catalog/catalog.ts'
+import { catalogEntryById, catalogValuesFor } from '../catalog/catalog.ts'
 import type { FaultMode } from '../calibration/types.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
@@ -77,14 +79,27 @@ const KIND_BY_CATALOG: Record<string, CanonicalKind> = {
   'aws-ecs': 'service',
   'aws-elasticache': 'cache',
   'aws-dynamodb': 'nosql_db',
+  'aws-rds': 'relational_db',
+  'aws-sqs': 'queue',
+  'aws-batch': 'worker',
+  'aws-s3': 'object_storage',
   'gcp-gke': 'service',
   'gcp-pub-sub': 'event_bus',
   'gcp-cloud-run': 'service',
   'gcp-firestore': 'nosql_db',
+  'gcp-cloud-cdn': 'cdn',
+  'gcp-cloud-load-balancing': 'load_balancer',
+  'gcp-memorystore': 'cache',
+  'gcp-cloud-sql': 'relational_db',
+  'gcp-cloud-storage': 'object_storage',
   'azure-aks': 'worker',
   'azure-service-bus': 'queue',
   'azure-blob-storage': 'object_storage',
   'azure-front-door': 'load_balancer',
+  'azure-application-gateway': 'load_balancer',
+  'azure-cache-for-redis': 'cache',
+  'azure-database-for-postgresql': 'relational_db',
+  'azure-container-apps': 'worker',
 }
 
 const KIND_BY_CATEGORY: Record<string, CanonicalKind> = {
@@ -265,6 +280,11 @@ function routingFor(rfEdge: RfEdge): Routing {
   return extra?.routing ?? { mode: 'single' }
 }
 
+function breakerFor(rfEdge: RfEdge): Edge['breaker'] {
+  const extra = rfEdge.data as { breaker?: Edge['breaker'] } | undefined
+  return extra?.breaker ?? { ...documentedBreaker }
+}
+
 function crashTarget(components: Component[]): string | undefined {
   return components.find((item) => item.id === 'aks')?.id ?? components.find((item) => item.kind === 'worker')?.id
 }
@@ -290,7 +310,13 @@ export function compileCanvas(
       id: node.id,
       name: node.data.title,
       kind,
-      behavior: behaviorFor(kind, active, profile),
+      behavior: applyCatalogCeilings(
+        behaviorFor(kind, active, profile),
+        catalogValuesFor(node.data.catalogId).filter((value) => {
+          if (value.conditions.launch === 'fargate') return false
+          return true
+        }),
+      ),
       calibrationProfileIds: profile ? [profile.id] : [],
     }
   })
@@ -318,6 +344,7 @@ export function compileCanvas(
         serialization: false,
       },
       call: { kind: 'sync' },
+      breaker: breakerFor(rfEdge),
     })
   }
 

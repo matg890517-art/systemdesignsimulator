@@ -2,15 +2,19 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { usableAsCeiling } from '@sds/engine'
 import {
   catalogEntries,
   catalogReadOn,
   catalogStats,
+  catalogValuesFor,
+  comparisonRows,
   emptyProviderBinding,
   exampleNodeCatalogIds,
   filterCatalog,
   paletteGroupsFor,
 } from './catalog.ts'
+import { mappedProviders, referenceBindings } from './provider-maps.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../../..')
 
@@ -82,8 +86,48 @@ describe('catalog data', () => {
 
   it('does not live in the engine package', () => {
     const engineIndex = readFileSync(join(root, 'web/packages/engine/src/index.ts'), 'utf8')
-    expect(engineIndex).not.toContain('catalog')
+    expect(engineIndex).not.toContain('catalogEntries')
     const fluid = readFileSync(join(root, 'web/packages/engine/src/fluid.ts'), 'utf8')
     expect(fluid).not.toMatch(/aws|azure|gcp|kubernetes/i)
+  })
+
+  it('keeps verified ECS task quota as a documented ceiling that does not fill unknown', () => {
+    const values = catalogValuesFor('aws-ecs')
+    expect(values[0]?.value).toBe(5_000)
+    expect(usableAsCeiling(values[0]!)).toBe(true)
+    const fargate = values.find((value) => value.conditions.launch === 'fargate')
+    expect(fargate?.limitType).toBe('adjustable_quota')
+    expect(catalogValuesFor('aws-application-load-balancer').some((value) => value.limitType === 'configurable_setting')).toBe(
+      true,
+    )
+    expect(usableAsCeiling(catalogValuesFor('aws-application-load-balancer').find((value) => value.unit === 's')!)).toBe(
+      false,
+    )
+  })
+
+  it('maps the 9-block reference onto each first-release catalog without prices', () => {
+    for (const provider of mappedProviders) {
+      const roles = Object.values(referenceBindings[provider])
+      expect(roles).toHaveLength(9)
+      for (const bind of roles) {
+        if (bind.catalogId.startsWith('generic-')) continue
+        expect(
+          catalogEntries.find((entry) => entry.id === bind.catalogId),
+          bind.catalogId,
+        ).toBeDefined()
+      }
+    }
+    expect(JSON.stringify(referenceBindings)).not.toMatch(/\$|price|hourly/i)
+  })
+
+  it('compares container services on sourced ceilings without inventing prices', () => {
+    const rows = comparisonRows('Containers')
+    const names = rows.map((row) => `${row.provider}:${row.name}`)
+    expect(names).toEqual(expect.arrayContaining(['aws:ECS', 'aws:EKS', 'azure:AKS', 'gcp:GKE']))
+    const ecs = rows.find((row) => row.catalogId === 'aws-ecs')
+    expect(ecs?.ceilings.some((item) => item.mayCap && item.text.includes('5,000'))).toBe(true)
+    const aks = rows.find((row) => row.catalogId === 'azure-aks')
+    expect(aks?.ceilings).toEqual([])
+    expect(JSON.stringify(rows)).not.toMatch(/\$|price|hourly/i)
   })
 })

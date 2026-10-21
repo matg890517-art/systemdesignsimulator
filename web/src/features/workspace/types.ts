@@ -9,6 +9,8 @@ export type ServiceNodeData = {
   provider: ProviderId
   engineId?: string
   catalogId?: string
+  inBlast?: boolean
+  blastOrigin?: boolean
 }
 
 export type ZoneNodeData = {
@@ -23,6 +25,7 @@ export type Bottleneck = {
   summary: string
   suggestion: string
   fromEngine: boolean
+  citation?: string
 }
 
 export type KpiState = {
@@ -46,6 +49,7 @@ export type RankRow = {
   util: number
   p99: string
   source: RankSource
+  citation?: string
 }
 
 export type FluidPoint = {
@@ -87,6 +91,7 @@ export type NodeRunStat = {
   capped: boolean
   p99: string
   meta: string
+  citation?: string
 }
 
 export type WorkspaceRun = {
@@ -96,4 +101,7 @@ export type WorkspaceRun = {
   nodeStats: Record<string, NodeRunStat>
   classStats: Record<string, Record<string, NodeRunStat>>
   hint: string
+  affectedComponentIds: string[]
+  blastOriginId?: string
+  breakerOpenEdges: string[]
 }

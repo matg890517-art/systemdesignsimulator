@@ -58,6 +58,19 @@ export function generator(id: string, name = id): Component {
   }
 }
 
+export function cache(
+  id: string,
+  opts: { servers: number; serviceMs: number; hitRate: number; queue?: number | 'unbounded' },
+): Component {
+  const node = component(id, 'cache', {
+    servers: opts.servers,
+    serviceMs: opts.serviceMs,
+    queue: opts.queue ?? 'unbounded',
+  })
+  node.behavior.cacheHitRate = setValue(opts.hitRate)
+  return node
+}
+
 export function worker(
   id: string,
   opts: {

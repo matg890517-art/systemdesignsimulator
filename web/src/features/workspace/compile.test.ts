@@ -60,6 +60,21 @@ describe('compileCanvas', () => {
     expect(kindForNode(node)).toBe('traffic_generator')
   })
 
+  it('attaches the documented breaker so a crash can trip the upload edge', () => {
+    const { topology } = compileCanvas(
+      initialNodes,
+      initialEdges,
+      defaultWorkloadDraft(),
+      getProfiles(),
+      'none',
+    )
+    expect(topology.edges.find((item) => item.id === 'up-aks')?.breaker).toMatchObject({
+      errorThreshold: 0.5,
+      minRequests: 4,
+      probes: 1,
+    })
+  })
+
   it('zeros AKS slots on crash and sets upload loss on packet drop', () => {
     const crashed = compileCanvas(
       initialNodes,
@@ -129,6 +144,28 @@ describe('compileCanvas', () => {
       expect(ok.run.nodeStats.aks.offered).toBeGreaterThan(0)
     }
   })
+
+  it('trips the upload breaker and lists the AKS blast radius after a crash', () => {
+    const result = runWorkspace(
+      initialNodes,
+      initialEdges,
+      {
+        ...defaultWorkloadDraft(),
+        mode: 'discrete',
+        durationSec: 2,
+        classes: { read: 0, write: 0, async: 0, bulk: 40 },
+      },
+      getProfiles(),
+      'crash',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.run.breakerOpenEdges).toContain('up-aks')
+    expect(result.run.affectedComponentIds).toEqual(
+      expect.arrayContaining(['aks', 'servicebus', 'blob', 'frontdoor', 'cloudfront']),
+    )
+    expect(result.run.blastOriginId).toBe('aks')
+  })
 })
 
 describe('F24 class filter', () => {
@@ -154,6 +191,8 @@ describe('F24 class filter', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.run.classStats.aks.bulk.util).toBeCloseTo(0.95, 2)
+    expect(result.run.nodeStats.aks.citation).toContain('Estimated')
+    expect(result.run.nodeStats.aks.citation).toContain('AKS transcode workers')
     expect(result.run.classStats.aks.read?.offered ?? 0).toBe(0)
     expect(result.run.classStats.cloudfront.read.completed).toBeGreaterThan(40_000)
   })
@@ -193,6 +232,68 @@ describe('F3 config profiles', () => {
       value: 0.92,
     })
     expect(cf.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+  })
+})
+
+describe('mapped provider reference stacks', () => {
+  it('binds AWS catalog ids, runs fluid, and does not invent ECS servers from the task quota', () => {
+    const graph = referenceStackGraph('aws')
+    expect(graph.nodes.find((node) => node.id === 'service')?.data.catalogId).toBe('aws-ecs')
+    expect(graph.nodes.find((node) => node.id === 'queue')?.data.catalogId).toBe('aws-sqs')
+    const { topology } = compileCanvas(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), durationSec: 8 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(topology.components.find((item) => item.id === 'service')?.kind).toBe('service')
+    expect(topology.components.find((item) => item.id === 'service')?.behavior.servers).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
+
+    const unknownServers = referenceStackProfiles.map((profile) => ({
+      ...profile,
+      fields: profile.fields.map((field) =>
+        field.role === 'servers' ? { ...field, value: { state: 'unknown' as const } } : field,
+      ),
+    }))
+    const open = compileCanvas(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), durationSec: 8 },
+      unknownServers,
+      'none',
+    )
+    expect(open.topology.components.find((item) => item.id === 'service')?.behavior.servers.state).toBe(
+      'unknown',
+    )
+
+    const result = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), durationSec: 8 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
+  })
+
+  it('keeps Azure AKS and GCP Pub/Sub on the same 9 node ids', () => {
+    const azure = referenceStackGraph('azure')
+    const gcp = referenceStackGraph('gcp')
+    expect(azure.nodes.find((node) => node.id === 'service')?.data.catalogId).toBe('azure-aks')
+    expect(gcp.nodes.find((node) => node.id === 'queue')?.data.catalogId).toBe('gcp-pub-sub')
+    expect(kindForNode(gcp.nodes.find((node) => node.id === 'queue') as Node<ServiceNodeData>)).toBe(
+      'event_bus',
+    )
+    expect(kindForNode(azure.nodes.find((node) => node.id === 'service') as Node<ServiceNodeData>)).toBe(
+      'worker',
+    )
   })
 })
 

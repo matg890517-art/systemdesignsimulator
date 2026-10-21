@@ -1,5 +1,6 @@
 import { runFluid, edge, generator, worker } from '@sds/engine'
-import { aksRunPlan, getFault, lossProbForFault } from '../calibration/library.ts'
+import { profileCitation } from '../calibration/citation.ts'
+import { aksRunPlan, getFault, getProfiles, lossProbForFault } from '../calibration/library.ts'
 import { initialNodes } from './graph.ts'
 import { idleKpis } from './run-workspace.ts'
 import type {
@@ -42,6 +43,7 @@ function healthFor(util: number): NodeHealth {
 }
 
 export function nodeHealth(data: ServiceNodeData): NodeHealth {
+  if (data.inBlast || data.blastOrigin) return 'bottleneck'
   return healthFor(data.util)
 }
 
@@ -148,6 +150,7 @@ export function utilizationRanking(engineAks?: {
     .map((node) => {
       const data = node.data as ServiceNodeData
       const fromEngine = node.id === 'aks' && engineAks !== undefined
+      const profile = getProfiles().find((item) => item.bindsTo === node.id)
       return {
         id: node.id,
         title: data.title,
@@ -155,6 +158,7 @@ export function utilizationRanking(engineAks?: {
         util: fromEngine ? engineAks.util : data.util,
         p99: fromEngine ? engineAks.p99 : data.p99,
         source: fromEngine ? 'engine' : 'estimated',
+        citation: profileCitation(profile),
       }
     })
   rows.push({
@@ -164,6 +168,7 @@ export function utilizationRanking(engineAks?: {
     util: 0.91,
     p99: '0.8 GB/s',
     source: 'estimated',
+    citation: profileCitation(getProfiles().find((item) => item.id === 'copy-link')),
   })
   return rows.filter((row) => row.util > 0).sort((a, b) => b.util - a.util)
 }
@@ -176,6 +181,7 @@ function aksBottleneck(run: AksRun, suggestedSlots: number): Bottleneck {
     summary: `${run.offered} uploads/s. ${run.servers} slots at ${run.serviceMs / 1000} s serve ${run.mu.toFixed(1)} uploads/s.`,
     suggestion: `Raise slots from ${run.servers} to ${suggestedSlots}. Utilization falls toward 83%.`,
     fromEngine: true,
+    citation: profileCitation(getProfiles().find((item) => item.bindsTo === 'aks')),
   }
 }
 
@@ -187,6 +193,7 @@ function copyLinkBottleneck(): Bottleneck {
     summary: '0.8 GB/s copies vs 0.88 GB/s on the link. Capacity is Estimated.',
     suggestion: 'Measure this cross-provider link in Calibration. Unknown bandwidth does not cap the engine.',
     fromEngine: false,
+    citation: profileCitation(getProfiles().find((item) => item.id === 'copy-link')),
   }
 }
 
@@ -196,7 +203,7 @@ function kpisFromRun(run: AksRun, hint: string): KpiState {
     ...idleKpis,
     bottlenecks: hot ? '1+' : '0',
     bottleneckHint: hot ? hint : 'none at the 83% target',
-    latencyHint: 'P50 / P99 still Estimated — fluid mode has no tails yet',
+    latencyHint: 'P50 / P99 still Estimated — fluid mode has no tails yet. Util from Estimated · AKS transcode workers.',
   }
 }
 

@@ -8,18 +8,34 @@ import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
-import { getFault, getProfiles, upsertProfiles, useLibrary } from '../calibration/library.ts'
+import { getFault, getProfiles, setFault, upsertProfiles, useLibrary } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
 import { idleKpis, kpisFromDraft, pickNodeStat } from './simulate.ts'
 import { runWorkspaceAsync } from './engine-client.ts'
 import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import { defaultWorkloadDraft, nodeCarriesClass, type ClassFilter } from './compile.ts'
+import { type MappedProvider } from '../catalog/provider-maps.ts'
 import {
   referenceStackGraph,
   referenceStackProfiles,
   referenceWorkloadDraft,
 } from './reference-graph.ts'
+import {
+  browserStore,
+  loadCurrent,
+  saveCurrent,
+  snapshotFrom,
+  takeQueuedOpen,
+  upsertProject,
+  type TopologySnapshot,
+} from './persistence.ts'
 import type { Bottleneck, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
+
+function readBootSnapshot(): TopologySnapshot | undefined {
+  const store = browserStore()
+  if (!store) return undefined
+  return takeQueuedOpen(store) ?? loadCurrent(store)
+}
 
 const seedBottlenecks: Bottleneck[] = [
   {
@@ -29,6 +45,7 @@ const seedBottlenecks: Bottleneck[] = [
     summary: '2 uploads/s. 84 slots at 40 s serve 2.1 uploads/s.',
     suggestion: 'Run to confirm from the engine.',
     fromEngine: false,
+    citation: 'Estimated · AKS transcode workers',
   },
   {
     id: 'copy-link',
@@ -37,6 +54,7 @@ const seedBottlenecks: Bottleneck[] = [
     summary: '0.8 GB/s copies vs 0.88 GB/s on the link. Capacity is Estimated.',
     suggestion: 'Measure this cross-provider link in Calibration.',
     fromEngine: false,
+    citation: 'Estimated · Azure to AWS copy link',
   },
 ]
 
@@ -63,6 +81,19 @@ function Kpi({
 }
 
 export function WorkspacePage() {
+  const boot = useRef<{
+    nodes: typeof initialNodes
+    edges: typeof initialEdges
+    snapshot?: TopologySnapshot
+  } | null>(null)
+  if (boot.current === null) {
+    const snapshot = readBootSnapshot()
+    boot.current = {
+      nodes: snapshot?.nodes?.length ? snapshot.nodes : initialNodes,
+      edges: snapshot?.edges?.length ? snapshot.edges : initialEdges,
+      snapshot,
+    }
+  }
   const [canvasReady, setCanvasReady] = useState(false)
   const [tab, setTab] = useState(0)
   const [kpis, setKpis] = useState<KpiState>(idleKpis)
@@ -74,16 +105,23 @@ export function WorkspacePage() {
   const [classFilter, setClassFilter] = useState<ClassFilter>('all')
   const [lastRun, setLastRun] = useState<WorkspaceRun>()
   const [running, setRunning] = useState(false)
-  const [scene, setScene] = useState<'youtube' | 'reference'>('youtube')
+  const [scene, setScene] = useState<'youtube' | 'reference' | 'custom'>(
+    boot.current.snapshot?.scene ?? 'youtube',
+  )
+  const [projectName, setProjectName] = useState(
+    boot.current.snapshot?.name ?? 'Example: Video streaming platform (YouTube-style)',
+  )
+  const [savedHint, setSavedHint] = useState(boot.current.snapshot ? 'Restored locally' : 'Local draft')
   const [fps, setFps] = useState(0)
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [nodes, setNodes, onNodesChange] = useNodesState(boot.current.nodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(boot.current.edges)
   const library = useLibrary()
   const draft = useWorkloadDraft()
   const runGen = useRef(0)
   const paintFrame = useRef(0)
   const minFpsDuringRun = useRef<number | undefined>(undefined)
   const maxPaintMs = useRef(0)
+  const [sessionReady, setSessionReady] = useState(false)
 
   useEffect(() => {
     setCanvasReady(true)
@@ -139,6 +177,8 @@ export function WorkspacePage() {
         if (node.type === 'zone') return node
         const data = node.data as ServiceNodeData
         const stat = pickNodeStat(run, node.id, filter)
+        const inBlast = run.affectedComponentIds.includes(node.id)
+        const blastOrigin = run.blastOriginId === node.id
         if (!stat || (filter !== 'all' && stat.offered <= 0 && stat.completed <= 0)) {
           return {
             ...node,
@@ -147,6 +187,8 @@ export function WorkspacePage() {
               util: 0,
               p99: filter === 'all' ? 'no traffic' : `no ${filter}`,
               meta: `${run.mode} · ${filter === 'all' ? 'not on path' : `off ${filter} path`}`,
+              inBlast,
+              blastOrigin,
             },
           }
         }
@@ -157,6 +199,23 @@ export function WorkspacePage() {
             util: stat.util,
             p99: stat.p99,
             meta: filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`,
+            inBlast,
+            blastOrigin,
+          },
+        }
+      }),
+    )
+    setEdges((current) =>
+      current.map((edge) => {
+        const hit =
+          run.affectedComponentIds.includes(edge.source) ||
+          run.affectedComponentIds.includes(edge.target) ||
+          run.breakerOpenEdges.includes(edge.id)
+        return {
+          ...edge,
+          style: {
+            ...edge.style,
+            stroke: hit ? '#B3261E' : '#7B8794',
           },
         }
       }),
@@ -178,8 +237,10 @@ export function WorkspacePage() {
     )
   }
 
-  function onLoadReference() {
-    const graph = referenceStackGraph()
+  function onLoadReference(provider: MappedProvider = 'generic') {
+    const graph = referenceStackGraph(provider)
+    const label =
+      provider === 'generic' ? 'Generic' : provider === 'aws' ? 'AWS' : provider === 'gcp' ? 'GCP' : 'Azure'
     setNodes(graph.nodes)
     setEdges(graph.edges)
     upsertProfiles(referenceStackProfiles)
@@ -191,7 +252,9 @@ export function WorkspacePage() {
     setBottlenecks([])
     setSelected(undefined)
     setRunError(undefined)
-    setRunHint('Generic reference · Estimated example numbers')
+    setProjectName(`${label} reference stack`)
+    setSavedHint('Local draft')
+    setRunHint(`${label} reference · Estimated capacities · catalog bindings only`)
   }
 
   function onRestoreExample() {
@@ -199,6 +262,8 @@ export function WorkspacePage() {
     setEdges(initialEdges)
     setWorkloadDraft(defaultWorkloadDraft())
     setScene('youtube')
+    setProjectName('Example: Video streaming platform (YouTube-style)')
+    setSavedHint('Local draft')
     setRan(false)
     setLastRun(undefined)
     setKpis(idleKpis)
@@ -206,6 +271,28 @@ export function WorkspacePage() {
     setSelected(undefined)
     setRunError(undefined)
     setRunHint(undefined)
+  }
+
+  function currentSnapshot() {
+    return snapshotFrom({
+      name: projectName,
+      scene,
+      nodes,
+      edges,
+      draft: getWorkloadDraft(),
+      profiles: getProfiles(),
+      fault: getFault(),
+    })
+  }
+
+  function onSave() {
+    const store = browserStore()
+    if (!store) {
+      setRunError('localStorage is not available in this tab.')
+      return
+    }
+    upsertProject(store, currentSnapshot())
+    setSavedHint('Saved to Projects')
   }
 
   async function onRun() {
@@ -269,6 +356,27 @@ export function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classFilter])
 
+  useEffect(() => {
+    const snapshot = boot.current?.snapshot
+    if (snapshot) {
+      setWorkloadDraft(snapshot.draft)
+      upsertProfiles(snapshot.profiles)
+      setFault(snapshot.fault)
+      setRunHint(`Loaded ${snapshot.name}`)
+    }
+    setSessionReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!sessionReady) return
+    const store = browserStore()
+    if (!store) return
+    const handle = window.setTimeout(() => {
+      saveCurrent(store, currentSnapshot())
+    }, 250)
+    return () => window.clearTimeout(handle)
+  }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
+
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopNav page="workspace" />
@@ -277,16 +385,21 @@ export function WorkspacePage() {
         sx={{ alignItems: 'center', px: 2, py: 1, gap: 1.5 }}
       >
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          {scene === 'reference'
-            ? 'Projects / Generic reference stack / Workspace'
-            : 'Projects / Example: Video streaming platform (YouTube-style) / Workspace'}
+          Projects / {projectName} / Workspace
         </Typography>
-        <Chip label="Saved" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', height: 20 }} />
+        <Chip
+          label={savedHint}
+          size="small"
+          sx={{ bgcolor: 'success.light', color: 'success.dark', height: 20 }}
+        />
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
           {fps >= 20 ? `${fps} FPS` : fps > 0 ? `${fps} FPS · tab` : 'FPS —'} · {modeLabel} ·{' '}
           {draft.durationSec} s · seed {draft.seed}
         </Typography>
+        <Button variant="outlined" onClick={onSave}>
+          Save
+        </Button>
         <Button variant="contained" onClick={() => void onRun()} disabled={running}>
           {running ? 'Running…' : 'Run'}
         </Button>
@@ -369,7 +482,13 @@ export function WorkspacePage() {
                 Loading canvas
               </Box>
             )}
-            <Inspector bottlenecks={shownBottlenecks} selected={selected} />
+            <Inspector
+              bottlenecks={shownBottlenecks}
+              selected={selected}
+              affectedIds={lastRun?.affectedComponentIds ?? []}
+              blastOriginId={lastRun?.blastOriginId}
+              breakerOpenEdges={lastRun?.breakerOpenEdges ?? []}
+            />
           </>
         )}
         {tab === 1 && <WorkloadEditor />}

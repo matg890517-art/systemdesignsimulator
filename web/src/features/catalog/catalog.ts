@@ -1,5 +1,6 @@
-import { genericBlocks, type ProviderBinding } from '@sds/engine'
+import { genericBlocks, usableAsCeiling, type ProviderBinding } from '@sds/engine'
 import { catalogEntries, catalogReadOn } from './entries.ts'
+import { catalogValuesFor } from './verified-limits.ts'
 import type {
   CatalogEntry,
   CatalogProvider,
@@ -9,6 +10,7 @@ import type {
 } from './types.ts'
 
 export { catalogEntries, catalogReadOn }
+export { catalogValuesFor, verifiedCatalogValues } from './verified-limits.ts'
 export type { CatalogEntry, CatalogProvider, LimitsOnPage, PaletteGroup, PaletteProvider }
 
 export const CATALOG_PROVIDERS: { id: CatalogProvider; label: string }[] = [
@@ -153,6 +155,47 @@ export function paletteGroupsFor(provider: PaletteProvider, query = ''): Palette
       })),
     }
   })
+}
+
+export const COMPARISON_CATEGORIES = [
+  'Containers',
+  'Compute',
+  'Cache',
+  'Database',
+  'Network and CDN',
+] as const
+
+export type ComparisonCeiling = {
+  text: string
+  mayCap: boolean
+  limitType: string
+}
+
+/** F18: capacity and limits only. Missing CatalogValue is shown as unsourced, never invented. */
+export type ComparisonRow = {
+  category: string
+  provider: CatalogProvider
+  catalogId: string
+  name: string
+  limitsOnPage: LimitsOnPage
+  ceilings: ComparisonCeiling[]
+}
+
+export function comparisonRows(category: string): ComparisonRow[] {
+  return catalogEntries
+    .filter((entry) => entry.category === category)
+    .map((entry) => ({
+      category: entry.category,
+      provider: entry.provider,
+      catalogId: entry.id,
+      name: entry.name,
+      limitsOnPage: entry.limitsOnPage,
+      ceilings: catalogValuesFor(entry.id).map((value) => ({
+        text: `${value.value.toLocaleString('en-US')} ${value.unit} · ${value.limitType.replaceAll('_', ' ')}`,
+        mayCap: usableAsCeiling(value),
+        limitType: value.limitType,
+      })),
+    }))
 }
 
 /** Attach a cloud service to a component without inventing quota numbers. */

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Button, Stack, TextField, Typography } from '@mui/material'
 import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
+import { mappedProviders, type MappedProvider } from '../catalog/provider-maps.ts'
 import type { PaletteProvider, PaletteTile } from '../catalog/types.ts'
 
 function limitsDot(tile: PaletteTile) {
@@ -13,7 +14,7 @@ export function Palette({
   onLoadReference,
   onRestoreExample,
 }: {
-  onLoadReference: () => void
+  onLoadReference: (provider: MappedProvider) => void
   onRestoreExample: () => void
 }) {
   const [provider, setProvider] = useState<PaletteProvider>('aws')
@@ -117,14 +118,21 @@ export function Palette({
         </Box>
       ))}
       <Stack spacing={0.75} sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-        <Button size="small" variant="outlined" onClick={onLoadReference}>
-          Load generic reference
-        </Button>
+        {mappedProviders.map((provider) => (
+          <Button
+            key={provider}
+            size="small"
+            variant={provider === 'generic' ? 'outlined' : 'text'}
+            onClick={() => onLoadReference(provider)}
+          >
+            Load {provider === 'generic' ? 'generic' : provider === 'aws' ? 'AWS' : provider === 'gcp' ? 'GCP' : 'Azure'} reference
+          </Button>
+        ))}
         <Button size="small" onClick={onRestoreExample}>
           Restore YouTube example
         </Button>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          Reference uses Estimated example numbers, not measurements.
+          Same 9 blocks. Catalog bindings only. Capacities stay Estimated until a lab test exists.
         </Typography>
       </Stack>
     </Box>

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { blastRadius } from './blast.ts'
+import { documentedBreaker } from './breaker.ts'
 import { runDiscrete } from './discrete.ts'
 import {
   edge,
@@ -40,6 +42,7 @@ describe('J9 node crash', () => {
     })
     expect(result.counts.rejected).toBeGreaterThan(0)
     expect(result.affectedComponentIds).toEqual(expect.arrayContaining(['front', 'back']))
+    expect(blastRadius(topology, 'front')).toEqual(['front', 'back'])
   })
 })
 
@@ -112,5 +115,28 @@ describe('J11 circuit breaker', () => {
       true,
     )
     expect(result.counts.breakerRejected).toBeGreaterThan(0)
+  })
+
+  it('opens the upstream breaker when a downstream node crashes', () => {
+    const topology = {
+      components: [
+        generator('clients'),
+        worker('front', { servers: 8, serviceMs: 2, queue: 'unbounded' }),
+        worker('back', { servers: 8, serviceMs: 2, queue: 'unbounded' }),
+      ],
+      edges: [
+        edge('c-f', 'clients', 'front'),
+        edge('f-b', 'front', 'back', { breaker: { ...documentedBreaker } }),
+      ],
+    }
+    const result = runDiscrete(topology, {
+      ...workloadAt(80, { durationSec: 1.2, seed: 17 }),
+      faults: [{ tSec: 0, kind: 'crash', componentId: 'back' }],
+    })
+    expect(result.events.some((event) => event.type === 'breaker-change' && event.edge === 'f-b' && event.to === 'open')).toBe(
+      true,
+    )
+    expect(result.counts.breakerRejected).toBeGreaterThan(0)
+    expect(result.affectedComponentIds).toEqual(['back'])
   })
 })

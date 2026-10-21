@@ -226,4 +226,45 @@ export interface DiscreteRunResult {
   measuredLoss: number
   meanNetworkMs: number
   affectedComponentIds: string[]
+  /** Lookups and hits per cache/CDN. Absent when the component has no hit rate. */
+  cacheStats: Record<string, { lookups: number; hits: number; measuredHitRate: number }>
+}
+
+export type LimitType =
+  | 'hard_limit'
+  | 'adjustable_quota'
+  | 'best_effort_target'
+  | 'performance_guidance'
+  | 'configurable_setting'
+  | 'documented_behavior'
+  | 'quota_adjustability_unknown'
+
+export type CatalogValueStatus = 'documented' | 'measured' | 'estimated' | 'unknown'
+
+export type CatalogValueScope =
+  | 'function'
+  | 'account'
+  | 'region'
+  | 'distribution'
+  | 'queue'
+  | 'message'
+  | 'prefix'
+  | 'invocation'
+  | 'service'
+  | 'cluster'
+  | 'target'
+
+export type CatalogValueCap = 'throughputRps' | 'servers' | 'bandwidthBps'
+
+/** Sourced catalog figure. Only hard_limit and adjustable_quota may cap the engine. */
+export interface CatalogValue {
+  value: number
+  unit: string
+  scope: CatalogValueScope
+  limitType: LimitType
+  conditions: Record<string, string>
+  sourceUrl: string
+  retrievedOn: string
+  status: CatalogValueStatus
+  caps?: CatalogValueCap
 }

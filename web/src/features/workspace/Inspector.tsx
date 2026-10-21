@@ -101,9 +101,15 @@ function ConfigPanel({
 export function Inspector({
   bottlenecks,
   selected,
+  affectedIds = [],
+  blastOriginId,
+  breakerOpenEdges = [],
 }: {
   bottlenecks: Bottleneck[]
   selected?: { id: string; title: string; catalogId?: string }
+  affectedIds?: string[]
+  blastOriginId?: string
+  breakerOpenEdges?: string[]
 }) {
   const [tab, setTab] = useState(0)
   return (
@@ -123,6 +129,7 @@ export function Inspector({
       <Tabs value={tab} onChange={(_, value) => setTab(value)}>
         <Tab label="Config" />
         <Tab label={`Bottlenecks ${bottlenecks.length}`} />
+        <Tab label={`Blast ${affectedIds.length}`} />
       </Tabs>
       {tab === 0 && (
         <ConfigPanel
@@ -163,9 +170,49 @@ export function Inspector({
                 {item.fromEngine ? 'From engine · ' : 'Estimated · '}
                 {item.suggestion}
               </Typography>
+              {item.citation ? (
+                <Typography sx={{ fontSize: 11, mt: 0.5, color: 'text.secondary' }}>
+                  {item.citation}
+                </Typography>
+              ) : null}
             </Box>
           ))}
         </>
+      )}
+      {tab === 2 && (
+        <Stack spacing={1}>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            Downstream of a crash, from the engine graph. Unknown capacity still does not cap.
+          </Typography>
+          {blastOriginId ? (
+            <Typography sx={{ fontSize: 12, fontWeight: 600 }}>Origin {blastOriginId}</Typography>
+          ) : (
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+              Run with AKS crash (Faults tab) to fill this view.
+            </Typography>
+          )}
+          {breakerOpenEdges.length > 0 ? (
+            <Typography sx={{ fontSize: 12 }}>
+              Upstream breaker open on {breakerOpenEdges.join(', ')}.
+            </Typography>
+          ) : null}
+          {affectedIds.map((id) => (
+            <Box
+              key={id}
+              sx={{
+                p: 1,
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: id === blastOriginId ? 'error.main' : 'divider',
+                bgcolor: id === blastOriginId ? 'error.light' : 'background.default',
+              }}
+            >
+              <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
+                {id === blastOriginId ? `${id} · crashed` : id}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
       )}
     </Box>
   )

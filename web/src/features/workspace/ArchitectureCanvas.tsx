@@ -37,7 +37,11 @@ function ClassAwareEdge(props: EdgeProps) {
       {...props}
       style={{
         ...props.style,
-        stroke: visible ? '#7B8794' : '#D5DBE3',
+        stroke: visible
+          ? typeof props.style?.stroke === 'string'
+            ? props.style.stroke
+            : '#7B8794'
+          : '#D5DBE3',
         opacity: visible ? 1 : 0.14,
       }}
       label={visible ? props.label : undefined}

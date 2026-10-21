@@ -57,7 +57,11 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
           </Typography>
         </Stack>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          {data.meta}
+          {data.blastOrigin
+            ? `Crash origin · ${data.meta}`
+            : data.inBlast
+              ? `Blast radius · ${data.meta}`
+              : data.meta}
         </Typography>
       </Stack>
       <Handle type="source" position={Position.Right} />

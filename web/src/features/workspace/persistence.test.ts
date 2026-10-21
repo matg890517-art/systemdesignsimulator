@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import { replayLog, runFluid } from '@sds/engine'
+import { getProfiles } from '../calibration/library.ts'
+import { defaultWorkloadDraft } from './compile.ts'
+import { initialEdges, initialNodes } from './graph.ts'
+import {
+  compileSnapshot,
+  createMemoryStore,
+  listProjects,
+  parseSnapshot,
+  serializeSnapshot,
+  snapshotFrom,
+  upsertProject,
+} from './persistence.ts'
+
+describe('F12 topology snapshot', () => {
+  it('round-trips and replays the same fluid timeline', () => {
+    const snapshot = snapshotFrom({
+      name: 'Example: Video streaming',
+      scene: 'youtube',
+      nodes: initialNodes,
+      edges: initialEdges,
+      draft: { ...defaultWorkloadDraft(), durationSec: 8 },
+      profiles: getProfiles(),
+      fault: 'none',
+    })
+    const restored = parseSnapshot(serializeSnapshot(snapshot))
+    expect(restored?.draft.seed).toBe(4821)
+    expect(restored?.nodes.map((node) => node.id)).toEqual(snapshot.nodes.map((node) => node.id))
+    if (!restored) throw new Error('parse failed')
+    const a = compileSnapshot(snapshot)
+    const b = compileSnapshot(restored)
+    expect(a.workload.seed).toBe(b.workload.seed)
+    expect(replayLog(runFluid(a.topology, a.workload))).toBe(replayLog(runFluid(b.topology, b.workload)))
+  })
+
+  it('keeps named projects in the store and lists newest first', () => {
+    const store = createMemoryStore()
+    const first = snapshotFrom({
+      id: 'a',
+      name: 'A',
+      scene: 'youtube',
+      nodes: initialNodes,
+      edges: initialEdges,
+      draft: defaultWorkloadDraft(),
+      profiles: getProfiles(),
+      fault: 'none',
+      savedAt: '2026-10-21T00:00:00.000Z',
+    })
+    const second = snapshotFrom({
+      id: 'b',
+      name: 'B',
+      scene: 'reference',
+      nodes: initialNodes,
+      edges: initialEdges,
+      draft: defaultWorkloadDraft(),
+      profiles: getProfiles(),
+      fault: 'crash',
+      savedAt: '2026-10-21T01:00:00.000Z',
+    })
+    upsertProject(store, first)
+    upsertProject(store, second)
+    expect(listProjects(store).map((item) => item.id)).toEqual(['b', 'a'])
+  })
+})
