@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Stack, TextField, Typography } from '@mui/material'
+import { Box, Button, Stack, TextField, Typography } from '@mui/material'
 import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
 import type { PaletteProvider, PaletteTile } from '../catalog/types.ts'
 
@@ -9,7 +9,13 @@ function limitsDot(tile: PaletteTile) {
   return 'divider'
 }
 
-export function Palette() {
+export function Palette({
+  onLoadReference,
+  onRestoreExample,
+}: {
+  onLoadReference: () => void
+  onRestoreExample: () => void
+}) {
   const [provider, setProvider] = useState<PaletteProvider>('aws')
   const [query, setQuery] = useState('')
   const groups = paletteGroupsFor(provider, query)
@@ -110,6 +116,17 @@ export function Palette() {
           )}
         </Box>
       ))}
+      <Stack spacing={0.75} sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+        <Button size="small" variant="outlined" onClick={onLoadReference}>
+          Load generic reference
+        </Button>
+        <Button size="small" onClick={onRestoreExample}>
+          Restore YouTube example
+        </Button>
+        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+          Reference uses Estimated example numbers, not measurements.
+        </Typography>
+      </Stack>
     </Box>
   )
 }

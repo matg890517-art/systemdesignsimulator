@@ -8,6 +8,7 @@ import {
   type Edge,
   type LoadShape,
   type RequestClassId,
+  type Routing,
   type Topology,
   type Value,
   type Workload,
@@ -114,6 +115,14 @@ const EDGE_CLASSES: Record<string, RequestClassId[]> = {
   'sb-blob': ['bulk'],
   'blob-fd': ['bulk'],
   'copy-link': ['bulk'],
+  'c-cdn': ['read', 'write'],
+  'cdn-lb': ['read', 'write'],
+  'lb-svc': ['read', 'write'],
+  'svc-cache': ['read'],
+  'svc-db': ['write'],
+  'c-q': ['async', 'bulk'],
+  'q-w': ['async', 'bulk'],
+  'w-obj': ['bulk'],
 }
 
 const CLASS_BYTES: Record<WorkspaceClassId, { requestBytes: number; responseBytes: number }> = {
@@ -251,6 +260,11 @@ function behaviorFor(
   }
 }
 
+function routingFor(rfEdge: RfEdge): Routing {
+  const extra = rfEdge.data as { routing?: Routing } | undefined
+  return extra?.routing ?? { mode: 'single' }
+}
+
 function crashTarget(components: Component[]): string | undefined {
   return components.find((item) => item.id === 'aks')?.id ?? components.find((item) => item.kind === 'worker')?.id
 }
@@ -294,7 +308,7 @@ export function compileCanvas(
       id: rfEdge.id,
       from: rfEdge.source,
       to: rfEdge.target,
-      routing: { mode: 'single' },
+      routing: routingFor(rfEdge),
       fanOut: 1,
       classes,
       network: {

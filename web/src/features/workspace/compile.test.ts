@@ -10,6 +10,12 @@ import {
   nodeCarriesClass,
 } from './compile.ts'
 import { initialEdges, initialNodes } from './graph.ts'
+import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import {
+  referenceStackGraph,
+  referenceStackProfiles,
+  referenceWorkloadDraft,
+} from './reference-graph.ts'
 import { runWorkspace } from './simulate.ts'
 import type { ServiceNodeData } from './types.ts'
 import type { Node } from '@xyflow/react'
@@ -152,3 +158,76 @@ describe('F24 class filter', () => {
     expect(result.run.classStats.cloudfront.read.completed).toBeGreaterThan(40_000)
   })
 })
+
+describe('F3 config profiles', () => {
+  it('opens every selected node with unknown fields and does not invent numbers', () => {
+    const ecs = blankProfileForNode('ecs', 'ECS ×60', 'aws-ecs')
+    expect(ecs.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+    expect(ecs.fields.find((field) => field.role === 'serviceMs')?.value).toEqual({
+      state: 'unknown',
+    })
+    const clients = blankProfileForNode('clients', 'Clients', 'generic-clients')
+    expect(clients.fields).toEqual([])
+  })
+
+  it('keeps bound AKS numbers and fills missing CloudFront capacity as unknown', () => {
+    const aks = configProfileForNode(
+      getProfiles().find((profile) => profile.bindsTo === 'aks'),
+      'aks',
+      'AKS ×84',
+      'azure-aks',
+    )
+    expect(aks.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
+      state: 'set',
+      value: 84,
+      confidence: 'estimated',
+    })
+    const cf = configProfileForNode(
+      getProfiles().find((profile) => profile.bindsTo === 'cloudfront'),
+      'cloudfront',
+      'CloudFront',
+      'aws-cloudfront',
+    )
+    expect(cf.fields.find((field) => field.role === 'cacheHitRate')?.value).toMatchObject({
+      state: 'set',
+      value: 0.92,
+    })
+    expect(cf.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+  })
+})
+
+describe('generic reference stack', () => {
+  it('compiles all 9 generic tiles and runs fluid without invented measurements', () => {
+    const graph = referenceStackGraph()
+    expect(graph.nodes).toHaveLength(9)
+    const { topology, workload } = compileCanvas(
+      graph.nodes,
+      graph.edges,
+      referenceWorkloadDraft(),
+      referenceStackProfiles,
+      'none',
+    )
+    expect(topology.components.map((component) => component.id).sort()).toEqual(
+      ['cache', 'cdn', 'clients', 'db', 'lb', 'object', 'queue', 'service', 'worker'].sort(),
+    )
+    expect(topology.components.find((item) => item.id === 'service')?.behavior.servers).toMatchObject(
+      { state: 'set', value: 8, confidence: 'estimated' },
+    )
+    const split = topology.edges.filter((edge) => edge.from === 'clients')
+    expect(split.every((edge) => edge.routing.mode === 'weighted')).toBe(true)
+    expect(workload.offered.clients.read).toBe(200)
+
+    const result = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), durationSec: 8 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
+    expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
+  })
+})
+

@@ -147,6 +147,7 @@ function CanvasInner({
         }}
         fitView
         minZoom={0.4}
+        snapGrid={[16, 16]}
       >
         <Background gap={16} color="#D5DBE3" />
         <Controls />

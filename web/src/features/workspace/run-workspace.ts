@@ -39,6 +39,21 @@ export const idleKpis: KpiState = {
   costHint: 'estimate, three providers',
 }
 
+export function kpisFromDraft(draft: WorkloadDraft): KpiState {
+  const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
+  return {
+    load: formatRps(load),
+    loadHint: `R ${draft.classes.read.toLocaleString('en-US')} · W ${draft.classes.write.toLocaleString('en-US')} · A ${draft.classes.async.toLocaleString('en-US')} · B ${draft.classes.bulk}/s`,
+    latency: '—',
+    latencyHint: 'Run to fill from the engine',
+    errors: '—',
+    bottlenecks: '—',
+    bottleneckHint: 'Run to rank from the engine',
+    cost: '—',
+    costHint: 'No prices in v1',
+  }
+}
+
 export type RunProgress = {
   t: number
   fraction: number
@@ -146,7 +161,6 @@ function kpisFromStats(
   return {
     bottlenecks,
     kpis: {
-      ...idleKpis,
       load: formatRps(load),
       loadHint: hint,
       latency: extra.latency,
@@ -156,6 +170,8 @@ function kpisFromStats(
       bottleneckHint: bottlenecks.length
         ? bottlenecks.map((item) => item.title).join(', ')
         : `none at 85% in ${mode} mode`,
+      cost: '—',
+      costHint: 'No prices in v1',
     },
   }
 }

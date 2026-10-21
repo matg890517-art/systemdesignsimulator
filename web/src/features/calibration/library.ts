@@ -128,10 +128,23 @@ export function profileForNode(nodeId: string): CalibrationProfile | undefined {
 }
 
 export function updateProfile(next: CalibrationProfile) {
+  upsertProfile(next)
+}
+
+export function upsertProfile(next: CalibrationProfile) {
+  const exists = state.profiles.some((profile) => profile.id === next.id)
   emit({
     ...state,
-    profiles: state.profiles.map((profile) => (profile.id === next.id ? next : profile)),
+    profiles: exists
+      ? state.profiles.map((profile) => (profile.id === next.id ? next : profile))
+      : [...state.profiles, next],
   })
+}
+
+export function upsertProfiles(incoming: CalibrationProfile[]) {
+  const byId = new Map(state.profiles.map((profile) => [profile.id, profile]))
+  for (const profile of incoming) byId.set(profile.id, profile)
+  emit({ ...state, profiles: [...byId.values()] })
 }
 
 export function importCalibrationCsv(text: string) {

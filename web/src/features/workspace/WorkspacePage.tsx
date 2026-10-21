@@ -8,12 +8,17 @@ import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
-import { getFault, getProfiles, useLibrary } from '../calibration/library.ts'
+import { getFault, getProfiles, upsertProfiles, useLibrary } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
-import { idleKpis, pickNodeStat } from './simulate.ts'
+import { idleKpis, kpisFromDraft, pickNodeStat } from './simulate.ts'
 import { runWorkspaceAsync } from './engine-client.ts'
-import { getWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
-import { nodeCarriesClass, type ClassFilter } from './compile.ts'
+import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
+import { defaultWorkloadDraft, nodeCarriesClass, type ClassFilter } from './compile.ts'
+import {
+  referenceStackGraph,
+  referenceStackProfiles,
+  referenceWorkloadDraft,
+} from './reference-graph.ts'
 import type { Bottleneck, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
 
 const seedBottlenecks: Bottleneck[] = [
@@ -69,18 +74,46 @@ export function WorkspacePage() {
   const [classFilter, setClassFilter] = useState<ClassFilter>('all')
   const [lastRun, setLastRun] = useState<WorkspaceRun>()
   const [running, setRunning] = useState(false)
+  const [scene, setScene] = useState<'youtube' | 'reference'>('youtube')
+  const [fps, setFps] = useState(0)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const library = useLibrary()
   const draft = useWorkloadDraft()
   const runGen = useRef(0)
   const paintFrame = useRef(0)
+  const minFpsDuringRun = useRef<number | undefined>(undefined)
+  const maxPaintMs = useRef(0)
 
   useEffect(() => {
     setCanvasReady(true)
   }, [])
 
-  const kpisToShow = useMemo(() => kpis, [kpis])
+  useEffect(() => {
+    let frames = 0
+    let last = performance.now()
+    let raf = 0
+    const loop = (now: number) => {
+      frames += 1
+      if (now - last >= 500) {
+        const next = Math.round((frames * 1000) / (now - last))
+        if (next > 0) setFps(next)
+        frames = 0
+        last = now
+      }
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  useEffect(() => {
+    if (!running || fps <= 0) return
+    minFpsDuringRun.current =
+      minFpsDuringRun.current === undefined ? fps : Math.min(minFpsDuringRun.current, fps)
+  }, [running, fps])
+
+  const kpisToShow = ran ? kpis : scene === 'youtube' ? idleKpis : kpisFromDraft(draft)
   const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
   const shownBottlenecks = useMemo(() => {
     if (classFilter === 'all') return bottlenecks
@@ -145,9 +178,41 @@ export function WorkspacePage() {
     )
   }
 
+  function onLoadReference() {
+    const graph = referenceStackGraph()
+    setNodes(graph.nodes)
+    setEdges(graph.edges)
+    upsertProfiles(referenceStackProfiles)
+    setWorkloadDraft(referenceWorkloadDraft())
+    setScene('reference')
+    setRan(false)
+    setLastRun(undefined)
+    setKpis(idleKpis)
+    setBottlenecks([])
+    setSelected(undefined)
+    setRunError(undefined)
+    setRunHint('Generic reference · Estimated example numbers')
+  }
+
+  function onRestoreExample() {
+    setNodes(initialNodes)
+    setEdges(initialEdges)
+    setWorkloadDraft(defaultWorkloadDraft())
+    setScene('youtube')
+    setRan(false)
+    setLastRun(undefined)
+    setKpis(idleKpis)
+    setBottlenecks(seedBottlenecks)
+    setSelected(undefined)
+    setRunError(undefined)
+    setRunHint(undefined)
+  }
+
   async function onRun() {
     const id = runGen.current + 1
     runGen.current = id
+    minFpsDuringRun.current = undefined
+    maxPaintMs.current = 0
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
@@ -166,8 +231,11 @@ export function WorkspacePage() {
           cancelAnimationFrame(paintFrame.current)
           paintFrame.current = requestAnimationFrame(() => {
             if (!live || runGen.current !== id) return
+            const started = performance.now()
             paintLiveStats(progress.nodeStats)
-            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
+            const paintMs = performance.now() - started
+            maxPaintMs.current = Math.max(maxPaintMs.current, paintMs)
+            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s · paint ${paintMs.toFixed(1)} ms`)
           })
         },
       )
@@ -181,7 +249,10 @@ export function WorkspacePage() {
       setRan(true)
       setKpis(result.run.kpis)
       setBottlenecks(result.run.bottlenecks)
-      setRunHint(result.run.hint)
+      const fpsHint =
+        minFpsDuringRun.current !== undefined ? ` · min ${minFpsDuringRun.current} FPS` : ''
+      const paintHint = maxPaintMs.current > 0 ? ` · paint max ${maxPaintMs.current.toFixed(1)} ms` : ''
+      setRunHint(`${result.run.hint}${fpsHint}${paintHint}`)
       setLastRun(result.run)
       paintRun(result.run, classFilter)
     } catch (error) {
@@ -206,12 +277,15 @@ export function WorkspacePage() {
         sx={{ alignItems: 'center', px: 2, py: 1, gap: 1.5 }}
       >
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          Projects / Example: Video streaming platform (YouTube-style) / Workspace
+          {scene === 'reference'
+            ? 'Projects / Generic reference stack / Workspace'
+            : 'Projects / Example: Video streaming platform (YouTube-style) / Workspace'}
         </Typography>
         <Chip label="Saved" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', height: 20 }} />
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          {modeLabel} · {draft.durationSec} s · seed {draft.seed}
+          {fps >= 20 ? `${fps} FPS` : fps > 0 ? `${fps} FPS · tab` : 'FPS —'} · {modeLabel} ·{' '}
+          {draft.durationSec} s · seed {draft.seed}
         </Typography>
         <Button variant="contained" onClick={() => void onRun()} disabled={running}>
           {running ? 'Running…' : 'Run'}
@@ -270,7 +344,7 @@ export function WorkspacePage() {
       <Box sx={{ flex: 1, display: 'flex', gap: 1.5, p: 1.5, minHeight: 0 }}>
         {tab === 0 && (
           <>
-            <Palette />
+            <Palette onLoadReference={onLoadReference} onRestoreExample={onRestoreExample} />
             {canvasReady ? (
               <ArchitectureCanvas
                 nodes={nodes}

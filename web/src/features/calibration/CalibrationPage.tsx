@@ -1,16 +1,9 @@
 import { useMemo, useState } from 'react'
-import {
-  Box,
-  Button,
-  Chip,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material'
+import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table'
 import { TopNav } from '../../components/TopNav.tsx'
-import type { CalibrationField, CalibrationProfile, Confidence } from './types.ts'
+import type { CalibrationField, CalibrationProfile } from './types.ts'
+import { FieldEditor } from './FieldEditor.tsx'
 import {
   exportCalibrationCsv,
   importCalibrationCsv,
@@ -201,61 +194,19 @@ export function CalibrationPage() {
                 {draft.notes}
               </Typography>
               <Stack spacing={2} sx={{ mt: 2, maxWidth: 420 }}>
-                {fieldSummary.map((field) => {
-                  const current = field.value.state === 'set' ? field.value : undefined
-                  return (
-                    <Box key={field.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-                          {field.label}
-                        </Typography>
-                        <Chip size="small" label={chipLabel(field)} sx={{ height: 20, ...chipColor(field) }} />
-                      </Stack>
-                      <TextField
-                        size="small"
-                        type="number"
-                        disabled={!current}
-                        value={current ? current.value : ''}
-                        onChange={(event) => {
-                          if (!current) return
-                          const value = Number(event.target.value)
-                          if (!Number.isFinite(value)) return
-                          patchField(field.id, {
-                            ...field,
-                            value: { ...current, value },
-                          })
-                        }}
-                      />
-                      <TextField
-                        select
-                        size="small"
-                        label="Confidence"
-                        value={current ? current.confidence : 'unknown'}
-                        onChange={(event) => {
-                          const next = event.target.value
-                          if (next === 'unknown') {
-                            patchField(field.id, { ...field, value: { state: 'unknown' } })
-                            return
-                          }
-                          patchField(field.id, {
-                            ...field,
-                            value: {
-                              state: 'set',
-                              value: current ? current.value : 0,
-                              confidence: next as Confidence,
-                              sourceId: current ? current.sourceId : 'calibration',
-                            },
-                          })
-                        }}
-                      >
-                        <MenuItem value="unknown">Unknown</MenuItem>
-                        <MenuItem value="estimated">Estimated</MenuItem>
-                        <MenuItem value="vendor">Vendor figure</MenuItem>
-                        <MenuItem value="measured">Measured</MenuItem>
-                      </TextField>
-                    </Box>
-                  )
-                })}
+                {fieldSummary.map((field) => (
+                  <Box key={field.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{field.label}</Typography>
+                      <Chip size="small" label={chipLabel(field)} sx={{ height: 20, ...chipColor(field) }} />
+                    </Stack>
+                    <FieldEditor
+                      field={field}
+                      sourceId="calibration"
+                      onChange={(next) => patchField(field.id, next)}
+                    />
+                  </Box>
+                ))}
               </Stack>
             </>
           ) : null}
