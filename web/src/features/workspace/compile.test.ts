@@ -5,7 +5,9 @@ import {
   compileCanvas,
   defaultWorkloadDraft,
   DISCRETE_EVENT_GUARD,
+  edgeCarriesClass,
   kindForNode,
+  nodeCarriesClass,
 } from './compile.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { runWorkspace } from './simulate.ts'
@@ -120,5 +122,33 @@ describe('compileCanvas', () => {
       expect(ok.run.mode).toBe('discrete')
       expect(ok.run.nodeStats.aks.offered).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('F24 class filter', () => {
+  const service = (id: string) =>
+    initialNodes.find((node) => node.id === id) as Node<ServiceNodeData>
+
+  it('keeps read on the viewer path and bulk on the upload path', () => {
+    expect(edgeCarriesClass('v-cf', 'viewers', 'read')).toBe(true)
+    expect(edgeCarriesClass('v-cf', 'viewers', 'bulk')).toBe(false)
+    expect(edgeCarriesClass('up-aks', 'uploaders', 'bulk')).toBe(true)
+    expect(edgeCarriesClass('up-aks', 'uploaders', 'read')).toBe(false)
+    expect(nodeCarriesClass(service('aks'), initialEdges, 'bulk')).toBe(true)
+    expect(nodeCarriesClass(service('aks'), initialEdges, 'read')).toBe(false)
+    expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'read')).toBe(true)
+    expect(nodeCarriesClass(service('alb'), initialEdges, 'bulk')).toBe(false)
+    expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'bulk')).toBe(true)
+    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(true)
+  })
+
+  it('exposes per-class util so a bulk filter can still see AKS saturation', () => {
+    const draft = { ...defaultWorkloadDraft(), durationSec: 8 }
+    const result = runWorkspace(initialNodes, initialEdges, draft, getProfiles(), 'none')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.run.classStats.aks.bulk.util).toBeCloseTo(0.95, 2)
+    expect(result.run.classStats.aks.read?.offered ?? 0).toBe(0)
+    expect(result.run.classStats.cloudfront.read.completed).toBeGreaterThan(40_000)
   })
 })

@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material'
 import { useEdgesState, useNodesState } from '@xyflow/react'
 import { TopNav } from '../../components/TopNav.tsx'
 import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
+import { ClassFilterChips } from './ClassFilterChips.tsx'
 import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
 import { getFault, getProfiles, useLibrary } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
-import { idleKpis, runWorkspace } from './simulate.ts'
+import { idleKpis, pickNodeStat } from './simulate.ts'
+import { runWorkspaceAsync } from './engine-client.ts'
 import { getWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
-import type { Bottleneck, KpiState, ServiceNodeData } from './types.ts'
+import { nodeCarriesClass, type ClassFilter } from './compile.ts'
+import type { Bottleneck, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
 
 const seedBottlenecks: Bottleneck[] = [
   {
@@ -63,10 +66,15 @@ export function WorkspacePage() {
   const [ran, setRan] = useState(false)
   const [runError, setRunError] = useState<string>()
   const [runHint, setRunHint] = useState<string>()
+  const [classFilter, setClassFilter] = useState<ClassFilter>('all')
+  const [lastRun, setLastRun] = useState<WorkspaceRun>()
+  const [running, setRunning] = useState(false)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const library = useLibrary()
   const draft = useWorkloadDraft()
+  const runGen = useRef(0)
+  const paintFrame = useRef(0)
 
   useEffect(() => {
     setCanvasReady(true)
@@ -74,27 +82,39 @@ export function WorkspacePage() {
 
   const kpisToShow = useMemo(() => kpis, [kpis])
   const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
+  const shownBottlenecks = useMemo(() => {
+    if (classFilter === 'all') return bottlenecks
+    return bottlenecks.filter((item) => {
+      const node = nodes.find((entry) => entry.id === item.id)
+      if (!node || node.type === 'zone') return false
+      return nodeCarriesClass(
+        {
+          id: node.id,
+          type: 'service',
+          position: node.position,
+          data: node.data as ServiceNodeData,
+        },
+        edges,
+        classFilter,
+      )
+    })
+  }, [bottlenecks, classFilter, nodes, edges])
 
-  function onRun() {
-    const result = runWorkspace(nodes, edges, getWorkloadDraft(), getProfiles(), getFault())
-    if (!result.ok) {
-      setRunError(result.reason)
-      return
-    }
-    setRan(true)
-    setRunError(undefined)
-    setKpis(result.run.kpis)
-    setBottlenecks(result.run.bottlenecks)
-    setRunHint(result.run.hint)
+  function paintRun(run: WorkspaceRun, filter: ClassFilter) {
     setNodes((current) =>
       current.map((node) => {
         if (node.type === 'zone') return node
         const data = node.data as ServiceNodeData
-        const stat = result.run.nodeStats[node.id]
-        if (!stat) {
+        const stat = pickNodeStat(run, node.id, filter)
+        if (!stat || (filter !== 'all' && stat.offered <= 0 && stat.completed <= 0)) {
           return {
             ...node,
-            data: { ...data, util: 0, p99: 'no traffic', meta: `${result.run.mode} · not on path` },
+            data: {
+              ...data,
+              util: 0,
+              p99: filter === 'all' ? 'no traffic' : `no ${filter}`,
+              meta: `${run.mode} · ${filter === 'all' ? 'not on path' : `off ${filter} path`}`,
+            },
           }
         }
         return {
@@ -103,12 +123,80 @@ export function WorkspacePage() {
             ...data,
             util: stat.util,
             p99: stat.p99,
-            meta: stat.meta,
+            meta: filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`,
           },
         }
       }),
     )
   }
+
+  function paintLiveStats(stats: WorkspaceRun['nodeStats']) {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.type === 'zone') return node
+        const data = node.data as ServiceNodeData
+        const stat = stats[node.id]
+        if (!stat) return node
+        return {
+          ...node,
+          data: { ...data, util: stat.util, p99: stat.p99, meta: `${stat.meta} · live` },
+        }
+      }),
+    )
+  }
+
+  async function onRun() {
+    const id = runGen.current + 1
+    runGen.current = id
+    setRunning(true)
+    setRunError(undefined)
+    setRunHint('worker · running')
+    let live = true
+    try {
+      const result = await runWorkspaceAsync(
+        {
+          nodes,
+          edges,
+          draft: getWorkloadDraft(),
+          profiles: getProfiles(),
+          fault: getFault(),
+        },
+        (progress) => {
+          if (!live || runGen.current !== id) return
+          cancelAnimationFrame(paintFrame.current)
+          paintFrame.current = requestAnimationFrame(() => {
+            if (!live || runGen.current !== id) return
+            paintLiveStats(progress.nodeStats)
+            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
+          })
+        },
+      )
+      live = false
+      cancelAnimationFrame(paintFrame.current)
+      if (runGen.current !== id) return
+      if (!result.ok) {
+        setRunError(result.reason)
+        return
+      }
+      setRan(true)
+      setKpis(result.run.kpis)
+      setBottlenecks(result.run.bottlenecks)
+      setRunHint(result.run.hint)
+      setLastRun(result.run)
+      paintRun(result.run, classFilter)
+    } catch (error) {
+      if (runGen.current !== id) return
+      setRunError(error instanceof Error ? error.message : String(error))
+    } finally {
+      if (runGen.current === id) setRunning(false)
+    }
+  }
+
+  useEffect(() => {
+    if (lastRun) paintRun(lastRun, classFilter)
+    // Paint from the last engine run when the class filter changes. Node positions stay in setNodes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classFilter])
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
@@ -125,17 +213,28 @@ export function WorkspacePage() {
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
           {modeLabel} · {draft.durationSec} s · seed {draft.seed}
         </Typography>
-        <Button variant="contained" onClick={onRun}>
-          Run
+        <Button variant="contained" onClick={() => void onRun()} disabled={running}>
+          {running ? 'Running…' : 'Run'}
         </Button>
       </Stack>
-      <Box sx={{ bgcolor: 'background.paper', px: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          bgcolor: 'background.paper',
+          px: 2,
+          borderBottom: 1,
+          borderColor: 'divider',
+          gap: 2,
+        }}
+      >
         <Tabs value={tab} onChange={(_, value) => setTab(value)}>
           <Tab label="Canvas" />
           <Tab label="Workload" />
           <Tab label="Faults" />
         </Tabs>
-      </Box>
+        {tab === 0 ? <ClassFilterChips value={classFilter} onChange={setClassFilter} /> : null}
+      </Stack>
       <Stack
         direction="row"
         sx={{
@@ -155,9 +254,9 @@ export function WorkspacePage() {
           hint={kpisToShow.bottleneckHint}
         />
         <Kpi label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
-        {ran ? (
+        {running || ran ? (
           <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'text.secondary' }}>
-            Last run from @sds/engine
+            {running ? 'Running on a Web Worker' : 'Last run from @sds/engine'}
             {library.fault !== 'none' ? ` · fault ${library.fault}` : ''}
             {runHint ? ` · ${runHint}` : ''}
           </Typography>
@@ -176,6 +275,7 @@ export function WorkspacePage() {
               <ArchitectureCanvas
                 nodes={nodes}
                 edges={edges}
+                classFilter={classFilter}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
@@ -195,7 +295,7 @@ export function WorkspacePage() {
                 Loading canvas
               </Box>
             )}
-            <Inspector bottlenecks={bottlenecks} selected={selected} />
+            <Inspector bottlenecks={shownBottlenecks} selected={selected} />
           </>
         )}
         {tab === 1 && <WorkloadEditor />}

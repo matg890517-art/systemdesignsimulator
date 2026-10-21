@@ -162,10 +162,12 @@ export function classesForGenerator(nodeId: string, kind: CanonicalKind): Worksp
   return []
 }
 
-function classesForEdge(
+export type ClassFilter = 'all' | WorkspaceClassId
+
+export function classesForEdge(
   edgeId: string,
   fromId: string,
-  active: RequestClassId[],
+  active: RequestClassId[] = [...REQUEST_CLASSES],
 ): RequestClassId[] {
   const mapped = EDGE_CLASSES[edgeId]
   if (mapped) return mapped.filter((id) => active.includes(id))
@@ -176,6 +178,29 @@ function classesForEdge(
     return active.filter((id) => id === 'async' || id === 'read')
   }
   return active.filter((id) => id === 'read' || id === 'write')
+}
+
+export function edgeCarriesClass(
+  edgeId: string,
+  fromId: string,
+  classId: WorkspaceClassId,
+): boolean {
+  return classesForEdge(edgeId, fromId).includes(classId)
+}
+
+export function nodeCarriesClass(
+  node: Node<ServiceNodeData>,
+  edges: { id: string; source: string; target: string }[],
+  filter: ClassFilter,
+): boolean {
+  if (filter === 'all') return true
+  const kind = kindForNode(node)
+  if (classesForGenerator(node.id, kind).includes(filter)) return true
+  return edges.some(
+    (edge) =>
+      (edge.source === node.id || edge.target === node.id) &&
+      edgeCarriesClass(edge.id, edge.source, filter),
+  )
 }
 
 function numericField(profile: CalibrationProfile | undefined, role: CalibrationProfile['fields'][number]['role']) {

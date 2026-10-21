@@ -5,10 +5,12 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  SmoothStepEdge,
   addEdge,
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type OnEdgesChange,
   type OnNodesChange,
@@ -16,6 +18,8 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Box } from '@mui/material'
 import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
+import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-filter.ts'
+import { edgeCarriesClass } from './compile.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
@@ -23,6 +27,26 @@ export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
 const nodeTypes = {
   service: ServiceNodeView,
   zone: ZoneNodeView,
+}
+
+function ClassAwareEdge(props: EdgeProps) {
+  const { filter } = useClassFilter()
+  const visible = filter === 'all' || edgeCarriesClass(props.id, props.source, filter)
+  return (
+    <SmoothStepEdge
+      {...props}
+      style={{
+        ...props.style,
+        stroke: visible ? '#7B8794' : '#D5DBE3',
+        opacity: visible ? 1 : 0.14,
+      }}
+      label={visible ? props.label : undefined}
+    />
+  )
+}
+
+const edgeTypes = {
+  smoothstep: ClassAwareEdge,
 }
 
 function CanvasInner({
@@ -110,6 +134,7 @@ function CanvasInner({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         onSelectionChange={({ nodes: selected }) => {
           const node = selected[0]
@@ -142,6 +167,7 @@ function CanvasInner({
 export function ArchitectureCanvas(props: {
   nodes: WorkspaceNode[]
   edges: Edge[]
+  classFilter: ClassFilter
   onNodesChange: OnNodesChange<WorkspaceNode>
   onEdgesChange: OnEdgesChange<Edge>
   setEdges: Dispatch<SetStateAction<Edge[]>>
@@ -149,7 +175,16 @@ export function ArchitectureCanvas(props: {
 }) {
   return (
     <ReactFlowProvider>
-      <CanvasInner {...props} />
+      <ClassFilterProvider value={{ filter: props.classFilter, edges: props.edges }}>
+        <CanvasInner
+          nodes={props.nodes}
+          edges={props.edges}
+          onNodesChange={props.onNodesChange}
+          onEdgesChange={props.onEdgesChange}
+          setEdges={props.setEdges}
+          onSelect={props.onSelect}
+        />
+      </ClassFilterProvider>
     </ReactFlowProvider>
   )
 }

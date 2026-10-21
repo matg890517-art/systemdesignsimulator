@@ -1,6 +1,8 @@
 import { Box, Stack, Typography } from '@mui/material'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { formatPct, nodeHealth } from './simulate.ts'
+import { useClassFilter } from './class-filter.ts'
+import { nodeCarriesClass } from './compile.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import { zoneColors } from '../../theme/sdsTheme.ts'
 
@@ -16,7 +18,13 @@ const utilColor = {
   bottleneck: '#B3261E',
 } as const
 
-export function ServiceNodeView({ data }: NodeProps<Node<ServiceNodeData>>) {
+export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) {
+  const { filter, edges } = useClassFilter()
+  const onPath = nodeCarriesClass(
+    { id, type: 'service', position: { x: 0, y: 0 }, data },
+    edges,
+    filter,
+  )
   const health = nodeHealth(data)
   return (
     <Box
@@ -28,6 +36,7 @@ export function ServiceNodeView({ data }: NodeProps<Node<ServiceNodeData>>) {
         borderWidth: health === 'default' ? 1 : 2,
         borderRadius: '10px',
         p: 1.25,
+        opacity: onPath ? 1 : 0.28,
       }}
     >
       <Handle type="target" position={Position.Left} />

@@ -94,5 +94,6 @@ export type WorkspaceRun = {
   kpis: KpiState
   bottlenecks: Bottleneck[]
   nodeStats: Record<string, NodeRunStat>
+  classStats: Record<string, Record<string, NodeRunStat>>
   hint: string
 }
