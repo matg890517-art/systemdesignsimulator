@@ -43,7 +43,13 @@ const nodeTypes = {
 
 function ClassAwareEdge(props: EdgeProps) {
   const { filter } = useClassFilter()
-  const visible = filter === 'all' || edgeCarriesClass(props.id, props.source, filter)
+  const visible =
+    filter === 'all' ||
+    edgeCarriesClass(props.id, props.source, filter, {
+      id: props.id,
+      source: props.source,
+      data: props.data,
+    })
   return (
     <SmoothStepEdge
       {...props}

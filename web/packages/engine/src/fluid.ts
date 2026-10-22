@@ -269,7 +269,7 @@ export function fluidStep(
         if (edge.routing.mode === 'conditional') {
           return edge.routing.classes.includes(classId)
         }
-        return classId in edge.classes || Object.keys(edge.classes).length === 0
+        return classId in edge.classes
       })
       const weights = siblingWeights(outgoing, component.id)
       const output = sourceOutput(component, classId, next, workload)

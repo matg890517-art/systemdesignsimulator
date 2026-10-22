@@ -11,6 +11,7 @@ import {
 } from './compile.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import { readEdgeData, setEdgeClassActive } from './edge-data.ts'
 import {
   referenceStackGraph,
   referenceStackProfiles,
@@ -371,6 +372,41 @@ describe('generic reference stack', () => {
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(50, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
     expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
+  })
+
+  it('sends Write to Queue when that hop is switched on', () => {
+    const graph = referenceStackGraph('generic')
+    const edges = graph.edges.map((edge) => {
+      const data = readEdgeData(edge)
+      if (edge.id === 'c-cdn') {
+        return { ...edge, data: setEdgeClassActive(data, 'write', false), label: 'R' }
+      }
+      if (edge.id === 'c-q') {
+        return { ...edge, data: setEdgeClassActive(data, 'write', true), label: 'W/A/B' }
+      }
+      return edge
+    })
+    const { topology } = compileCanvas(
+      graph.nodes,
+      edges,
+      referenceWorkloadDraft(),
+      referenceStackProfiles,
+      'none',
+    )
+    expect(Object.keys(topology.edges.find((item) => item.id === 'c-q')?.classes ?? {}).sort()).toEqual(
+      ['async', 'bulk', 'write'],
+    )
+    const result = runWorkspace(
+      graph.nodes,
+      edges,
+      { ...referenceWorkloadDraft(), durationSec: 8 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.run.nodeStats.cdn.offered).toBeCloseTo(200, 0)
+    expect(result.run.nodeStats.queue.offered).toBeCloseTo(90, 0)
   })
 })
 

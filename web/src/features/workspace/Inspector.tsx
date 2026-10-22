@@ -17,15 +17,20 @@ import { FieldEditor } from '../calibration/FieldEditor.tsx'
 import { applyProfileFields } from '../calibration/field-edit.ts'
 import { profileForNode, upsertProfile, useLibrary } from '../calibration/library.ts'
 import { catalogForNode } from '../catalog/catalog.ts'
-import { REQUEST_CLASSES } from './compile.ts'
+import { classesForEdge, REQUEST_CLASSES } from './compile.ts'
 import {
   defaultEdgeData,
+  hasExplicitClasses,
   readEdgeData,
   relabelClassEdge,
   setEdgeClassActive,
+  withActiveClasses,
   type WorkspaceClassId,
   type WorkspaceEdgeData,
 } from './edge-data.ts'
+import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import { formatPct } from './simulate.ts'
+import type { Bottleneck } from './types.ts'
 
 const CLASS_NAME: Record<WorkspaceClassId, string> = {
   read: 'Read',
@@ -33,9 +38,12 @@ const CLASS_NAME: Record<WorkspaceClassId, string> = {
   async: 'Async',
   bulk: 'Bulk',
 }
-import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
-import { formatPct } from './simulate.ts'
-import type { Bottleneck } from './types.ts'
+
+function dataForEdit(edge: RfEdge): WorkspaceEdgeData {
+  const base = readEdgeData(edge)
+  if (hasExplicitClasses(edge)) return base
+  return withActiveClasses(base, classesForEdge(edge.id, String(edge.source)) as WorkspaceClassId[])
+}
 
 function ConfigPanel({
   nodeId,
@@ -206,7 +214,7 @@ function EdgePanel({
     )
   }
   const selected = edge
-  const data = readEdgeData(selected)
+  const data = dataForEdit(selected)
   function patch(next: WorkspaceEdgeData) {
     const previous = String(selected.label ?? '')
     const classLabel = relabelClassEdge(previous, next.classes)

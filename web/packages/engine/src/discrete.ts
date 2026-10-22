@@ -130,7 +130,7 @@ function pickOutgoing(
 ): Edge[] {
   const matching = edges.filter((edge) => {
     if (edge.routing.mode === 'conditional') return edge.routing.classes.includes(classId)
-    return classId in edge.classes || Object.keys(edge.classes).length === 0
+    return classId in edge.classes
   })
   if (matching.length === 0) return []
   if (matching.some((edge) => edge.routing.mode === 'broadcast')) {

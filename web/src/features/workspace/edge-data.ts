@@ -79,6 +79,27 @@ export function defaultEdgeData(): WorkspaceEdgeData {
   }
 }
 
+export function hasExplicitClasses(edge: RfEdge): boolean {
+  const extra = edge.data as WorkspaceEdgeData | undefined
+  return Boolean(extra?.classes && Object.keys(extra.classes).length > 0)
+}
+
+export function classesFromActiveMap(classes: WorkspaceEdgeData['classes']): WorkspaceClassId[] {
+  return CLASS_IDS.filter((id) => classes[id]?.active === true)
+}
+
+export function withActiveClasses(
+  data: WorkspaceEdgeData,
+  active: WorkspaceClassId[],
+): WorkspaceEdgeData {
+  const classes: WorkspaceEdgeData['classes'] = {}
+  for (const id of CLASS_IDS) {
+    const row = data.classes[id] ?? { ...defaultClassBytes[id], active: false }
+    classes[id] = { ...row, active: active.includes(id) }
+  }
+  return { ...data, classes }
+}
+
 export function readEdgeData(edge: RfEdge): WorkspaceEdgeData {
   const extra = edge.data as WorkspaceEdgeData | undefined
   const base = defaultEdgeData()
@@ -142,14 +163,19 @@ export function decorateEdges<T extends RfEdge>(
     const label = String(edge.label ?? '')
     const nextLabel =
       cross && !label.includes('cross') ? `${label ? `${label} · ` : ''}cross · Estimated` : edge.label
-    const sameData = (edge.data as WorkspaceEdgeData | undefined)?.crossProvider === cross
+    const extra = edge.data as WorkspaceEdgeData | undefined
+    const typed = readEdgeData(edge)
+    const data = extra?.classes
+      ? { ...extra, crossProvider: cross }
+      : { routing: typed.routing, fanOut: typed.fanOut, call: typed.call, network: typed.network, crossProvider: cross }
+    const sameData = extra?.crossProvider === cross && extra?.classes === (data as WorkspaceEdgeData).classes
     const sameStyle = edge.style?.stroke === stroke && edge.style?.strokeDasharray === style.strokeDasharray
     const sameLabel = edge.label === nextLabel
     if (sameData && sameStyle && sameLabel) return edge
     changed = true
     return {
       ...edge,
-      data: { ...readEdgeData(edge), crossProvider: cross },
+      data,
       style: { ...edge.style, ...style, stroke },
       label: nextLabel,
     }

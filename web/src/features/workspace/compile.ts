@@ -19,7 +19,7 @@ import { catalogEntryById, catalogValuesFor } from '../catalog/catalog.ts'
 import type { FaultMode } from '../calibration/types.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
-import { readEdgeData } from './edge-data.ts'
+import { classesFromActiveMap, hasExplicitClasses, readEdgeData } from './edge-data.ts'
 
 export const REQUEST_CLASSES = ['read', 'write', 'async', 'bulk'] as const
 export type WorkspaceClassId = (typeof REQUEST_CLASSES)[number]
@@ -193,7 +193,11 @@ export function classesForEdge(
   edgeId: string,
   fromId: string,
   active: RequestClassId[] = [...REQUEST_CLASSES],
+  edge?: { id: string; source: string; data?: unknown },
 ): RequestClassId[] {
+  if (edge && hasExplicitClasses(edge)) {
+    return classesFromActiveMap(readEdgeData(edge).classes).filter((id) => active.includes(id))
+  }
   const mapped = EDGE_CLASSES[edgeId]
   if (mapped) return mapped.filter((id) => active.includes(id))
   if (fromId === 'uploaders' || ['aks', 'servicebus', 'blob', 'frontdoor'].includes(fromId)) {
@@ -209,13 +213,14 @@ export function edgeCarriesClass(
   edgeId: string,
   fromId: string,
   classId: WorkspaceClassId,
+  edge?: { id: string; source: string; data?: unknown },
 ): boolean {
-  return classesForEdge(edgeId, fromId).includes(classId)
+  return classesForEdge(edgeId, fromId, [...REQUEST_CLASSES], edge).includes(classId)
 }
 
 export function nodeCarriesClass(
   node: Node<ServiceNodeData>,
-  edges: { id: string; source: string; target: string }[],
+  edges: { id: string; source: string; target: string; data?: unknown }[],
   filter: ClassFilter,
 ): boolean {
   if (filter === 'all') return true
@@ -224,7 +229,7 @@ export function nodeCarriesClass(
   return edges.some(
     (edge) =>
       (edge.source === node.id || edge.target === node.id) &&
-      edgeCarriesClass(edge.id, edge.source, filter),
+      edgeCarriesClass(edge.id, edge.source, filter, edge),
   )
 }
 
@@ -325,10 +330,7 @@ export function compileCanvas(
   for (const rfEdge of rfEdges) {
     if (!nodeIds.has(rfEdge.source) || !nodeIds.has(rfEdge.target)) continue
     const typed = readEdgeData(rfEdge)
-    const classIds = classesForEdge(rfEdge.id, rfEdge.source, active).filter((id) => {
-      const row = typed.classes[id as WorkspaceClassId]
-      return row ? row.active !== false : true
-    })
+    const classIds = classesForEdge(rfEdge.id, rfEdge.source, active, rfEdge)
     const classes: Edge['classes'] = {}
     for (const classId of classIds) {
       const typedBytes = typed.classes[classId as WorkspaceClassId]
