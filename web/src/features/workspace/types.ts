@@ -17,7 +17,8 @@ export type ServiceNodeData = {
 
 export type ZoneNodeData = {
   label: string
-  provider: Exclude<ProviderId, 'generic'>
+  provider: ProviderId
+  nested?: boolean
 }
 
 export type Bottleneck = {

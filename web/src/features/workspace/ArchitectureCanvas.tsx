@@ -27,6 +27,7 @@ import {
   isCrossProviderEdge,
   styleCrossProviderEdge,
 } from './edge-data.ts'
+import { heatStroke } from './heat.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
@@ -68,6 +69,7 @@ function CanvasInner({
   setEdges,
   onSelect,
   onSelectEdge,
+  onSelectIds,
 }: {
   nodes: WorkspaceNode[]
   edges: Edge[]
@@ -76,6 +78,7 @@ function CanvasInner({
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
   onSelectEdge: (edge?: Edge) => void
+  onSelectIds: (ids: string[]) => void
 }) {
   const { screenToFlowPosition } = useReactFlow()
   const selectionKey = useRef('')
@@ -86,6 +89,8 @@ function CanvasInner({
       const key = canvasSelectionKey(selectedNodes, selectedEdges)
       if (key === selectionKey.current) return
       selectionKey.current = key
+      const serviceIds = selectedNodes.filter((item) => item.type === 'service').map((item) => item.id)
+      onSelectIds(serviceIds)
       if (key.startsWith('e:')) {
         const edge = selectedEdges[0]
         onSelect(undefined)
@@ -101,7 +106,7 @@ function CanvasInner({
       const data = node.data as ServiceNodeData
       onSelect({ id: node.id, title: data.title, catalogId: data.catalogId })
     },
-    [onSelect, onSelectEdge],
+    [onSelect, onSelectEdge, onSelectIds],
   )
 
   const onConnect = useCallback(
@@ -202,10 +207,7 @@ function CanvasInner({
         <MiniMap
           nodeColor={(node) => {
             if (node.type === 'zone') return '#D5DBE3'
-            const util = (node.data as ServiceNodeData | undefined)?.util ?? 0
-            if (util >= 0.85) return '#B3261E'
-            if (util >= 0.7) return '#B7791F'
-            return '#2744C7'
+            return heatStroke((node.data as ServiceNodeData | undefined)?.util ?? 0)
           }}
         />
       </ReactFlow>
@@ -222,6 +224,7 @@ export function ArchitectureCanvas(props: {
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
   onSelectEdge: (edge?: Edge) => void
+  onSelectIds: (ids: string[]) => void
 }) {
   const filterValue = useMemo(
     () => ({ filter: props.classFilter, edges: props.edges }),
@@ -238,6 +241,7 @@ export function ArchitectureCanvas(props: {
           setEdges={props.setEdges}
           onSelect={props.onSelect}
           onSelectEdge={props.onSelectEdge}
+          onSelectIds={props.onSelectIds}
         />
       </ClassFilterProvider>
     </ReactFlowProvider>

@@ -8,13 +8,14 @@ export type AppPage =
   | 'catalog'
   | 'projects'
   | 'learn'
+  | 'challenge'
 
 const NavButton = createLink(Button)
 
 const pages: {
   id: AppPage
   label: string
-  to: '/' | '/results' | '/calibration' | '/catalog' | '/projects' | '/learn'
+  to: '/' | '/results' | '/calibration' | '/catalog' | '/projects' | '/learn' | '/challenge'
 }[] = [
   { id: 'workspace', label: 'Workspace', to: '/' },
   { id: 'results', label: 'Results', to: '/results' },
@@ -22,6 +23,7 @@ const pages: {
   { id: 'catalog', label: 'Catalog', to: '/catalog' },
   { id: 'projects', label: 'Projects', to: '/projects' },
   { id: 'learn', label: 'Learn', to: '/learn' },
+  { id: 'challenge', label: 'Challenge', to: '/challenge' },
 ]
 
 export function TopNav({ page }: { page: AppPage }) {

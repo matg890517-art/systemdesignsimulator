@@ -11,6 +11,12 @@ describe('canvas selection during drag', () => {
     expect(after).toBe(before)
   })
 
+  it('joins multi-selected service ids so extra selected nodes change the key', () => {
+    expect(canvasSelectionKey([{ id: 'ecs', type: 'service' }, { id: 'aks', type: 'service' }], [])).toBe(
+      'n:aks,ecs',
+    )
+  })
+
   it('does not allocate new edge objects when paint is already applied', () => {
     const first = decorateEdges(initialNodes, initialEdges)
     const second = decorateEdges(initialNodes, first)

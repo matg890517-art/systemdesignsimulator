@@ -21,6 +21,10 @@ const steps = [
     title: '4. Read Results as a model, not a lab',
     body: 'Bottlenecks come from μ = n / S. Fluid P50 / P90 / P99 stay unknown. J12 A/B stay blocked until a real recorded test of the reference stack exists. No profile is Measured yet.',
   },
+  {
+    title: '5. Try the AKS headroom challenge',
+    body: 'Type Estimated slots so engine util on AKS is under 85%. Pass is not Measured. Do not fill n from the ECS task quota.',
+  },
 ]
 
 const templates: { id: TemplateId; label: string; hint: string }[] = [
@@ -57,6 +61,14 @@ export function LearnPage() {
               <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 0.5 }}>{step.body}</Typography>
             </Box>
           ))}
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => void navigate({ to: '/challenge' })}
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            Open AKS headroom challenge
+          </Button>
           <Typography sx={{ fontWeight: 600, fontSize: 14 }}>Templates</Typography>
           <Stack spacing={1}>
             {templates.map((item) => (

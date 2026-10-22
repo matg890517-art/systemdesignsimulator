@@ -37,4 +37,5 @@ export const zoneColors = {
   gcp: { bg: '#F1F6FD', line: '#C7D8EF', label: '#1B3F7A' },
   azure: { bg: '#F0F7F7', line: '#BFDADA', label: '#0D5A55' },
   kubernetes: { bg: '#F6F3FB', line: '#D4C8E8', label: '#5B3A8C' },
+  generic: { bg: '#EEF1F5', line: '#D5DBE3', label: '#566273' },
 } as const

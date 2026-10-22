@@ -1,5 +1,6 @@
 import type { Routing } from '@sds/engine'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
+import { heatStroke } from './heat.ts'
 import type { ProviderId, ServiceNodeData, ZoneNodeData } from './types.ts'
 
 const CLASS_IDS = ['read', 'write', 'async', 'bulk'] as const
@@ -92,7 +93,13 @@ export function decorateEdges<T extends RfEdge>(
   const next = edges.map((edge) => {
     const cross = isCrossProviderEdge(nodes, edge) || readEdgeData(edge).crossProvider === true
     const style = styleCrossProviderEdge(cross)
-    const stroke = edge.style?.stroke === '#B3261E' ? '#B3261E' : style.stroke
+    const from = nodes.find((node) => node.id === edge.source)
+    const to = nodes.find((node) => node.id === edge.target)
+    const fromUtil = from?.type === 'service' ? ((from.data as ServiceNodeData).util ?? 0) : 0
+    const toUtil = to?.type === 'service' ? ((to.data as ServiceNodeData).util ?? 0) : 0
+    const heat = heatStroke(Math.max(fromUtil, toUtil))
+    const stroke =
+      edge.style?.stroke === '#B3261E' ? '#B3261E' : fromUtil > 0 || toUtil > 0 ? heat : style.stroke
     const label = String(edge.label ?? '')
     const nextLabel =
       cross && !label.includes('cross') ? `${label ? `${label} · ` : ''}cross · Estimated` : edge.label

@@ -40,12 +40,30 @@ import {
   upsertProject,
   type TopologySnapshot,
 } from './persistence.ts'
+import { HEAT_STOPS } from './heat.ts'
+import { architectureInventory } from './inventory.ts'
+import { shareUrlFor, snapshotFromHref } from './share.ts'
+import { wrapInSubsystem } from './subsystem.ts'
+import { AKS_HEADROOM_CHALLENGE, scoreAksHeadroom } from '../challenge/challenge.ts'
 import type { Bottleneck, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
 
 function readBootSnapshot(): TopologySnapshot | undefined {
+  if (typeof window !== 'undefined') {
+    const shared = snapshotFromHref(window.location.href)
+    if (shared) return shared
+  }
   const store = browserStore()
   if (!store) return undefined
   return takeQueuedOpen(store) ?? loadCurrent(store)
+}
+
+function challengeFromHref(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    return new URL(window.location.href).searchParams.get('challenge') ?? undefined
+  } catch {
+    return undefined
+  }
 }
 
 const seedBottlenecks: Bottleneck[] = [
@@ -110,7 +128,9 @@ export function WorkspacePage() {
   const [kpis, setKpis] = useState<KpiState>(idleKpis)
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(seedBottlenecks)
   const [selected, setSelected] = useState<{ id: string; title: string; catalogId?: string }>()
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>()
+  const [challengeId] = useState(challengeFromHref)
   const [ran, setRan] = useState(false)
   const [runError, setRunError] = useState<string>()
   const [runHint, setRunHint] = useState<string>()
@@ -158,6 +178,10 @@ export function WorkspacePage() {
     })
   }, [])
 
+  const onSelectIds = useCallback((ids: string[]) => {
+    setSelectedIds((current) => (current.join(',') === ids.join(',') ? current : ids))
+  }, [])
+
   useEffect(() => {
     setCanvasReady(true)
   }, [])
@@ -191,6 +215,8 @@ export function WorkspacePage() {
     ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
     : kpisFromDraft(draft, library.profiles)
   const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
+  const challengeScore =
+    challengeId === AKS_HEADROOM_CHALLENGE.id ? scoreAksHeadroom(lastRun) : undefined
   const shownBottlenecks = useMemo(() => {
     if (classFilter === 'all') return bottlenecks
     return bottlenecks.filter((item) => {
@@ -298,6 +324,7 @@ export function WorkspacePage() {
     setKpis(idleKpis)
     setBottlenecks([])
     setSelected(undefined)
+    setSelectedIds([])
     setRunError(undefined)
     setProjectName(`${label} reference stack`)
     setSavedHint('Local draft')
@@ -317,6 +344,7 @@ export function WorkspacePage() {
     setKpis(idleKpis)
     setBottlenecks(seedBottlenecks)
     setSelected(undefined)
+    setSelectedIds([])
     setRunError(undefined)
     setRunHint(undefined)
   }
@@ -346,6 +374,7 @@ export function WorkspacePage() {
     setKpis(idleKpis)
     setBottlenecks(snapshot.scene === 'youtube' ? seedBottlenecks : [])
     setSelected(undefined)
+    setSelectedIds([])
     setSelectedEdgeId(undefined)
     setRunError(undefined)
     setSavedHint(hint)
@@ -372,6 +401,42 @@ export function WorkspacePage() {
     link.click()
     URL.revokeObjectURL(url)
     setSavedHint('Exported JSON')
+  }
+
+  function onCopyLink() {
+    const url = shareUrlFor(currentSnapshot(), window.location.href)
+    if (!url) {
+      setRunError('Snapshot too large for a URL. Export JSON instead.')
+      return
+    }
+    void navigator.clipboard.writeText(url).then(
+      () => setSavedHint('Copied share link'),
+      () => setRunError('Clipboard is not available. Copy from the address bar after Export.'),
+    )
+  }
+
+  function onInventory() {
+    const payload = architectureInventory(projectName, nodes, edges)
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'sds-inventory.json'
+    link.click()
+    URL.revokeObjectURL(url)
+    setSavedHint('Inventory JSON · not executable IaC')
+  }
+
+  function onGroup() {
+    const result = wrapInSubsystem(nodes, selectedIds)
+    if ('error' in result) {
+      setRunError(result.error)
+      return
+    }
+    setNodes(result.nodes)
+    setScene('custom')
+    setSavedHint('Nested subsystem')
+    setRunError(undefined)
   }
 
   function onImportFile(file: File) {
@@ -490,6 +555,15 @@ export function WorkspacePage() {
         <Button variant="outlined" onClick={onSave}>
           Save
         </Button>
+        <Button variant="outlined" onClick={onCopyLink}>
+          Copy link
+        </Button>
+        <Button variant="outlined" onClick={onInventory}>
+          Inventory
+        </Button>
+        <Button variant="outlined" onClick={onGroup} disabled={selectedIds.length < 2}>
+          Group
+        </Button>
         <Button variant="outlined" onClick={onExport}>
           Export
         </Button>
@@ -526,7 +600,29 @@ export function WorkspacePage() {
           <Tab label="Workload" />
           <Tab label="Faults" />
         </Tabs>
-        {tab === 0 ? <ClassFilterChips value={classFilter} onChange={setClassFilter} /> : null}
+        {tab === 0 ? (
+          <>
+            <ClassFilterChips value={classFilter} onChange={setClassFilter} />
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', py: 0.5 }}>
+              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Util heat</Typography>
+              {HEAT_STOPS.map((stop) => (
+                <Chip
+                  key={stop.label}
+                  label={stop.label}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: 11,
+                    bgcolor: 'background.paper',
+                    color: 'text.secondary',
+                    border: '1px solid',
+                    borderColor: stop.color,
+                  }}
+                />
+              ))}
+            </Stack>
+          </>
+        ) : null}
       </Stack>
       <Stack
         direction="row"
@@ -559,6 +655,25 @@ export function WorkspacePage() {
             {runError}
           </Typography>
         ) : null}
+        {challengeScore ? (
+          <Chip
+            label={`${AKS_HEADROOM_CHALLENGE.title}: ${challengeScore.status} · ${challengeScore.detail}`}
+            size="small"
+            sx={{
+              alignSelf: 'center',
+              height: 'auto',
+              py: 0.5,
+              maxWidth: 520,
+              '& .MuiChip-label': { whiteSpace: 'normal' },
+              bgcolor:
+                challengeScore.status === 'pass'
+                  ? 'success.light'
+                  : challengeScore.status === 'fail'
+                    ? 'error.light'
+                    : 'action.hover',
+            }}
+          />
+        ) : null}
       </Stack>
       <Box sx={{ flex: 1, display: 'flex', gap: 1.5, p: 1.5, minHeight: 0 }}>
         {tab === 0 && (
@@ -574,6 +689,7 @@ export function WorkspacePage() {
                 setEdges={setEdges}
                 onSelect={onSelectNode}
                 onSelectEdge={onSelectCanvasEdge}
+                onSelectIds={onSelectIds}
               />
             ) : (
               <Box

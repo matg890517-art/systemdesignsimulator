@@ -1,5 +1,6 @@
 import { Box, Stack, Typography } from '@mui/material'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { heatFill } from './heat.ts'
 import { formatPct, nodeHealth } from './simulate.ts'
 import { useClassFilter } from './class-filter.ts'
 import { nodeCarriesClass } from './compile.ts'
@@ -30,7 +31,7 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
     <Box
       sx={{
         width: 150,
-        bgcolor: 'background.paper',
+        bgcolor: heatFill(data.util),
         border: '1px solid',
         borderColor: stroke[health],
         borderWidth: health === 'default' ? 1 : 2,
@@ -96,7 +97,7 @@ export function ZoneNodeView({ data }: NodeProps<Node<ZoneNodeData>>) {
       }}
     >
       <Typography sx={{ fontSize: 11, fontWeight: 600, color: colors.label }}>
-        {data.label}
+        {data.nested ? `${data.label} · nested` : data.label}
       </Typography>
     </Box>
   )
