@@ -15,7 +15,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   SmoothStepEdge,
-  addEdge,
   useReactFlow,
   type Connection,
   type Edge,
@@ -31,7 +30,7 @@ import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-f
 import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges } from './edge-data.ts'
-import { connectComponents, edgeDraftFromConnection } from './canvas-edit.ts'
+import { connectComponents } from './canvas-edit.ts'
 import { heatStroke } from './heat.ts'
 import type { ServiceNodeData, WorkspaceNode } from './types.ts'
 
@@ -128,17 +127,20 @@ function CanvasInner({
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return
-      const sourceNode = nodes.find((node) => node.id === connection.source)
-      const targetNode = nodes.find((node) => node.id === connection.target)
-      if (sourceNode?.type !== 'service' || targetNode?.type !== 'service') return
       setEdges((current) => {
-        if (current.some((edge) => edge.source === connection.source && edge.target === connection.target)) {
+        const next = connectComponents(nodes, current, connection.source!, connection.target!, {
+          sourceHandle: connection.sourceHandle,
+          targetHandle: connection.targetHandle,
+        })
+        if ('error' in next) {
+          onConnectError(next.error)
           return current
         }
-        return addEdge(edgeDraftFromConnection(nodes, connection), current)
+        onConnectError(undefined)
+        return next.edges
       })
     },
-    [nodes, setEdges],
+    [nodes, onConnectError, setEdges],
   )
 
   const onNodeClick = useCallback(
@@ -269,7 +271,7 @@ function CanvasInner({
             ? connectFromId
               ? 'Click a target component'
               : 'Click a source component'
-            : 'Drag a blue handle, or use Connect and click two components. Delete or Backspace removes the selection.'}
+            : 'Drag from the right or bottom handle to a left or top handle. Delete or Backspace removes the selection.'}
         </Typography>
       </Box>
     </Box>

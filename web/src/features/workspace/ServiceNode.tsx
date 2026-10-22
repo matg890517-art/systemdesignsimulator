@@ -22,7 +22,8 @@ const utilColor = {
   bottleneck: '#B3261E',
 } as const
 
-const HANDLE_SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const
+const TARGET_SIDES = [Position.Left, Position.Top] as const
+const SOURCE_SIDES = [Position.Right, Position.Bottom] as const
 
 export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) {
   const { filter, edges } = useClassFilter()
@@ -51,10 +52,10 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
         opacity: onPath ? 1 : 0.28,
       }}
     >
-      {HANDLE_SIDES.map((side) => (
+      {TARGET_SIDES.map((side) => (
         <Handle key={`t-${side}`} id={`t-${side}`} type="target" position={side} />
       ))}
-      {HANDLE_SIDES.map((side) => (
+      {SOURCE_SIDES.map((side) => (
         <Handle key={`s-${side}`} id={`s-${side}`} type="source" position={side} />
       ))}
       <Stack spacing={0.5}>

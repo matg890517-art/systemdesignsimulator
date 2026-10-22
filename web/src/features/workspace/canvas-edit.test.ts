@@ -29,10 +29,22 @@ describe('canvas edit', () => {
     expect(added?.type).toBe('smoothstep')
     expect(String(added?.label)).toMatch(/cross · Estimated/)
     expect(connectComponents(initialNodes, initialEdges, 'alb', 'ecs')).toMatchObject({
-      error: 'Already connected',
+      error: 'Already connected. One hop per pair; extra classes go on that edge.',
     })
     expect(connectComponents(initialNodes, initialEdges, 'alb', 'alb')).toMatchObject({
       error: 'Pick a different component',
+    })
+  })
+
+  it('refuses client-to-client, edges into clients, and a second hop on the same pair', () => {
+    expect(connectComponents(initialNodes, initialEdges, 'viewers', 'uploaders')).toMatchObject({
+      error: 'Clients only send load. They cannot be a target.',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'alb', 'viewers')).toMatchObject({
+      error: 'Clients only send load. They cannot be a target.',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'ecs', 'alb')).toMatchObject({
+      error: 'Already connected. One hop per pair; extra classes go on that edge.',
     })
   })
 })

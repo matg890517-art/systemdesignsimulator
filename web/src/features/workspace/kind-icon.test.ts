@@ -22,5 +22,8 @@ describe('kind icons', () => {
         catalogId: 'aws-application-load-balancer',
       }),
     ).toBe('lb')
+    expect(
+      iconGlyphFor({ mode: 'normal', name: 'Worker pool', catalogId: 'generic-worker' }),
+    ).toBe('worker')
   })
 })

@@ -1,10 +1,16 @@
-import { addEdge, type Connection, type Edge } from '@xyflow/react'
+import { addEdge, type Connection, type Edge, type Node } from '@xyflow/react'
+import { kindForNode } from './compile.ts'
 import {
   defaultEdgeData,
   isCrossProviderEdge,
   styleCrossProviderEdge,
 } from './edge-data.ts'
-import type { WorkspaceNode } from './types.ts'
+import type { ServiceNodeData, WorkspaceNode } from './types.ts'
+
+function asService(node: WorkspaceNode | undefined): Node<ServiceNodeData> | undefined {
+  if (!node || node.type !== 'service') return undefined
+  return node as Node<ServiceNodeData>
+}
 
 export function edgeDraftFromConnection(
   nodes: WorkspaceNode[],
@@ -22,27 +28,46 @@ export function edgeDraftFromConnection(
   }
 }
 
+export function connectRefusal(
+  nodes: WorkspaceNode[],
+  edges: Edge[],
+  source: string,
+  target: string,
+): string | undefined {
+  if (!source || !target) return 'Pick two components'
+  if (source === target) return 'Pick a different component'
+  const sourceNode = asService(nodes.find((node) => node.id === source))
+  const targetNode = asService(nodes.find((node) => node.id === target))
+  if (!sourceNode || !targetNode) return 'Connect services, not zones'
+  const targetKind = kindForNode(targetNode)
+  if (targetKind === 'traffic_generator') {
+    return 'Clients only send load. They cannot be a target.'
+  }
+  const hop = edges.some(
+    (edge) =>
+      (edge.source === source && edge.target === target) ||
+      (edge.source === target && edge.target === source),
+  )
+  if (hop) return 'Already connected. One hop per pair; extra classes go on that edge.'
+  return undefined
+}
+
 export function connectComponents(
   nodes: WorkspaceNode[],
   edges: Edge[],
   source: string,
   target: string,
+  handles?: Pick<Connection, 'sourceHandle' | 'targetHandle'>,
 ): { edges: Edge[] } | { error: string } {
-  if (!source || !target) return { error: 'Pick two components' }
-  if (source === target) return { error: 'Pick a different component' }
-  const sourceNode = nodes.find((node) => node.id === source && node.type === 'service')
-  const targetNode = nodes.find((node) => node.id === target && node.type === 'service')
-  if (!sourceNode || !targetNode) return { error: 'Connect services, not zones' }
-  if (edges.some((edge) => edge.source === source && edge.target === target)) {
-    return { error: 'Already connected' }
-  }
+  const error = connectRefusal(nodes, edges, source, target)
+  if (error) return { error }
   return {
     edges: addEdge(
       edgeDraftFromConnection(nodes, {
         source,
         target,
-        sourceHandle: null,
-        targetHandle: null,
+        sourceHandle: handles?.sourceHandle ?? null,
+        targetHandle: handles?.targetHandle ?? null,
       }),
       edges,
     ),
