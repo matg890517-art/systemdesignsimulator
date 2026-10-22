@@ -14,7 +14,7 @@ import type {
   ServiceNodeData,
 } from './types.ts'
 
-export { idleKpis, kpisFromDraft, pickNodeStat, runWorkspace } from './run-workspace.ts'
+export { idleKpis, kpisFromDraft, pickEdgeOffered, pickNodeStat, runWorkspace } from './run-workspace.ts'
 export type { RunProgress } from './run-workspace.ts'
 
 export const aksScenario = {

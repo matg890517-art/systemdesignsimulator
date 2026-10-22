@@ -20,7 +20,7 @@ import {
   youtubeSeedProfiles,
 } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
-import { idleKpis, kpisFromDraft, pickNodeStat } from './simulate.ts'
+import { idleKpis, kpisFromDraft, pickEdgeOffered, pickNodeStat } from './simulate.ts'
 import { runWorkspaceAsync } from './engine-client.ts'
 import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import {
@@ -51,6 +51,7 @@ import {
   type TopologySnapshot,
 } from './persistence.ts'
 import { HEAT_STOPS } from './heat.ts'
+import { hopLabelWithRate, hopTypeLabel } from './edge-data.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
@@ -301,6 +302,7 @@ export function WorkspacePage() {
           run.breakerOpenEdges.includes(edge.id)
         return {
           ...edge,
+          label: hopLabelWithRate(hopTypeLabel(edge), pickEdgeOffered(run, edge.id, filter)),
           style: {
             ...edge.style,
             stroke: hit ? '#B3261E' : '#7B8794',

@@ -14,6 +14,8 @@ export const CLASS_SHORT: Record<WorkspaceClassId, string> = {
 }
 
 const CLASS_LABEL_RE = /^(none|[RWAB](\/[RWAB])*)$/
+const MISS_PREFIX = /^miss(?: · )?/
+const HOP_RATE_RE = / · [\d,.]+(?:k)? \/s/g
 
 export type WorkspaceEdgeData = {
   routing: Routing
@@ -26,6 +28,7 @@ export type WorkspaceEdgeData = {
     lossProb: number
   }
   crossProvider?: boolean
+  note?: string
 }
 
 export const defaultClassBytes: Record<WorkspaceClassId, { requestBytes: number; responseBytes: number }> = {
@@ -55,14 +58,65 @@ export function classSummaryLabel(classes: WorkspaceEdgeData['classes']): string
   )
 }
 
-/** Rewrite R/W-style labels when classes change. Leave miss, hop titles, and cross suffixes alone. */
+export function activeClassMap(active: readonly WorkspaceClassId[]): WorkspaceEdgeData['classes'] {
+  const classes: WorkspaceEdgeData['classes'] = {}
+  for (const id of CLASS_IDS) {
+    classes[id] = { ...defaultClassBytes[id], active: active.includes(id) }
+  }
+  return classes
+}
+
+export function formatHopRate(n: number): string {
+  if (n >= 1000) return `${Math.round(n).toLocaleString('en-US')} /s`
+  return `${n.toFixed(1)} /s`
+}
+
+function typeTokenFromLabel(raw: string): string {
+  const stripped = raw
+    .replace(MISS_PREFIX, '')
+    .replace(/ · cross · Estimated/g, '')
+    .replace(HOP_RATE_RE, '')
+    .trim()
+  const base = stripped.includes(' · ') ? stripped.slice(0, stripped.indexOf(' · ')) : stripped
+  if (CLASS_LABEL_RE.test(base)) return base
+  const first = base.split(/\s+/)[0] ?? ''
+  if (CLASS_LABEL_RE.test(first)) return first
+  return 'none'
+}
+
+/** Class letters (and miss / cross notes). No baked hop rates. */
+export function hopTypeLabel(edge: RfEdge): string {
+  const extra = edge.data as WorkspaceEdgeData | undefined
+  const summary = hasExplicitClasses(edge)
+    ? classSummaryLabel(extra!.classes)
+    : typeTokenFromLabel(String(edge.label ?? ''))
+  const raw = String(edge.label ?? '')
+  const miss = extra?.note === 'miss' || MISS_PREFIX.test(raw)
+  const cross = extra?.crossProvider === true || raw.includes('cross · Estimated')
+  const type = miss ? `miss · ${summary}` : summary
+  return cross ? `${type} · cross · Estimated` : type
+}
+
+export function hopLabelWithRate(typeLabel: string, offered?: number): string {
+  if (offered === undefined || offered <= 0) return typeLabel
+  const rate = formatHopRate(offered)
+  if (typeLabel.includes(' · cross ·')) {
+    return typeLabel.replace(' · cross ·', ` · ${rate} · cross ·`)
+  }
+  return `${typeLabel} · ${rate}`
+}
+
+/** Rewrite R/W-style labels when classes change. Keep a miss prefix. Leave hop titles and cross suffixes. */
 export function relabelClassEdge(currentLabel: string, classes: WorkspaceEdgeData['classes']): string {
   const raw = currentLabel
-  const split = raw.indexOf(' · ')
-  const base = split >= 0 ? raw.slice(0, split) : raw
-  const suffix = split >= 0 ? raw.slice(split) : ''
-  if (base !== '' && !CLASS_LABEL_RE.test(base)) return raw
-  return `${classSummaryLabel(classes)}${suffix}`
+  const miss = MISS_PREFIX.test(raw)
+  const rest = (miss ? raw.replace(MISS_PREFIX, '') : raw).replace(HOP_RATE_RE, '')
+  const split = rest.indexOf(' · ')
+  const base = split >= 0 ? rest.slice(0, split) : rest
+  const suffix = split >= 0 ? rest.slice(split) : ''
+  if (base !== '' && !CLASS_LABEL_RE.test(base) && !miss) return raw
+  const summary = classSummaryLabel(classes)
+  return `${miss ? `miss · ${summary}` : summary}${suffix}`
 }
 
 export function defaultEdgeData(): WorkspaceEdgeData {
@@ -115,6 +169,7 @@ export function readEdgeData(edge: RfEdge): WorkspaceEdgeData {
       lossProb: extra.network?.lossProb ?? 0,
     },
     crossProvider: extra.crossProvider,
+    note: extra.note,
   }
 }
 

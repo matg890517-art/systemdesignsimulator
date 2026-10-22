@@ -4,6 +4,8 @@ import { compileCanvas } from './compile.ts'
 import {
   classSummaryLabel,
   defaultEdgeData,
+  hopLabelWithRate,
+  hopTypeLabel,
   isCrossProviderEdge,
   relabelClassEdge,
   setEdgeClassActive,
@@ -45,7 +47,30 @@ describe('remaining P0 requirements', () => {
     expect(off.classes.write?.active).toBe(false)
     expect(classSummaryLabel(off.classes)).toBe('R')
     expect(relabelClassEdge('R/W', off.classes)).toBe('R')
-    expect(relabelClassEdge('miss', off.classes)).toBe('miss')
+    expect(relabelClassEdge('', off.classes)).toBe('R')
+    expect(relabelClassEdge('miss', off.classes)).toBe('miss · R')
+    expect(relabelClassEdge('miss · R/W', off.classes)).toBe('miss · R')
+    expect(relabelClassEdge('R/W · 50,000 /s', off.classes)).toBe('R')
+    expect(relabelClassEdge('B · 2.0 /s · cross · Estimated', defaultEdgeData().classes)).toBe(
+      'R/W · cross · Estimated',
+    )
+  })
+
+  it('edge labels are class types; hop rates come from a run, not baked copy', () => {
+    expect(initialEdges.find((edge) => edge.id === 'v-cf')?.label).toBe('R/W')
+    expect(initialEdges.find((edge) => edge.id === 'cf-alb')?.label).toBe('R/W')
+    expect(initialEdges.find((edge) => edge.id === 'ddb-gke')?.label).toBe('R/A')
+    expect(initialEdges.find((edge) => edge.id === 'up-aks')?.label).toBe('B')
+    expect(initialEdges.find((edge) => edge.id === 'copy-link')?.label).toBe('B · cross · Estimated')
+    for (const edge of initialEdges) {
+      expect(String(edge.label)).not.toMatch(/\d/)
+    }
+    expect(hopTypeLabel(initialEdges.find((edge) => edge.id === 'copy-link')!)).toBe(
+      'B · cross · Estimated',
+    )
+    expect(hopLabelWithRate('R/W', 50_000)).toBe('R/W · 50,000 /s')
+    expect(hopLabelWithRate('miss · R/W', 20)).toBe('miss · R/W · 20.0 /s')
+    expect(hopLabelWithRate('B · cross · Estimated', 2)).toBe('B · 2.0 /s · cross · Estimated')
   })
 
   it('F4 compiles typed edge payload bytes and fan-out from canvas data', () => {

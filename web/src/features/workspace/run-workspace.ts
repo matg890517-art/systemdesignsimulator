@@ -253,7 +253,24 @@ function statsFromFluid(
       )
     }
   }
-  return { stats, classStats }
+  const { offered: edgeOffered, byClass: edgeClassOffered } = edgeOfferedFromFluid(last)
+  return { stats, classStats, edgeOffered, edgeClassOffered }
+}
+
+function edgeOfferedFromFluid(last: FluidState) {
+  const offered: Record<string, number> = {}
+  const byClass: Record<string, Record<string, number>> = {}
+  for (const [id, classes] of Object.entries(last.edges)) {
+    let sum = 0
+    const row: Record<string, number> = {}
+    for (const [classId, state] of Object.entries(classes)) {
+      row[classId] = state.offered
+      sum += state.offered
+    }
+    offered[id] = sum
+    byClass[id] = row
+  }
+  return { offered, byClass }
 }
 
 function statsFromDiscrete(
@@ -307,7 +324,33 @@ function statsFromDiscrete(
       )
     }
   }
-  return { stats, classStats }
+  const { offered: edgeOffered, byClass: edgeClassOffered } = edgeOfferedFromDiscrete(result, durationSec)
+  return { stats, classStats, edgeOffered, edgeClassOffered }
+}
+
+function edgeOfferedFromDiscrete(result: DiscreteRunResult, durationSec: number) {
+  const counts: Record<string, number> = {}
+  const classCounts: Record<string, Record<string, number>> = {}
+  for (const event of result.events) {
+    if (event.type !== 'arrive') continue
+    const id = event.edgeId ?? event.req.edgeId
+    if (!id) continue
+    counts[id] = (counts[id] ?? 0) + 1
+    const row = (classCounts[id] ??= {})
+    row[event.req.classId] = (row[event.req.classId] ?? 0) + 1
+  }
+  const offered: Record<string, number> = {}
+  const byClass: Record<string, Record<string, number>> = {}
+  for (const [id, n] of Object.entries(counts)) {
+    offered[id] = n / durationSec
+  }
+  for (const [id, row] of Object.entries(classCounts)) {
+    byClass[id] = {}
+    for (const [classId, n] of Object.entries(row)) {
+      byClass[id][classId] = n / durationSec
+    }
+  }
+  return { offered, byClass }
 }
 
 export function blastFromRun(
@@ -347,6 +390,15 @@ export function pickNodeStat(
   return run.classStats[nodeId]?.[filter]
 }
 
+export function pickEdgeOffered(
+  run: WorkspaceRun,
+  edgeId: string,
+  filter: ClassFilter,
+): number | undefined {
+  if (filter === 'all') return run.edgeOffered[edgeId]
+  return run.edgeClassOffered[edgeId]?.[filter]
+}
+
 export function runWorkspace(
   nodes: Node<ServiceNodeData | ZoneNodeData>[],
   rfEdges: RfEdge[],
@@ -369,7 +421,12 @@ export function runWorkspace(
 
   if (draft.mode === 'discrete') {
     const result = runDiscrete(topology, workload)
-    const { stats, classStats } = statsFromDiscrete(topology, result, workload.durationSec, profiles)
+    const { stats, classStats, edgeOffered, edgeClassOffered } = statsFromDiscrete(
+      topology,
+      result,
+      workload.durationSec,
+      profiles,
+    )
     const sent = result.counts.created
     const errors = sent === 0 ? 0 : (result.counts.rejected + result.counts.dropped) / sent
     const { kpis, bottlenecks } = kpisFromStats(stats, topology, draft, 'discrete', {
@@ -387,6 +444,8 @@ export function runWorkspace(
         bottlenecks,
         nodeStats: stats,
         classStats,
+        edgeOffered,
+        edgeClassOffered,
         hint: `discrete · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}${blast.breakerOpenEdges.length ? ` · breaker open ${blast.breakerOpenEdges.join(',')}` : ''}`,
         ...blast,
       },
@@ -406,7 +465,12 @@ export function runWorkspace(
   })
   const last = result.steps.at(-1)
   if (!last) return { ok: false, reason: 'Fluid run produced no steps.' }
-  const { stats, classStats } = statsFromFluid(topology, last, 'fluid', profiles)
+  const { stats, classStats, edgeOffered, edgeClassOffered } = statsFromFluid(
+    topology,
+    last,
+    'fluid',
+    profiles,
+  )
   let offered = 0
   let rejected = 0
   for (const component of topology.components) {
@@ -430,6 +494,8 @@ export function runWorkspace(
       bottlenecks,
       nodeStats: stats,
       classStats,
+      edgeOffered,
+      edgeClassOffered,
       hint: `fluid · ${workload.durationSec}s · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}`,
       ...blast,
     },

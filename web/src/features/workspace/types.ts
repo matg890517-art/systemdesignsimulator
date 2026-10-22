@@ -113,6 +113,8 @@ export type WorkspaceRun = {
   bottlenecks: Bottleneck[]
   nodeStats: Record<string, NodeRunStat>
   classStats: Record<string, Record<string, NodeRunStat>>
+  edgeOffered: Record<string, number>
+  edgeClassOffered: Record<string, Record<string, number>>
   hint: string
   affectedComponentIds: string[]
   blastOriginId?: string

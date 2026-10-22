@@ -166,27 +166,47 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
   }),
 ]
 
+function hop(
+  id: string,
+  source: string,
+  target: string,
+  label: string,
+  extra?: { cross?: boolean },
+): Edge {
+  const cross = extra?.cross === true
+  return {
+    id,
+    source,
+    target,
+    label: cross ? `${label} · cross · Estimated` : label,
+    ...(cross ? { style: { strokeDasharray: '6 4', stroke: '#B7791F' } } : {}),
+    ...(cross
+      ? {
+          data: {
+            crossProvider: true,
+            routing: { mode: 'single' as const },
+            fanOut: 1,
+            call: { kind: 'sync' as const },
+          },
+        }
+      : {}),
+  }
+}
+
 export const initialEdges: Edge[] = [
-  { id: 'v-cf', source: 'viewers', target: 'cloudfront', label: 'R 50k' },
-  { id: 'cf-alb', source: 'cloudfront', target: 'alb', label: '5.2k' },
-  { id: 'alb-ecs', source: 'alb', target: 'ecs', label: '5.2k' },
-  { id: 'ecs-cache', source: 'ecs', target: 'elasticache', label: 'R 4k' },
-  { id: 'cache-ddb', source: 'elasticache', target: 'dynamodb', label: '2.0k' },
-  { id: 'ddb-gke', source: 'dynamodb', target: 'gke', label: 'A 2.6k' },
-  { id: 'gke-ps', source: 'gke', target: 'pubsub', label: 'A 2.6k' },
-  { id: 'ps-run', source: 'pubsub', target: 'cloudrun', label: 'A 2.6k' },
-  { id: 'run-fs', source: 'cloudrun', target: 'firestore', label: 'A 2.6k' },
-  { id: 'up-aks', source: 'uploaders', target: 'aks', label: 'B 2/s' },
-  { id: 'aks-sb', source: 'aks', target: 'servicebus', label: 'A 2/s' },
-  { id: 'sb-blob', source: 'servicebus', target: 'blob', label: 'A 2/s' },
-  { id: 'blob-fd', source: 'blob', target: 'frontdoor', label: 'B 2/s' },
-  {
-    id: 'copy-link',
-    source: 'blob',
-    target: 'cloudfront',
-    label: 'copy 0.8 GB/s · cross · Estimated',
-    style: { strokeDasharray: '6 4', stroke: '#B7791F' },
-    data: { crossProvider: true, routing: { mode: 'single' }, fanOut: 1, call: { kind: 'sync' } },
-  },
+  hop('v-cf', 'viewers', 'cloudfront', 'R/W'),
+  hop('cf-alb', 'cloudfront', 'alb', 'R/W'),
+  hop('alb-ecs', 'alb', 'ecs', 'R/W'),
+  hop('ecs-cache', 'ecs', 'elasticache', 'R'),
+  hop('cache-ddb', 'elasticache', 'dynamodb', 'R'),
+  hop('ddb-gke', 'dynamodb', 'gke', 'R/A'),
+  hop('gke-ps', 'gke', 'pubsub', 'R/A'),
+  hop('ps-run', 'pubsub', 'cloudrun', 'R/A'),
+  hop('run-fs', 'cloudrun', 'firestore', 'R/A'),
+  hop('up-aks', 'uploaders', 'aks', 'B'),
+  hop('aks-sb', 'aks', 'servicebus', 'B'),
+  hop('sb-blob', 'servicebus', 'blob', 'B'),
+  hop('blob-fd', 'blob', 'frontdoor', 'B'),
+  hop('copy-link', 'blob', 'cloudfront', 'B', { cross: true }),
 ]
 

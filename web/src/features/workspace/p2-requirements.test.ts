@@ -43,6 +43,8 @@ function mockRun(aks?: Partial<WorkspaceRun['nodeStats'][string]>): WorkspaceRun
         }
       : {},
     classStats: {},
+    edgeOffered: {},
+    edgeClassOffered: {},
     hint: 'test',
     affectedComponentIds: [],
     breakerOpenEdges: [],

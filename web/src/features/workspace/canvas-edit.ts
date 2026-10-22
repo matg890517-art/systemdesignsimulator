@@ -1,6 +1,7 @@
 import { addEdge, type Connection, type Edge, type Node } from '@xyflow/react'
 import { kindForNode } from './compile.ts'
 import {
+  classSummaryLabel,
   defaultEdgeData,
   isCrossProviderEdge,
   styleCrossProviderEdge,
@@ -18,12 +19,14 @@ export function edgeDraftFromConnection(
 ): Edge {
   const cross = isCrossProviderEdge(nodes, connection)
   const style = styleCrossProviderEdge(cross)
+  const data = { ...defaultEdgeData(), crossProvider: cross }
+  const summary = classSummaryLabel(data.classes)
   return {
     ...connection,
     id: `${connection.source}-${connection.target}`,
     type: 'smoothstep',
-    data: { ...defaultEdgeData(), crossProvider: cross },
-    label: cross ? 'cross · Estimated' : undefined,
+    data,
+    label: cross ? `${summary} · cross · Estimated` : summary,
     style,
   }
 }

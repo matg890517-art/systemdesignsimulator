@@ -347,6 +347,9 @@ describe('generic reference stack', () => {
     expect(topology.components.find((item) => item.id === 'service')?.behavior.servers).toMatchObject(
       { state: 'set', value: 8, confidence: 'estimated' },
     )
+    expect(graph.edges.find((edge) => edge.id === 'cdn-lb')?.label).toBe('miss · R/W')
+    expect(graph.edges.find((edge) => edge.id === 'lb-svc')?.label).toBe('R/W')
+    expect(graph.edges.find((edge) => edge.id === 'q-w')?.label).toBe('A/B')
     const split = topology.edges.filter((edge) => edge.from === 'clients')
     expect(split.every((edge) => edge.routing.mode === 'weighted')).toBe(true)
     expect(Object.keys(split.find((edge) => edge.id === 'c-cdn')?.classes ?? {}).sort()).toEqual([
@@ -370,6 +373,9 @@ describe('generic reference stack', () => {
     if (!result.ok) return
     expect(result.run.nodeStats.cdn.offered).toBeCloseTo(240, 0)
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(50, 0)
+    expect(result.run.edgeOffered['c-cdn']).toBeCloseTo(240, 0)
+    expect(result.run.edgeOffered['c-q']).toBeCloseTo(50, 0)
+    expect(result.run.edgeClassOffered['c-cdn']?.read).toBeCloseTo(200, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
     expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
   })
