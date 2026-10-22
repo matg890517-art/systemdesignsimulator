@@ -1,0 +1,25 @@
+---
+description: Follow full plan.md as the product coach for every SDS change
+alwaysApply: true
+---
+
+# Full Plan is the coach
+
+Read and follow `full plan.md` before planning or implementing. IDs F/N/J and phases 0–5 in that file are the source of truth. Ignore informal build numbering (repo skeleton 0–6, “phase 5 catalog”). Competitive C1–C8 map into F3, F7, F20–F25 as the plan states.
+
+## Do
+
+- Engine stays TypeScript, provider-agnostic, independent of React/MUI; catalogs are data.
+- Unknown stays unknown and does not cap. Only `hard_limit` or `adjustable_quota` may ceiling.
+- Typed values are Estimated. A source URL is Vendor figure (“source not checked” until confirmed). Measured only from a real imported load test. Never invent SKU prices, latencies, or quotas.
+- Fluid has rates, not tails: P50/P90/P99 stay unknown in fluid. J12 A/B stay blocked until a recorded reference test exists. Do not claim 92% fidelity or 60 FPS.
+- First provider compare is capacity and limits only (Oct 19). Cost is typed `$/hr` or sourced later, never guessed from Catalog.
+- Keep IaC export and real nested-as-one-node out of v1 (Later in the roadmap). Prefer SDS JSON over Terraform/Mermaid until F25.
+
+## Don’t
+
+- Don’t close Phase 1 or Phase 5 without a real load test of the reference stack (Decision 6).
+- Don’t add auth/Postgres until Phase 4 persistence is actually in scope.
+- Don’t “complete” F20/F21/F18 by shipping a thinner stand-in and calling the requirement done.
+
+When a request conflicts with `full plan.md`, follow the plan and say so. When the plan’s table and a Decision disagree, prefer the Oct 19 Decision and note the mismatch.
