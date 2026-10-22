@@ -150,9 +150,7 @@ function statFor(
     p99:
       component.kind === 'traffic_generator'
         ? formatRps(offered)
-        : mode === 'fluid'
-          ? 'unknown · fluid'
-          : `${completed.toFixed(1)} /s`,
+        : `${completed.toFixed(1)} /s`,
     meta,
     citation,
     backlog,
@@ -283,9 +281,10 @@ function statsFromDiscrete(
   const stats: Record<string, NodeRunStat> = {}
   const classStats: Record<string, Record<string, NodeRunStat>> = {}
   for (const component of topology.components) {
-    const done = (completed[component.id] ?? 0) / durationSec
     const offered = (arrived[component.id] ?? 0) / durationSec
-    const rejected = Math.max(0, offered - done)
+    const isGenerator = component.kind === 'traffic_generator'
+    const done = isGenerator ? offered : (completed[component.id] ?? 0) / durationSec
+    const rejected = isGenerator ? 0 : Math.max(0, offered - done)
     stats[component.id] = statFor(component, offered, done, rejected, 'discrete', undefined, profiles)
     classStats[component.id] = {}
     const classIds = new Set([
@@ -293,13 +292,15 @@ function statsFromDiscrete(
       ...Object.keys(arrivedClass[component.id] ?? {}),
     ])
     for (const classId of classIds) {
-      const classDone = (completedClass[component.id]?.[classId] ?? 0) / durationSec
       const classOffered = (arrivedClass[component.id]?.[classId] ?? 0) / durationSec
+      const classDone = isGenerator
+        ? classOffered
+        : (completedClass[component.id]?.[classId] ?? 0) / durationSec
       classStats[component.id][classId] = statFor(
         component,
         classOffered,
         classDone,
-        Math.max(0, classOffered - classDone),
+        isGenerator ? 0 : Math.max(0, classOffered - classDone),
         'discrete',
         [classId],
         profiles,

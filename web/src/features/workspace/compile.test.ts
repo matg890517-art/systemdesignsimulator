@@ -142,7 +142,36 @@ describe('compileCanvas', () => {
     if (ok.ok) {
       expect(ok.run.mode).toBe('discrete')
       expect(ok.run.nodeStats.aks.offered).toBeGreaterThan(0)
+      expect(ok.run.nodeStats.viewers.loss).toBe(0)
     }
+  })
+
+  it('shows fluid completed rate on cards and does not mark a generator as 100% loss', () => {
+    const graph = referenceStackGraph('generic')
+    const fluid = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), mode: 'fluid', durationSec: 8 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(fluid.ok).toBe(true)
+    if (!fluid.ok) return
+    expect(fluid.run.nodeStats.cdn.p99).toMatch(/\/s$/)
+    expect(fluid.run.nodeStats.cdn.p99).not.toMatch(/unknown/)
+    expect(fluid.run.kpis.latency).toBe('unknown')
+
+    const discrete = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), mode: 'discrete', durationSec: 2 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(discrete.ok).toBe(true)
+    if (!discrete.ok) return
+    expect(discrete.run.nodeStats.clients.loss).toBe(0)
+    expect(discrete.run.nodeStats.cdn.p99).toMatch(/\/s$/)
   })
 
   it('trips the upload breaker and lists the AKS blast radius after a crash', () => {
