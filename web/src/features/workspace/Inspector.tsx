@@ -353,6 +353,10 @@ export function Inspector({
   breakerOpenEdges?: string[]
 }) {
   const [tab, setTab] = useState(0)
+  useEffect(() => {
+    if (selectedEdge) setTab(1)
+    else if (selected) setTab(0)
+  }, [selectedEdge, selected])
   return (
     <Box
       sx={{

@@ -2,7 +2,26 @@ import type { Edge, Node } from '@xyflow/react'
 import type { CalibrationField, CalibrationProfile, Confidence, Value } from '@sds/engine'
 import { referenceBindings, type MappedProvider, type ReferenceRole } from '../catalog/provider-maps.ts'
 import { defaultWorkloadDraft, type WorkloadDraft } from './compile.ts'
+import { defaultClassBytes, type WorkspaceClassId } from './edge-data.ts'
 import type { ServiceNodeData } from './types.ts'
+
+const ALL_CLASSES: WorkspaceClassId[] = ['read', 'write', 'async', 'bulk']
+
+function edgeClasses(active: WorkspaceClassId[]) {
+  const classes: Record<
+    WorkspaceClassId,
+    { requestBytes: number; responseBytes: number; active: boolean }
+  > = {
+    read: { ...defaultClassBytes.read, active: false },
+    write: { ...defaultClassBytes.write, active: false },
+    async: { ...defaultClassBytes.async, active: false },
+    bulk: { ...defaultClassBytes.bulk, active: false },
+  }
+  for (const id of ALL_CLASSES) {
+    classes[id] = { ...defaultClassBytes[id], active: active.includes(id) }
+  }
+  return classes
+}
 
 function estimated(value: number): Value<number> {
   return { state: 'set', value, confidence: 'estimated' satisfies Confidence, sourceId: 'reference-stack-example' }
@@ -46,24 +65,37 @@ function service(
   }
 }
 
-function weighted(id: string, source: string, target: string, label: string): Edge {
+function weighted(
+  id: string,
+  source: string,
+  target: string,
+  label: string,
+  active: WorkspaceClassId[],
+): Edge {
   return {
     id,
     source,
     target,
     label,
     type: 'smoothstep',
-    data: { routing: { mode: 'weighted', weight: 1 } },
+    data: { routing: { mode: 'weighted', weight: 1 }, classes: edgeClasses(active) },
   }
 }
 
-function single(id: string, source: string, target: string, label: string): Edge {
+function single(
+  id: string,
+  source: string,
+  target: string,
+  label: string,
+  active: WorkspaceClassId[],
+): Edge {
   return {
     id,
     source,
     target,
     label,
     type: 'smoothstep',
+    data: { classes: edgeClasses(active) },
   }
 }
 
@@ -137,14 +169,14 @@ export function referenceStackGraph(provider: MappedProvider = 'generic'): {
       node('object'),
     ],
     edges: [
-      weighted('c-cdn', 'clients', 'cdn', 'R/W'),
-      weighted('c-q', 'clients', 'queue', 'A/B'),
-      single('cdn-lb', 'cdn', 'lb', 'miss'),
-      single('lb-svc', 'lb', 'service', ''),
-      weighted('svc-cache', 'service', 'cache', 'R'),
-      weighted('svc-db', 'service', 'db', 'W'),
-      single('q-w', 'queue', 'worker', ''),
-      single('w-obj', 'worker', 'object', 'B'),
+      weighted('c-cdn', 'clients', 'cdn', 'R/W', ['read', 'write']),
+      weighted('c-q', 'clients', 'queue', 'A/B', ['async', 'bulk']),
+      single('cdn-lb', 'cdn', 'lb', 'miss', ['read', 'write']),
+      single('lb-svc', 'lb', 'service', '', ['read', 'write']),
+      weighted('svc-cache', 'service', 'cache', 'R', ['read']),
+      weighted('svc-db', 'service', 'db', 'W', ['write']),
+      single('q-w', 'queue', 'worker', '', ['async', 'bulk']),
+      single('w-obj', 'worker', 'object', 'B', ['bulk']),
     ],
   }
 }

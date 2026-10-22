@@ -348,6 +348,14 @@ describe('generic reference stack', () => {
     )
     const split = topology.edges.filter((edge) => edge.from === 'clients')
     expect(split.every((edge) => edge.routing.mode === 'weighted')).toBe(true)
+    expect(Object.keys(split.find((edge) => edge.id === 'c-cdn')?.classes ?? {}).sort()).toEqual([
+      'read',
+      'write',
+    ])
+    expect(Object.keys(split.find((edge) => edge.id === 'c-q')?.classes ?? {}).sort()).toEqual([
+      'async',
+      'bulk',
+    ])
     expect(workload.offered.clients.read).toBe(200)
 
     const result = runWorkspace(
@@ -359,6 +367,8 @@ describe('generic reference stack', () => {
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
+    expect(result.run.nodeStats.cdn.offered).toBeCloseTo(240, 0)
+    expect(result.run.nodeStats.queue.offered).toBeCloseTo(50, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
     expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
   })

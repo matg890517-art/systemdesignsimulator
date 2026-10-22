@@ -63,7 +63,11 @@ The requirements for this section are F15 to F19 in the Requirements table.
 - **Delete a component.** Select it, then press Delete or Backspace, or use Delete in the toolbar or Config panel. Attached edges go with the node. Zones are layout and stay. Typing in a field does not delete.
 - **Connect components.** Drag from a source handle (right or bottom) to a target handle (left or top), or click Connect and then two components. Clients only emit load: they cannot be a target, and two Clients cannot connect. One directed hop per pair; extra request classes live on that edge (F4, F19), not a second parallel line. Cross-provider edges stay Estimated (Decision 17).
 - **Icons.** Follow Real-base DS/Icons. Palette tiles and canvas cards always show a 20px / 16px glyph. Service is the original service mark; Normal is the generic kind shape. Switch with Icons → Service | Normal under the palette search row.
-- **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word).
+- **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word) and is the default. One provider folder is open at a time; Generic starts open; categories collapse under it. Search opens every matching folder. Load at the bottom replaces the canvas with Generic, AWS, Azure or GCP (same 9-block wiring, catalog bindings only) or the YouTube example.
+- **Run mode.** Fluid-flow and Discrete-event sit next to Run (short labels Fluid / Discrete). Workload repeats the same control. Same topology either way. Fluid has rates, not tails: KPI P50/P90/P99 stay unknown. Discrete KPI latency is mean wait from the event run.
+- **Node cards.** After a run each card shows utilization, completed rate (`n /s`), queue depth and loss. The completed-rate slot is not P99. A traffic generator emits; it is not scored as 100% loss because it never `finish-service`.
+- **Edge classes.** Click the line, not the node. The Edge tab turns Read / Write / Async / Bulk on or off and sets routing (single, weighted, broadcast), weight, call kind, fan-out and latency. Clients rates come from the Workload tab. The generic reference wires R/W to CDN and A/B to Queue. An empty class map is zero flow, not every class. Class chips above the canvas only hide paths.
+- **Discrete-event guard.** Discrete Run is refused when expected arrivals exceed 20_000, so the tab does not freeze. Use fluid, or lower rate / duration. This is tab safety, not a closed N6 and not a 60 FPS claim.
 
 ## Requirements
 
@@ -72,12 +76,12 @@ The tool must let a user build a topology, run it under load, and trust the answ
 | ID | Requirement | Area | Priority | Source |
 | --- | --- | --- | --- | --- |
 | F1 | Node-link canvas: drag, connect from source (right/bottom) to target (left/top) or click Connect then two nodes, pan, zoom, grid snap. Clients only emit; one hop per pair. Delete selected components and edges with Delete/Backspace, the toolbar, or Config; attached edges drop with the node | Canvas | P0 | Blueprint |
-| F2 | Component palette: provider services listed directly under AWS, Azure, GCP and Kubernetes, plus a Generic group (clients, load balancer, service, cache, database, queue, worker pool, CDN, object store). The sidebar works like a file explorer: provider folders that expand, category headings, and two view modes in the search row (▦ button view: icon above, label below; ☰ list view). Icons follow Real-base DS/Icons (Service original glyph vs Normal kind shape) on tiles and on canvas cards; each service shows whether its limits are checked | Canvas | P0 | Blueprint, SyDe |
+| F2 | Component palette: provider services listed directly under AWS, Azure, GCP and Kubernetes, plus a Generic group (clients, load balancer, service, cache, database, queue, worker pool, CDN, object store). File explorer: one provider folder open at a time, collapsible categories, sticky search, ☰ list default, ▦ button view. Icons follow Real-base DS/Icons (Service original glyph vs Normal kind shape) on tiles and on canvas cards; each service shows whether its limits are checked. Load picks Generic / AWS / Azure / GCP (same 9-block) or the YouTube example | Canvas | P0 | Blueprint, SyDe |
 | F3 | Per-component configuration: concurrency, pool size, service time per request class, capacity. Every behavior-changing parameter is configurable and explained in the panel | Model | P0 | Blueprint, SyDe |
-| F4 | Typed edges: request classes, rates, payload sizes, call semantics (see System model) | Model | P0 | Proposed |
+| F4 | Typed edges: request classes, rates, payload sizes, call semantics (see System model). Classes are switched on the selected edge (on/off). Clients rates come from Workload. An empty class map is zero flow, not every class | Model | P0 | Proposed |
 | F5 | Workload definition: constant, Poisson, step and spike profiles, per request class | Run | P0 | Blueprint |
-| F6 | Two run modes (fluid-flow and discrete-event) on the same topology | Run | P0 | SysLab Architect spec |
-| F7 | Live metrics: P50/P90/P99 latency, queue depth, utilization, loss, bottleneck heatmap, shown on every node with labeled edges and one summary bar (rps, latency, errors, bottlenecks) | Results | P0 | Both specs, SysSimulator |
+| F6 | Two run modes (fluid-flow and discrete-event) on the same topology. The mode switch sits next to Run; Workload repeats it | Run | P0 | SysLab Architect spec |
+| F7 | Live metrics on every node: utilization, completed rate, queue depth, loss, utilization heatmap, labeled edges, and one summary bar (rps, latency, errors, bottlenecks). Fluid P50/P90/P99 stay unknown (rates, not tails). Discrete KPI latency is mean wait; P99 needs samples. A generator is not 100% loss | Results | P0 | Both specs, SysSimulator |
 | F8 | Fault injection: node crash, latency spike, link cut, packet drop | Run | P1 | Blueprint |
 | F9 | Blast-radius view: components impacted by a failed node | Results | P1 | SysLab Architect spec |
 | F10 | Calibration library as a full page: a profile per component with source, date, version, tier, region and confidence (Measured, Vendor figure or Estimated); load-test CSV import | Calibration | P0 | Proposed |
@@ -101,7 +105,7 @@ The tool must let a user build a topology, run it under load, and trust the answ
 | N3 | Conservation of flow holds at every tick (inflow = outflow + change in backlog), with retries and drops defined | Quality | P0 | SysLab Architect spec |
 | N4 | UI stays responsive: simulation off the main thread, 60 FPS canvas | Quality | P0 | SysLab Architect spec |
 | N5 | Time to build and evaluate a design under 4 hours | Quality | P1 | Blueprint KPI |
-| N6 | Limits: maximum nodes per canvas, simulated duration, browser support, discrete-event request volume. Numbers not yet set | Quality | P1 | Open |
+| N6 | Limits: maximum nodes per canvas, simulated duration, browser support, discrete-event request volume. Interim tab-safety guard: Discrete refuses above 20_000 expected arrivals. Other numbers not yet set (Decision 8) | Quality | P1 | Open |
 | N7 | Mode agreement: stable, light-load scenarios match within a stated tolerance; scenarios where the modes should differ are documented | Quality | P0 | Multi-cloud brief |
 | F26 | Every catalog value carries a limit type: hard limit, adjustable quota, best-effort target or performance guidance. Only the first two may act as a hard ceiling in the engine | Calibration | P0 (proposed) | AWS check, Oct 18, 2026 |
 | F27 | Every catalog value stores unit, scope, conditions (API type, engine, execution model), source URL, retrieval date and status. Provider entries are split where behavior differs (API Gateway types, SQS Standard and FIFO, ECS and EKS configurations, MemoryDB as a database profile) | Calibration, Catalog | P0 (proposed) | AWS check, Oct 18, 2026; Provider catalogs, Catalog value rules |
@@ -169,7 +173,7 @@ An edge is defined once, statically. Each run mode then derives its own runtime 
 \text{single: } \lambda_e = m_e\,\lambda \qquad \text{weighted: } \lambda_e = \frac{w_e}{\sum_{j\in G} w_j}\, m_e\,\lambda \qquad \text{broadcast: } \lambda_e = m_e\,\lambda \text{ for every edge}
 ```
 
-In weighted routing the weights are normalized across the edges of the same group G, so they do not have to sum to 1. In broadcast every edge gets the full rate. Conditional routing sends a class (v1: by request class only) to an edge, and the fraction is the share of that class.
+In weighted routing the weights are normalized across the outgoing edges that carry that class (group G), so they do not have to sum to 1. In broadcast every edge gets the full rate. Conditional routing sends a class (v1: by request class only) to an edge, and the fraction is the share of that class. An edge with no active classes carries zero flow; it must not be compiled as "every class" (that made the generic A/B line steal half of Read/Write).
 
 **Worked examples** (illustrative numbers, not benchmarks)
 
@@ -597,6 +601,8 @@ Discrete-event mode follows individual requests. It answers "what do queues, bur
 
 **Where the modes differ, on purpose.** Under bursts, priorities, deadlines, finite queues and random variation, discrete-event mode will show higher tail latency and earlier rejections than fluid mode. That is the reason both exist. They are compared only in stable, light-load cases (N7).
 
+**What the canvas shows.** Cards paint utilization and completed rate in both modes. Fluid KPI latency stays unknown. Discrete KPI latency is mean wait from the event log. A `traffic_generator` counts offered as emitted and loss as 0: it creates requests; it does not `finish-service`. Light-load Generic reference (Read 200, Write 40, Async 30, Bulk 20) should agree on utilization within N7's 5% starting guess (CDN ~1-2%, Service ~3%, Queue ~17%, Worker ~63-64%, Object store ~21%).
+
 ## Calibration
 
 A number is trusted in proportion to its evidence, and the screen always shows which evidence it has. The simulator ships no invented benchmark: a value either has a source, or it is an estimate the user typed, labeled Estimated.
@@ -613,7 +619,15 @@ When several profiles apply to one component, the simulator uses the most truste
 
 **A profile records:** the component kind, source URL or dataset name, capture date, software or service version, region and tier or SKU, request class, the configuration under test, the values (service-time distribution, saturation point, limits), the label, and who added it.
 
-**Importing a load test.** The user uploads a CSV of requests or of intervals. A proposed minimum is below; the exact format is a decision to confirm.
+**Three files, do not mix them.**
+
+| File | Where | What it does today |
+| --- | --- | --- |
+| Calibration profile CSV | Calibration page | Merges typed fields onto profiles. A `measured` column is a library dump, not a k6 log |
+| Load-test CSV (`timestamp,requestClass,latencyMs,status,rps`) | Engine parser; Decision 14 mapping screen not built | Reads rps and latency points. Does not label a profile Measured |
+| Recorded-test JSON (schema 1, `kind: lab`) | Results → Load recorded test | Fills J12 A/B inputs. Does not stamp Measured on profiles. A/B stay blocked without a lab recording (Decision 6) |
+
+**Importing a load test.** The intended user flow is still a CSV of requests or of intervals (F10, F28). A proposed minimum is below; the mapping screen with JMeter and k6 presets is Decision 14 and is not built.
 
 | Column | Needed for |
 | --- | --- |
@@ -623,7 +637,7 @@ When several profiles apply to one component, the simulator uses the most truste
 | `status` | Error and rejection rates |
 | `concurrency` or `rps` | Where latency starts to climb: the saturation point |
 
-From the file the app fits a service-time distribution per class, finds the throughput at which latency rises sharply, and shows the fit next to the data so the user can judge it. A fit with few samples is labeled low-sample.
+Decision 16 (Oct 19): no distribution fit in the first release. Show median and P95 from the data and let discrete-event resample the measured values. Low-sample files get the low-sample label. The latency-knee rps is the throughput where latency climbs (J12 B, tolerance after the first measurement).
 
 **Typing values by hand (F28, decided Oct 19, 2026).** A user does not need a load test. Each profile has editable fields for the median and P95 service time per request class, the connection pool and other capacity inputs, and can add custom request classes. The label follows the evidence: no source gives Estimated, a source link gives Vendor figure, an imported CSV gives Measured. Typed values never get the Measured label. The writes-per-second bound is calculated from the typed values, not typed. The CSV hint reads "concurrency or requests per second", matching the table above. Decided Oct 19, 2026: any valid link is accepted and its date recorded; the label shows Vendor figure with "source not checked" until confirmed.
 
@@ -938,6 +952,8 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 
 **Decided Oct 19, 2026.** Measure first; no limit claims until then. Browsers: current desktop Chrome, Firefox and Safari.
 
+**Oct 22, 2026.** Discrete Run refuses above 20_000 expected arrivals so the tab does not freeze. That is an interim guard, not a closed N6, and not a 60 FPS claim. Nodes per canvas, duration and other volume limits stay unset.
+
 #### 9. Test tolerances
 
 - **What it is.** Tests J1 to J12 and N7 compare numbers. They need a stated tolerance for "equal".
@@ -1029,3 +1045,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 21, 2026 | Component link file merged: the earlier link list and the Oct 20 catalog PDF were compared and combined into one file, component-links.md (Project). Both list the same 137 services with the same limits-on-page values; the only link differences were Pub/Sub and Dataproc, and the plan already uses the confirmed new links. The plan tables match the merged file row for row. |
 | Oct 22, 2026 | Workspace canvas UX written into F1/F2 and the product notes: easy delete (Delete/Backspace, toolbar, Config; edges drop with the node), easy connect (four-side handles plus Connect then two clicks), icons on every tile and card from Real-base DS/Icons (Service vs Normal), and the two palette layouts as the ▦ / ☰ toggle in the search row — not hidden text links. Same day: Worker pool icon path was a self-overlapping gear that filled as a blob (nonzero fill, inner circle not a hole). Connection rule: Clients only emit; one hop per pair; source handles right/bottom, target left/top — any-to-any was not the engine model. |
 | Oct 22, 2026 | Canonical Verified 18 is the Components-by-provider counts table, not the Verified-limits figure table. Azure Load Balancer stays Partial; idle timeout is a recorded configurable_setting. Limit-type mapping for plan prose (M1 + Decision 11) added. CatalogValue rows encoded from stated figures only; unknown stays unknown; no Phase 1/5 or Measured claim. |
+| Oct 22, 2026 | Workspace run and palette behavior written into F2, F4, F6, F7, N6 and the product notes: palette is a one-folder-open file explorer (☰ default) with Load Generic/AWS/Azure/GCP/YouTube; Fluid/Discrete sit next to Run; cards show completed rate not "unknown · fluid"; generators are not 100% loss; KPI tails stay unknown in fluid; Discrete refuses above 20_000 arrivals (tab safety, Decision 8 still open). Generic reference edges set R/W vs A/B explicitly; empty class map is zero flow. Load-test CSV, calibration CSV and recorded-test JSON stay three different files; none of them close J12 or stamp Measured. |
