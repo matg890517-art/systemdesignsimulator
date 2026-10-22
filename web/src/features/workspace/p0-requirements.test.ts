@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTE_PROVIDERS } from '../catalog/catalog.ts'
 import { compileCanvas } from './compile.ts'
-import { defaultEdgeData, isCrossProviderEdge } from './edge-data.ts'
+import {
+  classSummaryLabel,
+  defaultEdgeData,
+  isCrossProviderEdge,
+  relabelClassEdge,
+  setEdgeClassActive,
+} from './edge-data.ts'
 import { explainFromModel } from './explain.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { getProfiles } from '../calibration/library.ts'
@@ -30,6 +36,16 @@ describe('remaining P0 requirements', () => {
     expect(isCrossProviderEdge(initialNodes, { source: 'alb', target: 'ecs' })).toBe(false)
     const copy = initialEdges.find((edge) => edge.id === 'copy-link')
     expect(String(copy?.label)).toMatch(/cross · Estimated/)
+  })
+
+  it('F4 turns Write off on an edge and relabels R/W to R', () => {
+    const on = defaultEdgeData()
+    expect(classSummaryLabel(on.classes)).toBe('R/W')
+    const off = setEdgeClassActive(on, 'write', false)
+    expect(off.classes.write?.active).toBe(false)
+    expect(classSummaryLabel(off.classes)).toBe('R')
+    expect(relabelClassEdge('R/W', off.classes)).toBe('R')
+    expect(relabelClassEdge('miss', off.classes)).toBe('miss')
   })
 
   it('F4 compiles typed edge payload bytes and fan-out from canvas data', () => {

@@ -47,6 +47,7 @@ function ClassAwareEdge(props: EdgeProps) {
   return (
     <SmoothStepEdge
       {...props}
+      interactionWidth={32}
       style={{
         ...props.style,
         stroke: visible

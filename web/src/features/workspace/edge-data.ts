@@ -6,6 +6,15 @@ import type { ProviderId, ServiceNodeData, ZoneNodeData } from './types.ts'
 const CLASS_IDS = ['read', 'write', 'async', 'bulk'] as const
 export type WorkspaceClassId = (typeof CLASS_IDS)[number]
 
+export const CLASS_SHORT: Record<WorkspaceClassId, string> = {
+  read: 'R',
+  write: 'W',
+  async: 'A',
+  bulk: 'B',
+}
+
+const CLASS_LABEL_RE = /^(none|[RWAB](\/[RWAB])*)$/
+
 export type WorkspaceEdgeData = {
   routing: Routing
   fanOut: number
@@ -24,6 +33,36 @@ export const defaultClassBytes: Record<WorkspaceClassId, { requestBytes: number;
   write: { requestBytes: 8_000, responseBytes: 1_500 },
   async: { requestBytes: 500, responseBytes: 200 },
   bulk: { requestBytes: 8_000_000, responseBytes: 200 },
+}
+
+export function setEdgeClassActive(
+  data: WorkspaceEdgeData,
+  id: WorkspaceClassId,
+  active: boolean,
+): WorkspaceEdgeData {
+  const row = data.classes[id] ?? { ...defaultClassBytes[id], active: false }
+  return {
+    ...data,
+    classes: { ...data.classes, [id]: { ...row, active } },
+  }
+}
+
+export function classSummaryLabel(classes: WorkspaceEdgeData['classes']): string {
+  return (
+    CLASS_IDS.filter((id) => classes[id]?.active)
+      .map((id) => CLASS_SHORT[id])
+      .join('/') || 'none'
+  )
+}
+
+/** Rewrite R/W-style labels when classes change. Leave miss, hop titles, and cross suffixes alone. */
+export function relabelClassEdge(currentLabel: string, classes: WorkspaceEdgeData['classes']): string {
+  const raw = currentLabel
+  const split = raw.indexOf(' · ')
+  const base = split >= 0 ? raw.slice(0, split) : raw
+  const suffix = split >= 0 ? raw.slice(split) : ''
+  if (base !== '' && !CLASS_LABEL_RE.test(base)) return raw
+  return `${classSummaryLabel(classes)}${suffix}`
 }
 
 export function defaultEdgeData(): WorkspaceEdgeData {

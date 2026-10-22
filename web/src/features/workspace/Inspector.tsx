@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Box, Button, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material'
+import {
+  Box,
+  Button,
+  FormControlLabel,
+  MenuItem,
+  Stack,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material'
 import type { CalibrationProfile } from '@sds/engine'
 import type { Edge as RfEdge } from '@xyflow/react'
 import { FieldEditor } from '../calibration/FieldEditor.tsx'
@@ -7,7 +18,21 @@ import { applyProfileFields } from '../calibration/field-edit.ts'
 import { profileForNode, upsertProfile, useLibrary } from '../calibration/library.ts'
 import { catalogForNode } from '../catalog/catalog.ts'
 import { REQUEST_CLASSES } from './compile.ts'
-import { defaultEdgeData, readEdgeData, type WorkspaceEdgeData } from './edge-data.ts'
+import {
+  defaultEdgeData,
+  readEdgeData,
+  relabelClassEdge,
+  setEdgeClassActive,
+  type WorkspaceClassId,
+  type WorkspaceEdgeData,
+} from './edge-data.ts'
+
+const CLASS_NAME: Record<WorkspaceClassId, string> = {
+  read: 'Read',
+  write: 'Write',
+  async: 'Async',
+  bulk: 'Bulk',
+}
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
 import { formatPct } from './simulate.ts'
 import type { Bottleneck } from './types.ts'
@@ -184,14 +209,15 @@ function EdgePanel({
   const data = readEdgeData(selected)
   function patch(next: WorkspaceEdgeData) {
     const previous = String(selected.label ?? '')
+    const classLabel = relabelClassEdge(previous, next.classes)
     onChange({
       ...selected,
       data: next,
       label: next.crossProvider
-        ? previous.includes('cross')
-          ? previous
-          : `${previous ? `${previous} · ` : ''}cross · Estimated`
-        : previous,
+        ? classLabel.includes('cross')
+          ? classLabel
+          : `${classLabel ? `${classLabel} · ` : ''}cross · Estimated`
+        : classLabel,
     })
   }
   return (
@@ -199,6 +225,33 @@ function EdgePanel({
       <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
         {edge.source} → {edge.target}
       </Typography>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Classes on this hop. Off means zero flow here. Workload rps is the global rate, not this
+        switch.
+      </Typography>
+      <Stack spacing={0.25}>
+        {REQUEST_CLASSES.map((id) => {
+          const row = data.classes[id] ?? { ...defaultEdgeData().classes[id]! }
+          return (
+            <FormControlLabel
+              key={id}
+              sx={{ ml: 0, mr: 0, width: '100%', justifyContent: 'space-between' }}
+              labelPlacement="start"
+              control={
+                <Switch
+                  size="small"
+                  checked={row.active}
+                  onChange={(_, checked) => patch(setEdgeClassActive(data, id, checked))}
+                  slotProps={{ input: { 'aria-label': `${CLASS_NAME[id]} on this edge` } }}
+                />
+              }
+              label={
+                <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{CLASS_NAME[id]}</Typography>
+              }
+            />
+          )
+        })}
+      </Stack>
       {onDelete ? (
         <Button size="small" color="error" variant="outlined" onClick={onDelete}>
           Delete connection
@@ -271,27 +324,13 @@ function EdgePanel({
         }
       />
       <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-        Payload bytes per class. Inactive classes carry zero flow. Bandwidth empty =
-        unknown, does not cap.
+        Payload bytes per class. Bandwidth empty = unknown, does not cap.
       </Typography>
       {REQUEST_CLASSES.map((id) => {
         const row = data.classes[id] ?? { ...defaultEdgeData().classes[id]! }
         return (
           <Box key={id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{id}</Typography>
-              <Typography
-                onClick={() =>
-                  patch({
-                    ...data,
-                    classes: { ...data.classes, [id]: { ...row, active: !row.active } },
-                  })
-                }
-                sx={{ fontSize: 11, color: 'primary.main', cursor: 'pointer' }}
-              >
-                {row.active ? 'on' : 'off'}
-              </Typography>
-            </Stack>
+            <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{CLASS_NAME[id]}</Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
               <TextField
                 size="small"
