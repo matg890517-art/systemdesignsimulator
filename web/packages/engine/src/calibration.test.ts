@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aksInputsFromProfiles,
+  costFromProfiles,
   mergeProfiles,
   numericIfSet,
   parseCalibrationCsv,
@@ -17,6 +18,17 @@ copy-link,Azure to AWS copy,,Do not cap the engine,bandwidth,Bandwidth,bps,bandw
 `
 
 describe('calibration profiles', () => {
+  it('parses optional source, date, tier, region and version columns', () => {
+    const text = `profileId,name,bindsTo,notes,fieldId,label,unit,role,state,value,confidence,sourceId,source,retrievedOn,version,tier,region
+aks-transcode,AKS transcode,aks,Example,servers,Slots,count,servers,set,84,vendor,https://example,https://example,2026-10-20,1,standard,eastus
+`
+    const profiles = parseCalibrationCsv(text)
+    expect(profiles[0]?.source).toBe('https://example')
+    expect(profiles[0]?.retrievedOn).toBe('2026-10-20')
+    expect(profiles[0]?.tier).toBe('standard')
+    expect(profiles[0]?.fields[0]?.value).toMatchObject({ confidence: 'vendor' })
+  })
+
   it('parses CSV and round-trips set vs unknown', () => {
     const profiles = parseCalibrationCsv(sample)
     expect(profiles).toHaveLength(2)
@@ -105,5 +117,45 @@ describe('calibration profiles', () => {
     if (!last) throw new Error('no steps')
     expect(last.components.aks.read.completed).toBeCloseTo(0, 9)
     expect(last.edges['up-aks']?.read.delivered).toBeCloseTo(0, 9)
+  })
+})
+
+describe('F11 typed cost', () => {
+  it('stays unknown until a node has $/hr, then sums Estimated values', () => {
+    expect(costFromProfiles(parseCalibrationCsv(sample)).value).toBe('unknown')
+    const priced: CalibrationProfile[] = [
+      {
+        id: 'ecs',
+        name: 'ECS',
+        notes: 'Hand-typed. Not a catalog SKU.',
+        fields: [
+          {
+            id: 'costUsdPerHour',
+            label: 'Hourly cost',
+            unit: 'USD/hr',
+            role: 'costUsdPerHour',
+            value: { state: 'set', value: 12.5, confidence: 'estimated' },
+          },
+        ],
+      },
+      {
+        id: 'aks',
+        name: 'AKS',
+        notes: 'Hand-typed. Not a catalog SKU.',
+        fields: [
+          {
+            id: 'costUsdPerHour',
+            label: 'Hourly cost',
+            unit: 'USD/hr',
+            role: 'costUsdPerHour',
+            value: { state: 'set', value: 40, confidence: 'estimated' },
+          },
+        ],
+      },
+    ]
+    const cost = costFromProfiles(priced)
+    expect(cost.usdPerHour).toBe(52.5)
+    expect(cost.hint).toMatch(/Estimated/)
+    expect(cost.hint).toMatch(/not catalog SKUs/)
   })
 })

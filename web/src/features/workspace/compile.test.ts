@@ -205,6 +205,9 @@ describe('F3 config profiles', () => {
     expect(ecs.fields.find((field) => field.role === 'serviceMs')?.value).toEqual({
       state: 'unknown',
     })
+    expect(ecs.fields.find((field) => field.role === 'costUsdPerHour')?.value).toEqual({
+      state: 'unknown',
+    })
     const clients = blankProfileForNode('clients', 'Clients', 'generic-clients')
     expect(clients.fields).toEqual([])
   })

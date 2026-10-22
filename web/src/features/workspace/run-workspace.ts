@@ -5,6 +5,7 @@ import {
   runDiscrete,
   runFluid,
   unwrap,
+  costFromProfiles,
   type CalibrationProfile,
   type Component,
   type DiscreteRunResult,
@@ -12,6 +13,7 @@ import {
   type SimEvent,
   type Topology,
 } from '@sds/engine'
+import { explainFromModel } from './explain.ts'
 import { profileCitation } from '../calibration/citation.ts'
 import {
   compileCanvas,
@@ -30,32 +32,35 @@ import type {
 } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 
-export const idleKpis: KpiState = {
-  load: '51,200 rps',
-  loadHint: 'R 50,000 · W 1,200 · A 2,600 · B 2/s',
-  latency: '62 / 840 ms',
-  latencyHint: 'P50 / P99 · Estimated',
-  errors: '0.9%',
-  bottlenecks: '2',
-  bottleneckHint: 'Transcode workers, Azure to AWS link',
-  cost: '$6,480/hr',
-  costHint: 'estimate, three providers',
-}
-
-export function kpisFromDraft(draft: WorkloadDraft): KpiState {
+export function kpisFromDraft(draft: WorkloadDraft, profiles: CalibrationProfile[] = []): KpiState {
   const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
+  const cost = costFromProfiles(profiles)
   return {
     load: formatRps(load),
     loadHint: `R ${draft.classes.read.toLocaleString('en-US')} · W ${draft.classes.write.toLocaleString('en-US')} · A ${draft.classes.async.toLocaleString('en-US')} · B ${draft.classes.bulk}/s`,
-    latency: '—',
-    latencyHint: 'Run to fill from the engine',
-    errors: '—',
+    latency: 'unknown',
+    latencyHint: 'P50 / P90 / P99 unknown until discrete samples tails. Fluid has rates, not tails.',
+    errors: 'unknown',
     bottlenecks: '—',
     bottleneckHint: 'Run to rank from the engine',
-    cost: '—',
-    costHint: 'No prices in v1',
+    cost: cost.value,
+    costHint: cost.hint,
   }
 }
+
+export const idleKpis: KpiState = kpisFromDraft({
+  durationSec: 60,
+  dtSec: 0.1,
+  seed: 4821,
+  mode: 'fluid',
+  shapeKind: 'constant',
+  stepAtSec: 20,
+  stepFactor: 2,
+  spikeAtSec: 20,
+  spikeDurationSec: 5,
+  spikeFactor: 5,
+  classes: { read: 50_000, write: 1_200, async: 2_600, bulk: 2 },
+})
 
 export type RunProgress = {
   t: number
@@ -83,16 +88,18 @@ function muOf(component: Component, classIds: string[]): number {
   return servers / serviceSec
 }
 
-function classTotals(row: Record<string, { incomingOffered: number; completed: number; rejected: number }>) {
+function classTotals(row: Record<string, { incomingOffered: number; completed: number; rejected: number; backlog?: number }>) {
   let offered = 0
   let completed = 0
   let rejected = 0
+  let backlog = 0
   for (const item of Object.values(row)) {
     offered += item.incomingOffered
     completed += item.completed
     rejected += item.rejected
+    backlog += item.backlog ?? 0
   }
-  return { offered, completed, rejected }
+  return { offered, completed, rejected, backlog }
 }
 
 function statFor(
@@ -103,6 +110,7 @@ function statFor(
   mode: 'fluid' | 'discrete',
   classIds?: string[],
   profiles: CalibrationProfile[] = [],
+  backlog = 0,
 ): NodeRunStat {
   const mu = muOf(component, classIds ?? Object.keys(component.behavior.serviceTime))
   const capped = Number.isFinite(mu)
@@ -120,11 +128,17 @@ function statFor(
             : 0
   const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
   const citation = profileCitation(profile)
+  const servers = component.behavior.servers.state === 'set' ? unwrap(component.behavior.servers) : undefined
+  let serviceMs: number | undefined
+  for (const service of Object.values(component.behavior.serviceTime)) {
+    if (service?.state === 'set') serviceMs = Math.max(serviceMs ?? 0, meanMs(unwrap(service)))
+  }
+  const loss = offered > 0 ? rejected / offered : 0
   const meta =
     component.kind === 'traffic_generator'
       ? `${mode} · generator`
       : capped
-        ? `${mode} · μ ${mu.toFixed(1)} /s · ${citation}`
+        ? `${mode} · μ ${mu.toFixed(1)} /s · q ${backlog.toFixed(1)} · ${citation}`
         : `${mode} · unknown capacity (no cap) · ${citation}`
   return {
     util,
@@ -133,9 +147,18 @@ function statFor(
     offered,
     mu,
     capped,
-    p99: component.kind === 'traffic_generator' ? formatRps(offered) : `${completed.toFixed(1)} /s`,
+    p99:
+      component.kind === 'traffic_generator'
+        ? formatRps(offered)
+        : mode === 'fluid'
+          ? 'unknown · fluid'
+          : `${completed.toFixed(1)} /s`,
     meta,
     citation,
+    backlog,
+    loss,
+    servers,
+    serviceMs,
   }
 }
 
@@ -154,16 +177,27 @@ function kpisFromStats(
     if (!row) continue
     if (row.util < 0.85 && row.rejected <= Math.max(0.01, row.offered * 0.01)) continue
     const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
+    const explained = explainFromModel({
+      name: component.name,
+      offered: row.offered,
+      completed: row.completed,
+      rejected: row.rejected,
+      backlog: row.backlog,
+      util: row.util,
+      servers: row.servers,
+      serviceMs: row.serviceMs,
+      capped: row.capped,
+    })
     bottlenecks.push({
       id: component.id,
       title: component.name,
       util: row.util,
-      summary: `${formatRps(row.offered)} offered, ${row.completed.toFixed(1)} completed/s, ${row.rejected.toFixed(1)} rejected/s.`,
-      suggestion: row.capped
-        ? 'Raise calibrated servers or service rate, then run again.'
-        : 'Capacity is unknown, so this is not a hard engine cap. Set servers and service time in Calibration to measure utilization.',
+      summary: explained.numbers,
+      suggestion: explained.fix,
       fromEngine: true,
       citation: profileCitation(profile),
+      cause: explained.cause,
+      wait: explained.wait,
     })
   }
   const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
@@ -180,8 +214,8 @@ function kpisFromStats(
       bottleneckHint: bottlenecks.length
         ? bottlenecks.map((item) => item.title).join(', ')
         : `none at 85% in ${mode} mode`,
-      cost: '—',
-      costHint: 'No prices in v1',
+      cost: costFromProfiles(profiles).value,
+      costHint: costFromProfiles(profiles).hint,
     },
   }
 }
@@ -205,6 +239,7 @@ function statsFromFluid(
       mode,
       undefined,
       profiles,
+      totals.backlog,
     )
     classStats[component.id] = {}
     for (const [classId, item] of Object.entries(row)) {
@@ -216,6 +251,7 @@ function statsFromFluid(
         mode,
         [classId],
         profiles,
+        item.backlog,
       )
     }
   }
@@ -381,8 +417,8 @@ export function runWorkspace(
   }
   const { kpis, bottlenecks } = kpisFromStats(stats, topology, draft, 'fluid', {
     errors: offered > 0 ? rejected / offered : 0,
-    latency: idleKpis.latency,
-    latencyHint: 'P50 / P99 still Estimated — fluid mode has no tails',
+    latency: 'unknown',
+    latencyHint: 'P50 / P90 / P99 unknown — fluid mode has rates, not tails',
   }, profiles)
   const blast = blastFromRun(topology, fault)
   return {

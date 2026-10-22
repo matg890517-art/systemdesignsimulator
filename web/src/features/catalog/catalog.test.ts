@@ -12,6 +12,7 @@ import {
   emptyProviderBinding,
   exampleNodeCatalogIds,
   filterCatalog,
+  PALETTE_PROVIDERS,
   paletteGroupsFor,
 } from './catalog.ts'
 import { mappedProviders, referenceBindings } from './provider-maps.ts'
@@ -54,6 +55,10 @@ describe('catalog data', () => {
     const aks = catalogEntries.find((entry) => entry.id === 'azure-aks')
     expect(aks?.docsUrl).toContain('aks/quotas')
     expect(aks?.limitsOnPage).toBe('yes')
+  })
+
+  it('puts Generic first in the workspace palette folders', () => {
+    expect(PALETTE_PROVIDERS[0]?.id).toBe('generic')
   })
 
   it('filters by provider and search, and drives the workspace palette', () => {

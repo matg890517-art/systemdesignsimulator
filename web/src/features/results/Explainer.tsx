@@ -1,4 +1,5 @@
 import { Box, Stack, Typography } from '@mui/material'
+import { erlangCWaitMs } from '@sds/engine'
 import { formatPct } from '../workspace/simulate.ts'
 import type { ResultsReport } from '../workspace/types.ts'
 
@@ -43,6 +44,12 @@ export function Explainer({ report }: { report: ResultsReport }) {
           Fluid conservation: completed stays at {baseline.completed.toFixed(2)} /s, so the pool
           sits at {formatPct(baseline.util)} of capacity. Queue stays near{' '}
           {baseline.backlog.toFixed(1)}; rejected {baseline.rejected.toFixed(2)} /s.
+        </Typography>
+        <Typography sx={{ fontSize: 12, mt: 0.5, fontFamily: '"IBM Plex Mono", monospace' }}>
+          Erlang C mean wait{' '}
+          {baseline.mu > baseline.offered && baseline.servers > 0
+            ? `${erlangCWaitMs(baseline.offered, 1 / (baseline.serviceMs / 1000), baseline.servers).toFixed(1)} ms`
+            : 'unbounded (ρ ≥ 1)'}
         </Typography>
         {bottlenecks[0]?.citation ? (
           <Typography sx={{ fontSize: 11, mt: 0.75, color: 'text.secondary' }}>
@@ -94,10 +101,10 @@ export function Explainer({ report }: { report: ResultsReport }) {
         ))}
       <Stack spacing={0.5}>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          P50 / P99 on the KPI strip stay Estimated. Fluid mode has rates, not latency tails.
+          P50 / P90 / P99 stay unknown in fluid mode. Discrete mean wait is the live latency until tails are sampled.
         </Typography>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          Cost stays an estimate until SKU prices live in Catalog.
+          Cost sums typed $/hr on nodes. Catalog has no SKU prices. Unknown if none are typed.
         </Typography>
       </Stack>
     </Box>

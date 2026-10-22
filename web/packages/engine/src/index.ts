@@ -43,6 +43,7 @@ export { erlangC, erlangCWaitMs } from './queueing.ts'
 export { baselineRps, expectedArrivals, offeredAt, peakFactor, shapeFactor } from './workload.ts'
 export {
   aksInputsFromProfiles,
+  costFromProfiles,
   fieldByRole,
   mergeProfiles,
   numericIfSet,

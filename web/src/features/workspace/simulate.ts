@@ -1,4 +1,4 @@
-import { runFluid, edge, generator, worker } from '@sds/engine'
+import { costFromProfiles, runFluid, edge, generator, worker } from '@sds/engine'
 import { profileCitation } from '../calibration/citation.ts'
 import { aksRunPlan, getFault, getProfiles, lossProbForFault } from '../calibration/library.ts'
 import { initialNodes } from './graph.ts'
@@ -199,11 +199,16 @@ function copyLinkBottleneck(): Bottleneck {
 
 function kpisFromRun(run: AksRun, hint: string): KpiState {
   const hot = run.util >= 0.85 || run.completed < run.offered * 0.5
+  const cost = costFromProfiles(getProfiles())
   return {
     ...idleKpis,
     bottlenecks: hot ? '1+' : '0',
     bottleneckHint: hot ? hint : 'none at the 83% target',
-    latencyHint: 'P50 / P99 still Estimated — fluid mode has no tails yet. Util from Estimated · AKS transcode workers.',
+    latency: 'unknown',
+    latencyHint: 'P50 / P90 / P99 unknown — fluid mode has rates, not tails. Util from Estimated · AKS transcode workers.',
+    errors: run.offered > 0 ? `${((run.rejected / run.offered) * 100).toFixed(1)}%` : 'unknown',
+    cost: cost.value,
+    costHint: cost.hint,
   }
 }
 

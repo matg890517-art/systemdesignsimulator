@@ -99,7 +99,15 @@ export function snapshotFrom(input: {
 }
 
 export function serializeSnapshot(snapshot: TopologySnapshot): string {
-  return JSON.stringify(snapshot)
+  return JSON.stringify(snapshot, null, 2)
+}
+
+export function snapshotFilename(snapshot: TopologySnapshot): string {
+  const slug = snapshot.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return `${slug || 'sds-topology'}.sds.json`
 }
 
 export function parseSnapshot(raw: string): TopologySnapshot | undefined {

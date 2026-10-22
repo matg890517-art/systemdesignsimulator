@@ -11,14 +11,18 @@ export type AppPage =
 
 const NavButton = createLink(Button)
 
-const pages: { id: AppPage; label: string; to: '/' | '/results' | '/calibration' | '/catalog' | '/projects' }[] =
-  [
-    { id: 'workspace', label: 'Workspace', to: '/' },
-    { id: 'results', label: 'Results', to: '/results' },
-    { id: 'calibration', label: 'Calibration', to: '/calibration' },
-    { id: 'catalog', label: 'Catalog', to: '/catalog' },
-    { id: 'projects', label: 'Projects', to: '/projects' },
-  ]
+const pages: {
+  id: AppPage
+  label: string
+  to: '/' | '/results' | '/calibration' | '/catalog' | '/projects' | '/learn'
+}[] = [
+  { id: 'workspace', label: 'Workspace', to: '/' },
+  { id: 'results', label: 'Results', to: '/results' },
+  { id: 'calibration', label: 'Calibration', to: '/calibration' },
+  { id: 'catalog', label: 'Catalog', to: '/catalog' },
+  { id: 'projects', label: 'Projects', to: '/projects' },
+  { id: 'learn', label: 'Learn', to: '/learn' },
+]
 
 export function TopNav({ page }: { page: AppPage }) {
   return (
@@ -65,9 +69,6 @@ export function TopNav({ page }: { page: AppPage }) {
             </NavButton>
           )
         })}
-        <Button size="small" disabled sx={{ color: 'text.secondary' }}>
-          Learn
-        </Button>
       </Stack>
     </Box>
   )

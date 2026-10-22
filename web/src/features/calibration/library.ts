@@ -9,7 +9,7 @@ import type { CalibrationProfile, Confidence, FaultMode } from './types.ts'
 
 export type { CalibrationProfile, Confidence, FaultMode }
 
-const seedProfiles: CalibrationProfile[] = [
+export const youtubeSeedProfiles: CalibrationProfile[] = [
   {
     id: 'aks-transcode',
     name: 'AKS transcode workers',
@@ -88,7 +88,7 @@ type LibraryState = {
   fault: FaultMode
 }
 
-let state: LibraryState = { profiles: seedProfiles, fault: 'none' }
+let state: LibraryState = { profiles: youtubeSeedProfiles, fault: 'none' }
 const listeners = new Set<() => void>()
 
 function emit(next: LibraryState) {
@@ -145,6 +145,10 @@ export function upsertProfiles(incoming: CalibrationProfile[]) {
   const byId = new Map(state.profiles.map((profile) => [profile.id, profile]))
   for (const profile of incoming) byId.set(profile.id, profile)
   emit({ ...state, profiles: [...byId.values()] })
+}
+
+export function replaceProfiles(incoming: CalibrationProfile[]) {
+  emit({ ...state, profiles: incoming })
 }
 
 export function importCalibrationCsv(text: string) {

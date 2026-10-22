@@ -11,6 +11,8 @@ export type ServiceNodeData = {
   catalogId?: string
   inBlast?: boolean
   blastOrigin?: boolean
+  queueDepth?: string
+  loss?: string
 }
 
 export type ZoneNodeData = {
@@ -26,6 +28,8 @@ export type Bottleneck = {
   suggestion: string
   fromEngine: boolean
   citation?: string
+  cause?: string
+  wait?: string
 }
 
 export type KpiState = {
@@ -92,6 +96,10 @@ export type NodeRunStat = {
   p99: string
   meta: string
   citation?: string
+  backlog: number
+  loss: number
+  servers?: number
+  serviceMs?: number
 }
 
 export type WorkspaceRun = {

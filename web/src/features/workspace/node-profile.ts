@@ -39,10 +39,11 @@ export function blankProfileForNode(
   const fields: CalibrationField[] = []
   if (kind !== 'traffic_generator') {
     fields.push(
-      unknownField('servers', 'Servers', 'count', 'servers'),
-      unknownField('serviceMs', 'Service time (mean)', 'ms', 'serviceMs'),
+      unknownField('servers', 'Servers / pool', 'count', 'servers'),
+      unknownField('serviceMs', 'Service time (median)', 'ms', 'serviceMs'),
       unknownField('queue', 'Queue capacity', 'jobs', 'queue'),
       unknownField('p95Ms', 'Service time P95', 'ms', 'latencyP95Ms'),
+      unknownField('costUsdPerHour', 'Hourly cost', 'USD/hr', 'costUsdPerHour'),
     )
   }
   if (kind === 'cache' || kind === 'cdn') {

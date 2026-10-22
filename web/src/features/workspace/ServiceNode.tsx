@@ -57,12 +57,23 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
           </Typography>
         </Stack>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          {data.blastOrigin
-            ? `Crash origin · ${data.meta}`
-            : data.inBlast
-              ? `Blast radius · ${data.meta}`
-              : data.meta}
+          {data.queueDepth ?? data.loss
+            ? `${data.queueDepth ?? ''} ${data.loss ?? ''}`.trim()
+            : data.blastOrigin
+              ? `Crash origin · ${data.meta}`
+              : data.inBlast
+                ? `Blast radius · ${data.meta}`
+                : data.meta}
         </Typography>
+        {data.queueDepth || data.loss ? (
+          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+            {data.blastOrigin
+              ? `Crash origin · ${data.meta}`
+              : data.inBlast
+                ? `Blast radius · ${data.meta}`
+                : data.meta}
+          </Typography>
+        ) : null}
       </Stack>
       <Handle type="source" position={Position.Right} />
     </Box>

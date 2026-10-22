@@ -169,9 +169,8 @@ export function ResultsPage() {
               yLabel="rps"
             />
             <Typography sx={{ fontSize: 11, color: 'text.secondary', px: 0.5 }}>
-              Load, latency, errors and cost KPIs on this example stay Estimated except the AKS
-              bottleneck, which the engine ranks from conservation. Idle strip defaults:{' '}
-              {idleKpis.latency}.
+              Fluid P50 / P90 / P99 stay unknown. Cost is unknown until you type $/hr on a node.
+              Catalog has no SKU prices. AKS util is from Estimated · AKS transcode workers.
             </Typography>
           </Stack>
           <Stack spacing={1.5} sx={{ width: 320, flexShrink: 0, minHeight: 0, overflow: 'auto' }}>

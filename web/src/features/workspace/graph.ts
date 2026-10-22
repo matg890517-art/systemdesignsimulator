@@ -184,8 +184,9 @@ export const initialEdges: Edge[] = [
     id: 'copy-link',
     source: 'blob',
     target: 'cloudfront',
-    label: 'copy 0.8 GB/s',
-    style: { strokeDasharray: '6 4' },
+    label: 'copy 0.8 GB/s · cross · Estimated',
+    style: { strokeDasharray: '6 4', stroke: '#B7791F' },
+    data: { crossProvider: true, routing: { mode: 'single' }, fanOut: 1, call: { kind: 'sync' } },
   },
 ]
 

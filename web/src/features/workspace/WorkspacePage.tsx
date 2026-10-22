@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material'
-import { useEdgesState, useNodesState } from '@xyflow/react'
+import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
 import { TopNav } from '../../components/TopNav.tsx'
 import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
 import { ClassFilterChips } from './ClassFilterChips.tsx'
@@ -8,7 +8,15 @@ import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
-import { getFault, getProfiles, setFault, upsertProfiles, useLibrary } from '../calibration/library.ts'
+import { costFromProfiles } from '@sds/engine'
+import {
+  getFault,
+  getProfiles,
+  replaceProfiles,
+  setFault,
+  useLibrary,
+  youtubeSeedProfiles,
+} from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
 import { idleKpis, kpisFromDraft, pickNodeStat } from './simulate.ts'
 import { runWorkspaceAsync } from './engine-client.ts'
@@ -23,7 +31,10 @@ import {
 import {
   browserStore,
   loadCurrent,
+  parseSnapshot,
   saveCurrent,
+  serializeSnapshot,
+  snapshotFilename,
   snapshotFrom,
   takeQueuedOpen,
   upsertProject,
@@ -99,6 +110,7 @@ export function WorkspacePage() {
   const [kpis, setKpis] = useState<KpiState>(idleKpis)
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(seedBottlenecks)
   const [selected, setSelected] = useState<{ id: string; title: string; catalogId?: string }>()
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string>()
   const [ran, setRan] = useState(false)
   const [runError, setRunError] = useState<string>()
   const [runHint, setRunHint] = useState<string>()
@@ -122,6 +134,29 @@ export function WorkspacePage() {
   const minFpsDuringRun = useRef<number | undefined>(undefined)
   const maxPaintMs = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
+
+  const onSelectNode = useCallback(
+    (next?: { id: string; title: string; catalogId?: string }) => {
+      setSelected((current) => {
+        if (
+          current?.id === next?.id &&
+          current?.title === next?.title &&
+          current?.catalogId === next?.catalogId
+        ) {
+          return current
+        }
+        return next
+      })
+    },
+    [],
+  )
+
+  const onSelectCanvasEdge = useCallback((edge?: Edge) => {
+    setSelectedEdgeId((current) => {
+      const id = edge?.id
+      return current === id ? current : id
+    })
+  }, [])
 
   useEffect(() => {
     setCanvasReady(true)
@@ -151,7 +186,10 @@ export function WorkspacePage() {
       minFpsDuringRun.current === undefined ? fps : Math.min(minFpsDuringRun.current, fps)
   }, [running, fps])
 
-  const kpisToShow = ran ? kpis : scene === 'youtube' ? idleKpis : kpisFromDraft(draft)
+  const liveCost = costFromProfiles(library.profiles)
+  const kpisToShow = ran
+    ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
+    : kpisFromDraft(draft, library.profiles)
   const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
   const shownBottlenecks = useMemo(() => {
     if (classFilter === 'all') return bottlenecks
@@ -201,6 +239,8 @@ export function WorkspacePage() {
             meta: filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`,
             inBlast,
             blastOrigin,
+            queueDepth: `q ${stat.backlog.toFixed(1)}`,
+            loss: stat.loss > 0 ? `loss ${(stat.loss * 100).toFixed(0)}%` : 'loss 0%',
           },
         }
       }),
@@ -231,7 +271,14 @@ export function WorkspacePage() {
         if (!stat) return node
         return {
           ...node,
-          data: { ...data, util: stat.util, p99: stat.p99, meta: `${stat.meta} · live` },
+          data: {
+            ...data,
+            util: stat.util,
+            p99: stat.p99,
+            meta: `${stat.meta} · live`,
+            queueDepth: `q ${stat.backlog.toFixed(1)}`,
+            loss: `loss ${(stat.loss * 100).toFixed(0)}%`,
+          },
         }
       }),
     )
@@ -243,7 +290,7 @@ export function WorkspacePage() {
       provider === 'generic' ? 'Generic' : provider === 'aws' ? 'AWS' : provider === 'gcp' ? 'GCP' : 'Azure'
     setNodes(graph.nodes)
     setEdges(graph.edges)
-    upsertProfiles(referenceStackProfiles)
+    replaceProfiles(referenceStackProfiles)
     setWorkloadDraft(referenceWorkloadDraft())
     setScene('reference')
     setRan(false)
@@ -260,6 +307,7 @@ export function WorkspacePage() {
   function onRestoreExample() {
     setNodes(initialNodes)
     setEdges(initialEdges)
+    replaceProfiles(structuredClone(youtubeSeedProfiles))
     setWorkloadDraft(defaultWorkloadDraft())
     setScene('youtube')
     setProjectName('Example: Video streaming platform (YouTube-style)')
@@ -285,6 +333,25 @@ export function WorkspacePage() {
     })
   }
 
+  function applySnapshot(snapshot: TopologySnapshot, hint: string) {
+    setNodes(snapshot.nodes)
+    setEdges(snapshot.edges)
+    setWorkloadDraft(snapshot.draft)
+    replaceProfiles(snapshot.profiles)
+    setFault(snapshot.fault)
+    setScene(snapshot.scene)
+    setProjectName(snapshot.name)
+    setRan(false)
+    setLastRun(undefined)
+    setKpis(idleKpis)
+    setBottlenecks(snapshot.scene === 'youtube' ? seedBottlenecks : [])
+    setSelected(undefined)
+    setSelectedEdgeId(undefined)
+    setRunError(undefined)
+    setSavedHint(hint)
+    setRunHint(hint)
+  }
+
   function onSave() {
     const store = browserStore()
     if (!store) {
@@ -293,6 +360,29 @@ export function WorkspacePage() {
     }
     upsertProject(store, currentSnapshot())
     setSavedHint('Saved to Projects')
+  }
+
+  function onExport() {
+    const snapshot = currentSnapshot()
+    const blob = new Blob([serializeSnapshot(snapshot)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = snapshotFilename(snapshot)
+    link.click()
+    URL.revokeObjectURL(url)
+    setSavedHint('Exported JSON')
+  }
+
+  function onImportFile(file: File) {
+    void file.text().then((text) => {
+      const snapshot = parseSnapshot(text)
+      if (!snapshot) {
+        setRunError('Not an SDS snapshot. Need version 1 JSON with nodes, edges, draft, and profiles.')
+        return
+      }
+      applySnapshot(snapshot, `Imported ${snapshot.name}`)
+    })
   }
 
   async function onRun() {
@@ -360,7 +450,7 @@ export function WorkspacePage() {
     const snapshot = boot.current?.snapshot
     if (snapshot) {
       setWorkloadDraft(snapshot.draft)
-      upsertProfiles(snapshot.profiles)
+      replaceProfiles(snapshot.profiles)
       setFault(snapshot.fault)
       setRunHint(`Loaded ${snapshot.name}`)
     }
@@ -399,6 +489,22 @@ export function WorkspacePage() {
         </Typography>
         <Button variant="outlined" onClick={onSave}>
           Save
+        </Button>
+        <Button variant="outlined" onClick={onExport}>
+          Export
+        </Button>
+        <Button variant="outlined" component="label">
+          Import
+          <input
+            hidden
+            type="file"
+            accept="application/json,.json,.sds.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) onImportFile(file)
+            }}
+          />
         </Button>
         <Button variant="contained" onClick={() => void onRun()} disabled={running}>
           {running ? 'Running…' : 'Run'}
@@ -466,7 +572,8 @@ export function WorkspacePage() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 setEdges={setEdges}
-                onSelect={setSelected}
+                onSelect={onSelectNode}
+                onSelectEdge={onSelectCanvasEdge}
               />
             ) : (
               <Box
@@ -485,6 +592,10 @@ export function WorkspacePage() {
             <Inspector
               bottlenecks={shownBottlenecks}
               selected={selected}
+              selectedEdge={edges.find((edge) => edge.id === selectedEdgeId)}
+              onEdgeChange={(edge) =>
+                setEdges((current) => current.map((item) => (item.id === edge.id ? edge : item)))
+              }
               affectedIds={lastRun?.affectedComponentIds ?? []}
               blastOriginId={lastRun?.blastOriginId}
               breakerOpenEdges={lastRun?.breakerOpenEdges ?? []}

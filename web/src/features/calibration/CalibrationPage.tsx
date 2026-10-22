@@ -3,6 +3,7 @@ import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table'
 import { TopNav } from '../../components/TopNav.tsx'
 import type { CalibrationField, CalibrationProfile } from './types.ts'
+import { applyProfileFields } from './field-edit.ts'
 import { FieldEditor } from './FieldEditor.tsx'
 import {
   exportCalibrationCsv,
@@ -70,10 +71,10 @@ export function CalibrationPage() {
 
   function patchField(fieldId: string, next: CalibrationField) {
     if (!draft) return
-    updateProfile({
-      ...draft,
-      fields: draft.fields.map((field) => (field.id === fieldId ? next : field)),
-    })
+    const fields = draft.fields.map((field) => (field.id === fieldId ? next : field))
+    const applied = applyProfileFields(draft, fields, draft.source)
+    updateProfile(applied.profile)
+    if (applied.error) setMessage(applied.error)
   }
 
   function onImport() {
@@ -193,6 +194,53 @@ export function CalibrationPage() {
               <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>
                 {draft.notes}
               </Typography>
+              <Stack spacing={1} sx={{ mt: 2, maxWidth: 420 }}>
+                <TextField
+                  size="small"
+                  label="Source URL"
+                  value={draft.source ?? ''}
+                  onChange={(event) =>
+                    updateProfile({ ...draft, source: event.target.value || undefined })
+                  }
+                />
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Retrieved on"
+                    value={draft.retrievedOn ?? ''}
+                    placeholder="YYYY-MM-DD"
+                    onChange={(event) =>
+                      updateProfile({ ...draft, retrievedOn: event.target.value || undefined })
+                    }
+                  />
+                  <TextField
+                    size="small"
+                    label="Region"
+                    value={draft.region ?? ''}
+                    onChange={(event) =>
+                      updateProfile({ ...draft, region: event.target.value || undefined })
+                    }
+                  />
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Tier"
+                    value={draft.tier ?? ''}
+                    onChange={(event) =>
+                      updateProfile({ ...draft, tier: event.target.value || undefined })
+                    }
+                  />
+                  <TextField
+                    size="small"
+                    label="Version"
+                    value={draft.version ?? ''}
+                    onChange={(event) =>
+                      updateProfile({ ...draft, version: event.target.value || undefined })
+                    }
+                  />
+                </Stack>
+              </Stack>
               <Stack spacing={2} sx={{ mt: 2, maxWidth: 420 }}>
                 {fieldSummary.map((field) => (
                   <Box key={field.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

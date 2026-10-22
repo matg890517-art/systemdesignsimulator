@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CalibrationRouteImport } from './routes/calibration'
 import { Route as CatalogRouteImport } from './routes/catalog'
+import { Route as LearnRouteImport } from './routes/learn'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ResultsRouteImport } from './routes/results'
 
@@ -30,6 +31,11 @@ const CatalogRoute = CatalogRouteImport.update({
   path: '/catalog',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LearnRoute = LearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calibration': typeof CalibrationRoute
   '/catalog': typeof CatalogRoute
+  '/learn': typeof LearnRoute
   '/projects': typeof ProjectsRoute
   '/results': typeof ResultsRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calibration': typeof CalibrationRoute
   '/catalog': typeof CatalogRoute
+  '/learn': typeof LearnRoute
   '/projects': typeof ProjectsRoute
   '/results': typeof ResultsRoute
 }
@@ -60,21 +68,31 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/calibration': typeof CalibrationRoute
   '/catalog': typeof CatalogRoute
+  '/learn': typeof LearnRoute
   '/projects': typeof ProjectsRoute
   '/results': typeof ResultsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/calibration' | '/catalog' | '/projects' | '/results'
+  fullPaths:
+    '/' | '/calibration' | '/catalog' | '/learn' | '/projects' | '/results'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calibration' | '/catalog' | '/projects' | '/results'
-  id: '__root__' | '/' | '/calibration' | '/catalog' | '/projects' | '/results'
+  to: '/' | '/calibration' | '/catalog' | '/learn' | '/projects' | '/results'
+  id:
+    | '__root__'
+    | '/'
+    | '/calibration'
+    | '/catalog'
+    | '/learn'
+    | '/projects'
+    | '/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalibrationRoute: typeof CalibrationRoute
   CatalogRoute: typeof CatalogRoute
+  LearnRoute: typeof LearnRoute
   ProjectsRoute: typeof ProjectsRoute
   ResultsRoute: typeof ResultsRoute
 }
@@ -102,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/learn': {
+      id: '/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof LearnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
@@ -123,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalibrationRoute: CalibrationRoute,
   CatalogRoute: CatalogRoute,
+  LearnRoute: LearnRoute,
   ProjectsRoute: ProjectsRoute,
   ResultsRoute: ResultsRoute,
 }

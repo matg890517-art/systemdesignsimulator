@@ -8,6 +8,7 @@ const ROLES: FieldRole[] = [
   'bandwidthBps',
   'latencyP95Ms',
   'cacheHitRate',
+  'costUsdPerHour',
 ]
 
 const CONFIDENCE: Confidence[] = ['measured', 'vendor', 'estimated']
@@ -15,6 +16,33 @@ const CONFIDENCE: Confidence[] = ['measured', 'vendor', 'estimated']
 export function numericIfSet(value: Value<number>): number | undefined {
   if (value.state === 'set') return value.value
   return undefined
+}
+
+/** Sum typed $/hr. Empty stays unknown. Catalog never supplies this number. */
+export function costFromProfiles(profiles: CalibrationProfile[]): {
+  value: string
+  hint: string
+  usdPerHour?: number
+  counted: number
+} {
+  const set = profiles.flatMap((profile) =>
+    profile.fields.filter((field) => field.role === 'costUsdPerHour' && field.value.state === 'set'),
+  )
+  if (set.length === 0) {
+    return {
+      value: 'unknown',
+      hint: 'Type $/hr on a node. Catalog has no SKU prices.',
+      counted: 0,
+    }
+  }
+  const usdPerHour = set.reduce((sum, field) => sum + (field.value.state === 'set' ? field.value.value : 0), 0)
+  const allVendor = set.every((field) => field.value.state === 'set' && field.value.confidence === 'vendor')
+  return {
+    value: `$${usdPerHour.toLocaleString('en-US', { maximumFractionDigits: 0 })}/hr`,
+    hint: `${set.length} node${set.length === 1 ? '' : 's'} · ${allVendor ? 'Vendor' : 'Estimated'} · not catalog SKUs`,
+    usdPerHour,
+    counted: set.length,
+  }
 }
 
 export function fieldByRole(
@@ -117,9 +145,17 @@ export function parseCalibrationCsv(text: string): CalibrationProfile[] {
   if (expected.some((name, i) => header[i] !== name)) {
     throw new Error(`CSV header must be ${expected.join(',')}`)
   }
+  const extra = {
+    source: header.indexOf('source'),
+    retrievedOn: header.indexOf('retrievedOn'),
+    version: header.indexOf('version'),
+    tier: header.indexOf('tier'),
+    region: header.indexOf('region'),
+  }
 
   const byId = new Map<string, CalibrationProfile>()
   for (const line of lines.slice(1)) {
+    const cells = splitCsvLine(line)
     const [
       profileId,
       name,
@@ -133,7 +169,7 @@ export function parseCalibrationCsv(text: string): CalibrationProfile[] {
       valueRaw,
       confidenceRaw,
       sourceId,
-    ] = splitCsvLine(line)
+    ] = cells
     if (!profileId || !fieldId) continue
     const state = parseState(stateRaw ?? '')
     const role = parseRole(roleRaw ?? '')
@@ -166,11 +202,23 @@ export function parseCalibrationCsv(text: string): CalibrationProfile[] {
     if (existing) {
       existing.fields.push(field)
     } else {
+      const meta: Pick<CalibrationProfile, 'source' | 'retrievedOn' | 'version' | 'tier' | 'region'> =
+        {}
+      const take = (index: number, key: keyof typeof meta) => {
+        const text = index >= 0 ? cells[index] : undefined
+        if (text) meta[key] = text
+      }
+      take(extra.source, 'source')
+      take(extra.retrievedOn, 'retrievedOn')
+      take(extra.version, 'version')
+      take(extra.tier, 'tier')
+      take(extra.region, 'region')
       byId.set(profileId, {
         id: profileId,
         name: name || profileId,
         bindsTo: bindsTo || undefined,
         notes: notes ?? '',
+        ...meta,
         fields: [field],
       })
     }
@@ -192,6 +240,11 @@ export function serializeCalibrationCsv(profiles: CalibrationProfile[]): string 
     'value',
     'confidence',
     'sourceId',
+    'source',
+    'retrievedOn',
+    'version',
+    'tier',
+    'region',
   ].join(',')
   const rows = [header]
   for (const profile of profiles) {
@@ -211,6 +264,11 @@ export function serializeCalibrationCsv(profiles: CalibrationProfile[]): string 
           value.state === 'set' ? String(value.value) : '',
           value.state === 'set' ? value.confidence : '',
           value.state === 'set' ? (value.sourceId ?? '') : '',
+          csvCell(profile.source ?? ''),
+          csvCell(profile.retrievedOn ?? ''),
+          csvCell(profile.version ?? ''),
+          csvCell(profile.tier ?? ''),
+          csvCell(profile.region ?? ''),
         ].join(','),
       )
     }
@@ -232,6 +290,11 @@ export function mergeProfiles(
     existing.name = profile.name
     existing.bindsTo = profile.bindsTo
     existing.notes = profile.notes
+    existing.source = profile.source
+    existing.retrievedOn = profile.retrievedOn
+    existing.version = profile.version
+    existing.tier = profile.tier
+    existing.region = profile.region
     for (const field of profile.fields) {
       const index = existing.fields.findIndex((item) => item.id === field.id)
       if (index >= 0) existing.fields[index] = structuredClone(field)

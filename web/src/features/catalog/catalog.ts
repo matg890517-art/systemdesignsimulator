@@ -21,8 +21,8 @@ export const CATALOG_PROVIDERS: { id: CatalogProvider; label: string }[] = [
 ]
 
 export const PALETTE_PROVIDERS: { id: PaletteProvider; label: string }[] = [
-  ...CATALOG_PROVIDERS,
   { id: 'generic', label: 'Generic' },
+  ...CATALOG_PROVIDERS,
 ]
 
 const CATEGORY_ORDER = [

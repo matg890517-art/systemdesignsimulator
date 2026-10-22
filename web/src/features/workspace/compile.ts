@@ -19,6 +19,7 @@ import { catalogEntryById, catalogValuesFor } from '../catalog/catalog.ts'
 import type { FaultMode } from '../calibration/types.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
+import { readEdgeData } from './edge-data.ts'
 
 export const REQUEST_CLASSES = ['read', 'write', 'async', 'bulk'] as const
 export type WorkspaceClassId = (typeof REQUEST_CLASSES)[number]
@@ -276,8 +277,7 @@ function behaviorFor(
 }
 
 function routingFor(rfEdge: RfEdge): Routing {
-  const extra = rfEdge.data as { routing?: Routing } | undefined
-  return extra?.routing ?? { mode: 'single' }
+  return readEdgeData(rfEdge).routing
 }
 
 function breakerFor(rfEdge: RfEdge): Edge['breaker'] {
@@ -324,10 +324,17 @@ export function compileCanvas(
   const topologyEdges: Edge[] = []
   for (const rfEdge of rfEdges) {
     if (!nodeIds.has(rfEdge.source) || !nodeIds.has(rfEdge.target)) continue
-    const classIds = classesForEdge(rfEdge.id, rfEdge.source, active)
+    const typed = readEdgeData(rfEdge)
+    const classIds = classesForEdge(rfEdge.id, rfEdge.source, active).filter((id) => {
+      const row = typed.classes[id as WorkspaceClassId]
+      return row ? row.active !== false : true
+    })
     const classes: Edge['classes'] = {}
     for (const classId of classIds) {
-      const bytes = CLASS_BYTES[classId as WorkspaceClassId] ?? CLASS_BYTES.read
+      const typedBytes = typed.classes[classId as WorkspaceClassId]
+      const bytes = typedBytes
+        ? { requestBytes: typedBytes.requestBytes, responseBytes: typedBytes.responseBytes }
+        : (CLASS_BYTES[classId as WorkspaceClassId] ?? CLASS_BYTES.read)
       classes[classId] = bytes
     }
     topologyEdges.push({
@@ -335,15 +342,16 @@ export function compileCanvas(
       from: rfEdge.source,
       to: rfEdge.target,
       routing: routingFor(rfEdge),
-      fanOut: 1,
+      fanOut: typed.fanOut,
       classes,
       network: {
-        latencyMs: 0,
+        latencyMs: typed.network.latencyMs,
+        bandwidthBps: typed.network.bandwidthBps,
         bandwidthApplies: 'both',
-        lossProb: 0,
+        lossProb: typed.network.lossProb,
         serialization: false,
       },
-      call: { kind: 'sync' },
+      call: { kind: typed.call.kind },
       breaker: breakerFor(rfEdge),
     })
   }

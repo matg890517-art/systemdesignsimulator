@@ -16,6 +16,7 @@ export type FieldRole =
   | 'bandwidthBps'
   | 'latencyP95Ms'
   | 'cacheHitRate'
+  | 'costUsdPerHour'
 
 export type CalibrationField = {
   id: string
@@ -30,6 +31,12 @@ export type CalibrationProfile = {
   name: string
   bindsTo?: string
   notes: string
+  /** Official or lab URL. A link labels Vendor figure (F28). */
+  source?: string
+  retrievedOn?: string
+  version?: string
+  tier?: string
+  region?: string
   fields: CalibrationField[]
 }
 

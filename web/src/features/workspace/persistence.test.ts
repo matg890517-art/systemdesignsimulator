@@ -9,9 +9,12 @@ import {
   listProjects,
   parseSnapshot,
   serializeSnapshot,
+  snapshotFilename,
   snapshotFrom,
   upsertProject,
 } from './persistence.ts'
+import { youtubeTemplate } from './templates.ts'
+import { idleKpis, kpisFromDraft } from './run-workspace.ts'
 
 describe('F12 topology snapshot', () => {
   it('round-trips and replays the same fluid timeline', () => {
@@ -61,5 +64,24 @@ describe('F12 topology snapshot', () => {
     upsertProject(store, first)
     upsertProject(store, second)
     expect(listProjects(store).map((item) => item.id)).toEqual(['b', 'a'])
+  })
+
+  it('exports a filename and re-parses the pretty JSON snapshot', () => {
+    const snapshot = youtubeTemplate()
+    expect(snapshotFilename(snapshot)).toMatch(/youtube/)
+    const restored = parseSnapshot(serializeSnapshot(snapshot))
+    expect(restored?.scene).toBe('youtube')
+    expect(restored?.nodes.some((node) => node.id === 'aks')).toBe(true)
+  })
+})
+
+describe('honest idle KPIs', () => {
+  it('does not invent latency tails or catalog prices before a run', () => {
+    expect(idleKpis.latency).toBe('unknown')
+    expect(idleKpis.cost).toBe('unknown')
+    expect(idleKpis.costHint).toMatch(/no SKU prices/i)
+    const fromDraft = kpisFromDraft(defaultWorkloadDraft())
+    expect(fromDraft.errors).toBe('unknown')
+    expect(fromDraft.bottlenecks).toBe('—')
   })
 })

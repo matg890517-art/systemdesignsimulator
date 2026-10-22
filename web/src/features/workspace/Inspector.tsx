@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { Box, Button, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material'
 import type { CalibrationProfile } from '@sds/engine'
+import type { Edge as RfEdge } from '@xyflow/react'
 import { FieldEditor } from '../calibration/FieldEditor.tsx'
+import { applyProfileFields } from '../calibration/field-edit.ts'
 import { profileForNode, upsertProfile, useLibrary } from '../calibration/library.ts'
 import { catalogForNode } from '../catalog/catalog.ts'
-import { configProfileForNode } from './node-profile.ts'
+import { REQUEST_CLASSES } from './compile.ts'
+import { defaultEdgeData, readEdgeData, type WorkspaceEdgeData } from './edge-data.ts'
+import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
 import { formatPct } from './simulate.ts'
 import type { Bottleneck } from './types.ts'
 
@@ -72,6 +76,42 @@ function ConfigPanel({
       )}
       <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{draft.name}</Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{draft.notes}</Typography>
+      <TextField
+        size="small"
+        label="Source URL"
+        value={draft.source ?? ''}
+        placeholder="none → Estimated"
+        onChange={(event) => setDraft({ ...draft, source: event.target.value || undefined })}
+      />
+      <Stack direction="row" spacing={1}>
+        <TextField
+          size="small"
+          label="Date"
+          value={draft.retrievedOn ?? ''}
+          placeholder="YYYY-MM-DD"
+          onChange={(event) => setDraft({ ...draft, retrievedOn: event.target.value || undefined })}
+        />
+        <TextField
+          size="small"
+          label="Region"
+          value={draft.region ?? ''}
+          onChange={(event) => setDraft({ ...draft, region: event.target.value || undefined })}
+        />
+      </Stack>
+      <Stack direction="row" spacing={1}>
+        <TextField
+          size="small"
+          label="Tier"
+          value={draft.tier ?? ''}
+          onChange={(event) => setDraft({ ...draft, tier: event.target.value || undefined })}
+        />
+        <TextField
+          size="small"
+          label="Version"
+          value={draft.version ?? ''}
+          onChange={(event) => setDraft({ ...draft, version: event.target.value || undefined })}
+        />
+      </Stack>
       {draft.fields.length === 0 ? (
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
           No capacity fields on this node. Edit rates on the Workload tab.
@@ -91,9 +131,188 @@ function ConfigPanel({
           />
         ))
       )}
-      <Button variant="contained" size="small" onClick={() => upsertProfile(draft)}>
+      <Button
+        variant="contained"
+        size="small"
+        onClick={() => {
+          const next = applyProfileFields(draft, draft.fields, draft.source)
+          upsertProfile(next.profile)
+          setDraft(next.profile)
+        }}
+      >
         Apply to library
       </Button>
+      <Button
+        size="small"
+        onClick={() => {
+          const blank = blankProfileForNode(nodeId, title ?? nodeId, catalogId)
+          setDraft(blank)
+          upsertProfile(blank)
+        }}
+      >
+        Reset to default
+      </Button>
+    </Stack>
+  )
+}
+
+function EdgePanel({
+  edge,
+  onChange,
+}: {
+  edge?: RfEdge
+  onChange: (edge: RfEdge) => void
+}) {
+  if (!edge) {
+    return (
+      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+        Select an edge to edit request classes, payload bytes, routing, call kind, and
+        latency. Cross-provider links stay Estimated until measured.
+      </Typography>
+    )
+  }
+  const selected = edge
+  const data = readEdgeData(selected)
+  function patch(next: WorkspaceEdgeData) {
+    const previous = String(selected.label ?? '')
+    onChange({
+      ...selected,
+      data: next,
+      label: next.crossProvider
+        ? previous.includes('cross')
+          ? previous
+          : `${previous ? `${previous} · ` : ''}cross · Estimated`
+        : previous,
+    })
+  }
+  return (
+    <Stack spacing={1.5}>
+      <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+        {edge.source} → {edge.target}
+      </Typography>
+      {data.crossProvider ? (
+        <Typography sx={{ fontSize: 11, color: 'warning.dark' }}>
+          Leaves a provider. Latency and capacity stay Estimated until measured (F29).
+        </Typography>
+      ) : null}
+      <TextField
+        select
+        size="small"
+        label="Routing"
+        value={data.routing.mode}
+        onChange={(event) => {
+          const mode = event.target.value
+          patch({
+            ...data,
+            routing:
+              mode === 'weighted'
+                ? { mode: 'weighted', weight: 1 }
+                : mode === 'broadcast'
+                  ? { mode: 'broadcast' }
+                  : { mode: 'single' },
+          })
+        }}
+      >
+        <MenuItem value="single">Single</MenuItem>
+        <MenuItem value="weighted">Weighted</MenuItem>
+        <MenuItem value="broadcast">Broadcast</MenuItem>
+      </TextField>
+      {data.routing.mode === 'weighted' ? (
+        <TextField
+          size="small"
+          type="number"
+          label="Weight"
+          value={data.routing.weight}
+          onChange={(event) =>
+            patch({ ...data, routing: { mode: 'weighted', weight: Number(event.target.value) || 0 } })
+          }
+        />
+      ) : null}
+      <TextField
+        select
+        size="small"
+        label="Call"
+        value={data.call.kind}
+        onChange={(event) =>
+          patch({ ...data, call: { kind: event.target.value as 'sync' | 'async' } })
+        }
+      >
+        <MenuItem value="sync">Sync</MenuItem>
+        <MenuItem value="async">Async</MenuItem>
+      </TextField>
+      <TextField
+        size="small"
+        type="number"
+        label="Fan-out"
+        value={data.fanOut}
+        onChange={(event) => patch({ ...data, fanOut: Math.max(1, Number(event.target.value) || 1) })}
+      />
+      <TextField
+        size="small"
+        type="number"
+        label="Latency (ms)"
+        value={data.network.latencyMs}
+        onChange={(event) =>
+          patch({ ...data, network: { ...data.network, latencyMs: Number(event.target.value) || 0 } })
+        }
+      />
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Payload bytes per class. Inactive classes carry zero flow. Bandwidth empty =
+        unknown, does not cap.
+      </Typography>
+      {REQUEST_CLASSES.map((id) => {
+        const row = data.classes[id] ?? { ...defaultEdgeData().classes[id]! }
+        return (
+          <Box key={id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{id}</Typography>
+              <Typography
+                onClick={() =>
+                  patch({
+                    ...data,
+                    classes: { ...data.classes, [id]: { ...row, active: !row.active } },
+                  })
+                }
+                sx={{ fontSize: 11, color: 'primary.main', cursor: 'pointer' }}
+              >
+                {row.active ? 'on' : 'off'}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+              <TextField
+                size="small"
+                type="number"
+                label="req B"
+                value={row.requestBytes}
+                onChange={(event) =>
+                  patch({
+                    ...data,
+                    classes: {
+                      ...data.classes,
+                      [id]: { ...row, requestBytes: Number(event.target.value) || 0 },
+                    },
+                  })
+                }
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="resp B"
+                value={row.responseBytes}
+                onChange={(event) =>
+                  patch({
+                    ...data,
+                    classes: {
+                      ...data.classes,
+                      [id]: { ...row, responseBytes: Number(event.target.value) || 0 },
+                    },
+                  })
+                }
+              />
+            </Stack>
+          </Box>
+        )
+      })}
     </Stack>
   )
 }
@@ -101,12 +320,16 @@ function ConfigPanel({
 export function Inspector({
   bottlenecks,
   selected,
+  selectedEdge,
+  onEdgeChange,
   affectedIds = [],
   blastOriginId,
   breakerOpenEdges = [],
 }: {
   bottlenecks: Bottleneck[]
   selected?: { id: string; title: string; catalogId?: string }
+  selectedEdge?: RfEdge
+  onEdgeChange: (edge: RfEdge) => void
   affectedIds?: string[]
   blastOriginId?: string
   breakerOpenEdges?: string[]
@@ -128,6 +351,7 @@ export function Inspector({
     >
       <Tabs value={tab} onChange={(_, value) => setTab(value)}>
         <Tab label="Config" />
+        <Tab label="Edge" />
         <Tab label={`Bottlenecks ${bottlenecks.length}`} />
         <Tab label={`Blast ${affectedIds.length}`} />
       </Tabs>
@@ -138,7 +362,8 @@ export function Inspector({
           catalogId={selected?.catalogId}
         />
       )}
-      {tab === 1 && (
+      {tab === 1 && <EdgePanel edge={selectedEdge} onChange={onEdgeChange} />}
+      {tab === 2 && (
         <>
           {selected ? (
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
@@ -170,6 +395,14 @@ export function Inspector({
                 {item.fromEngine ? 'From engine · ' : 'Estimated · '}
                 {item.suggestion}
               </Typography>
+              {item.cause ? (
+                <Typography sx={{ fontSize: 11, mt: 0.5 }}>{item.cause}</Typography>
+              ) : null}
+              {item.wait ? (
+                <Typography sx={{ fontSize: 11, mt: 0.5, fontFamily: '"IBM Plex Mono", monospace' }}>
+                  {item.wait}
+                </Typography>
+              ) : null}
               {item.citation ? (
                 <Typography sx={{ fontSize: 11, mt: 0.5, color: 'text.secondary' }}>
                   {item.citation}
@@ -179,7 +412,7 @@ export function Inspector({
           ))}
         </>
       )}
-      {tab === 2 && (
+      {tab === 3 && (
         <Stack spacing={1}>
           <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
             Downstream of a crash, from the engine graph. Unknown capacity still does not cap.

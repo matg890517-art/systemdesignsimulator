@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type Dispatch, type DragEvent, type SetStateAction } from 'react'
+import { useCallback, useMemo, useRef, type Dispatch, type DragEvent, type SetStateAction } from 'react'
 import {
   Background,
   Controls,
@@ -20,6 +20,13 @@ import { Box } from '@mui/material'
 import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
 import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-filter.ts'
 import { edgeCarriesClass } from './compile.ts'
+import { canvasSelectionKey } from './canvas-selection.ts'
+import {
+  decorateEdges,
+  defaultEdgeData,
+  isCrossProviderEdge,
+  styleCrossProviderEdge,
+} from './edge-data.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
@@ -60,6 +67,7 @@ function CanvasInner({
   onEdgesChange,
   setEdges,
   onSelect,
+  onSelectEdge,
 }: {
   nodes: WorkspaceNode[]
   edges: Edge[]
@@ -67,12 +75,53 @@ function CanvasInner({
   onEdgesChange: OnEdgesChange<Edge>
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
+  onSelectEdge: (edge?: Edge) => void
 }) {
   const { screenToFlowPosition } = useReactFlow()
+  const selectionKey = useRef('')
+  const displayEdges = useMemo(() => decorateEdges(nodes, edges), [nodes, edges])
+
+  const onSelectionChange = useCallback(
+    ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: WorkspaceNode[]; edges: Edge[] }) => {
+      const key = canvasSelectionKey(selectedNodes, selectedEdges)
+      if (key === selectionKey.current) return
+      selectionKey.current = key
+      if (key.startsWith('e:')) {
+        const edge = selectedEdges[0]
+        onSelect(undefined)
+        if (edge) onSelectEdge(edge)
+        return
+      }
+      onSelectEdge(undefined)
+      const node = selectedNodes.find((item) => item.type === 'service')
+      if (!node) {
+        onSelect(undefined)
+        return
+      }
+      const data = node.data as ServiceNodeData
+      onSelect({ id: node.id, title: data.title, catalogId: data.catalogId })
+    },
+    [onSelect, onSelectEdge],
+  )
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((current) => addEdge(connection, current)),
-    [setEdges],
+    (connection: Connection) =>
+      setEdges((current) => {
+        const cross = isCrossProviderEdge(nodes, connection)
+        const data = { ...defaultEdgeData(), crossProvider: cross }
+        const style = styleCrossProviderEdge(cross)
+        return addEdge(
+          {
+            ...connection,
+            type: 'smoothstep',
+            data,
+            label: cross ? 'cross · Estimated' : undefined,
+            style,
+          },
+          current,
+        )
+      }),
+    [nodes, setEdges],
   )
 
   const onDrop = useCallback(
@@ -133,24 +182,19 @@ function CanvasInner({
     >
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
-        onSelectionChange={({ nodes: selected }) => {
-          const node = selected[0]
-          if (!node || node.type !== 'service') {
-            onSelect(undefined)
-            return
-          }
-          const data = node.data as ServiceNodeData
-          onSelect({ id: node.id, title: data.title, catalogId: data.catalogId })
+        onSelectionChange={onSelectionChange}
+        onInit={(instance) => {
+          void instance.fitView({ padding: 0.08 })
         }}
-        fitView
         minZoom={0.4}
+        snapToGrid
         snapGrid={[16, 16]}
       >
         <Background gap={16} color="#D5DBE3" />
@@ -177,10 +221,15 @@ export function ArchitectureCanvas(props: {
   onEdgesChange: OnEdgesChange<Edge>
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
+  onSelectEdge: (edge?: Edge) => void
 }) {
+  const filterValue = useMemo(
+    () => ({ filter: props.classFilter, edges: props.edges }),
+    [props.classFilter, props.edges],
+  )
   return (
     <ReactFlowProvider>
-      <ClassFilterProvider value={{ filter: props.classFilter, edges: props.edges }}>
+      <ClassFilterProvider value={filterValue}>
         <CanvasInner
           nodes={props.nodes}
           edges={props.edges}
@@ -188,6 +237,7 @@ export function ArchitectureCanvas(props: {
           onEdgesChange={props.onEdgesChange}
           setEdges={props.setEdges}
           onSelect={props.onSelect}
+          onSelectEdge={props.onSelectEdge}
         />
       </ClassFilterProvider>
     </ReactFlowProvider>
