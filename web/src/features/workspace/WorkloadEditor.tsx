@@ -1,7 +1,6 @@
 import {
   Box,
   FormControlLabel,
-  MenuItem,
   Radio,
   RadioGroup,
   Stack,
@@ -13,6 +12,8 @@ import { compileCanvas, DISCRETE_EVENT_GUARD, REQUEST_CLASSES, type WorkloadDraf
 import { getWorkloadDraft, patchWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { getProfiles } from '../calibration/library.ts'
+import { RunModeToggle } from './RunModeToggle.tsx'
+import { RUN_MODES } from './run-mode.ts'
 
 const SHAPES = [
   { id: 'constant', label: 'Constant', body: 'Offered rate stays at the baseline for the whole run.' },
@@ -100,19 +101,16 @@ export function WorkloadEditor() {
           }}
           sx={{ width: 120 }}
         />
-        <TextField
-          select
-          size="small"
-          label="Engine"
-          value={draft.mode}
-          onChange={(event) =>
-            patchWorkloadDraft({ mode: event.target.value as WorkloadDraft['mode'] })
-          }
-          sx={{ width: 160 }}
-        >
-          <MenuItem value="fluid">Fluid-flow</MenuItem>
-          <MenuItem value="discrete">Discrete-event</MenuItem>
-        </TextField>
+      </Stack>
+      <Stack spacing={0.75} sx={{ mt: 2 }}>
+        <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
+          Run mode
+        </Typography>
+        <RunModeToggle />
+        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+          {RUN_MODES.find((item) => item.id === draft.mode)?.hint} Same topology either way. Also
+          next to Run on the canvas.
+        </Typography>
       </Stack>
 
       <Typography sx={{ mt: 3, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>

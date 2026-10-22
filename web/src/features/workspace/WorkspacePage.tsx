@@ -10,7 +10,7 @@ import { IconModeProvider } from './icon-mode.tsx'
 import { deleteSelection } from './canvas-edit.ts'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
-import { costFromProfiles } from '@sds/engine'
+import { costFromProfiles, expectedArrivals } from '@sds/engine'
 import {
   getFault,
   getProfiles,
@@ -23,7 +23,15 @@ import { FaultsPanel } from './FaultsPanel.tsx'
 import { idleKpis, kpisFromDraft, pickNodeStat } from './simulate.ts'
 import { runWorkspaceAsync } from './engine-client.ts'
 import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
-import { defaultWorkloadDraft, nodeCarriesClass, type ClassFilter } from './compile.ts'
+import {
+  compileCanvas,
+  defaultWorkloadDraft,
+  DISCRETE_EVENT_GUARD,
+  nodeCarriesClass,
+  type ClassFilter,
+} from './compile.ts'
+import { RunModeToggle } from './RunModeToggle.tsx'
+import { RUN_MODES } from './run-mode.ts'
 import { type MappedProvider } from '../catalog/provider-maps.ts'
 import {
   referenceStackGraph,
@@ -223,7 +231,12 @@ export function WorkspacePage() {
   const kpisToShow = ran
     ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
     : kpisFromDraft(draft, library.profiles)
-  const modeLabel = draft.mode === 'discrete' ? 'Discrete-event' : 'Fluid-flow'
+  const modeMeta = RUN_MODES.find((item) => item.id === draft.mode) ?? RUN_MODES[0]!
+  const arrivals = useMemo(() => {
+    if (draft.mode !== 'discrete') return 0
+    return expectedArrivals(compileCanvas(nodes, edges, draft, getProfiles(), getFault()).workload)
+  }, [nodes, edges, draft, library])
+  const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
   const challengeScore =
     challengeId === AKS_HEADROOM_CHALLENGE.id ? scoreAksHeadroom(lastRun) : undefined
   const shownBottlenecks = useMemo(() => {
@@ -607,7 +620,7 @@ export function WorkspacePage() {
         />
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          {fps >= 20 ? `${fps} FPS` : fps > 0 ? `${fps} FPS · tab` : 'FPS —'} · {modeLabel} ·{' '}
+          {fps >= 20 ? `${fps} FPS` : fps > 0 ? `${fps} FPS · tab` : 'FPS —'} · {modeMeta.label} ·{' '}
           {draft.durationSec} s · seed {draft.seed}
         </Typography>
         <Button variant="outlined" onClick={onSave}>
@@ -652,7 +665,13 @@ export function WorkspacePage() {
             }}
           />
         </Button>
-        <Button variant="contained" onClick={() => void onRun()} disabled={running}>
+        <RunModeToggle compact disabled={running} />
+        <Button
+          variant="contained"
+          onClick={() => void onRun()}
+          disabled={running || discreteBlocked}
+          title={discreteBlocked ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.' : modeMeta.hint}
+        >
           {running ? 'Running…' : 'Run'}
         </Button>
       </Stack>
@@ -715,6 +734,19 @@ export function WorkspacePage() {
           hint={kpisToShow.bottleneckHint}
         />
         <Kpi label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
+        <Typography
+          sx={{
+            alignSelf: 'center',
+            fontSize: 11,
+            color: discreteBlocked ? 'error.main' : 'text.secondary',
+            maxWidth: 320,
+            px: 1,
+          }}
+        >
+          {discreteBlocked
+            ? `Discrete-event would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use fluid, or lower rate / duration.`
+            : modeMeta.hint}
+        </Typography>
         {running || ran ? (
           <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'text.secondary' }}>
             {running ? 'Running on a Web Worker' : 'Last run from @sds/engine'}

@@ -1,13 +1,32 @@
-import { useState } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import AppsIcon from '@mui/icons-material/Apps'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import MenuIcon from '@mui/icons-material/Menu'
-import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import {
+  Box,
+  Button,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material'
 import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
 import { mappedProviders, type MappedProvider } from '../catalog/provider-maps.ts'
-import type { PaletteProvider, PaletteTile } from '../catalog/types.ts'
+import type { PaletteGroup, PaletteProvider, PaletteTile } from '../catalog/types.ts'
 import { KindIcon } from './KindIcon.tsx'
 import { iconGlyphFor } from './kind-icon.ts'
 import { useIconMode } from './icon-mode.tsx'
+import {
+  accordionProviders,
+  categoryLabel,
+  firstCategoryOpen,
+  folderKey,
+  searchOpenState,
+} from './palette-fold.ts'
 
 function limitsDot(tile: PaletteTile) {
   if (tile.limitsOnPage === 'yes') return 'success.main'
@@ -16,10 +35,17 @@ function limitsDot(tile: PaletteTile) {
 }
 
 function limitsWord(tile: PaletteTile) {
-  if (tile.limitsOnPage === 'yes') return 'limits listed'
+  if (tile.limitsOnPage === 'yes') return 'listed'
   if (tile.limitsOnPage === 'partial') return 'partial'
-  if (tile.limitsOnPage === 'no') return 'none listed'
-  return 'not set'
+  if (tile.limitsOnPage === 'no') return 'none'
+  return 'generic'
+}
+
+const TEMPLATE_LABEL: Record<MappedProvider, string> = {
+  generic: 'Generic',
+  aws: 'AWS',
+  azure: 'Azure',
+  gcp: 'GCP',
 }
 
 export function Palette({
@@ -37,11 +63,44 @@ export function Palette({
     gcp: false,
     kubernetes: false,
   })
-  const [view, setView] = useState<'button' | 'list'>('button')
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    [folderKey('generic', 'GENERIC')]: true,
+  })
+  const [view, setView] = useState<'button' | 'list'>('list')
   const [query, setQuery] = useState('')
+  const [template, setTemplate] = useState<MappedProvider | 'youtube'>('generic')
 
-  function toggle(id: PaletteProvider) {
-    setOpenProviders((current) => ({ ...current, [id]: !current[id] }))
+  const groupsByProvider = useMemo(() => {
+    const next = {} as Record<PaletteProvider, PaletteGroup[]>
+    for (const item of PALETTE_PROVIDERS) {
+      next[item.id] = paletteGroupsFor(item.id, query)
+    }
+    return next
+  }, [query])
+
+  const searchOpen = searchOpenState(query, groupsByProvider)
+  const providersOpen = searchOpen?.providers ?? openProviders
+  const categoriesOpen = searchOpen?.categories ?? openCategories
+
+  function toggleProvider(id: PaletteProvider) {
+    if (query.trim()) return
+    const next = accordionProviders(openProviders, id)
+    setOpenProviders(next)
+    if (next[id]) {
+      const prefix = `${id}:`
+      setOpenCategories((current) => {
+        const kept = Object.fromEntries(
+          Object.entries(current).filter(([key]) => !key.startsWith(prefix)),
+        )
+        return { ...kept, ...firstCategoryOpen(id, groupsByProvider[id]) }
+      })
+    }
+  }
+
+  function toggleCategory(provider: PaletteProvider, category: string) {
+    if (query.trim()) return
+    const key = folderKey(provider, category)
+    setOpenCategories((current) => ({ ...current, [key]: !current[key] }))
   }
 
   function tileNode(tile: PaletteTile, category: string) {
@@ -56,23 +115,27 @@ export function Palette({
       catalogId: tile.catalogId,
       category,
     })
+    const onDragStart = (event: DragEvent) => {
+      event.dataTransfer.setData('application/sds-service', payload)
+      event.dataTransfer.effectAllowed = 'move'
+    }
     if (view === 'list') {
       return (
         <Stack
           key={tile.catalogId ?? tile.name}
           direction="row"
           draggable
-          onDragStart={(event) => {
-            event.dataTransfer.setData('application/sds-service', payload)
-            event.dataTransfer.effectAllowed = 'move'
-          }}
+          onDragStart={onDragStart}
+          title={`${tile.name} · ${limitsWord(tile)}`}
           sx={{
             alignItems: 'center',
             gap: 0.75,
-            py: 0.4,
+            px: 0.75,
+            py: 0.5,
+            mx: 0.25,
+            borderRadius: 1,
             cursor: 'grab',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
+            '&:hover': { bgcolor: 'primary.light' },
           }}
         >
           <KindIcon glyph={glyph} size={16} title={tile.name} />
@@ -85,8 +148,18 @@ export function Palette({
               flexShrink: 0,
             }}
           />
-          <Typography sx={{ fontSize: 11, flex: 1 }}>{tile.name}</Typography>
-          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>{limitsWord(tile)}</Typography>
+          <Typography
+            sx={{
+              fontSize: 12,
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tile.name}
+          </Typography>
         </Stack>
       )
     }
@@ -94,31 +167,40 @@ export function Palette({
       <Box
         key={tile.catalogId ?? tile.name}
         draggable
-        onDragStart={(event) => {
-          event.dataTransfer.setData('application/sds-service', payload)
-          event.dataTransfer.effectAllowed = 'move'
-        }}
+        onDragStart={onDragStart}
+        title={`${tile.name} · ${limitsWord(tile)}`}
         sx={{
-          width: 68,
-          minHeight: 55,
+          minHeight: 52,
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: '6px',
-          px: 0.25,
+          px: 0.5,
           py: 0.75,
           textAlign: 'center',
           cursor: 'grab',
           bgcolor: 'background.paper',
-          mb: 0.5,
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: 0.5,
+          '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.light' },
         }}
       >
         <KindIcon glyph={glyph} size={20} title={tile.name} />
-        <Typography sx={{ fontSize: 11, lineHeight: '17px', width: 64 }}>{tile.name}</Typography>
+        <Typography
+          sx={{
+            fontSize: 11,
+            lineHeight: '14px',
+            width: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {tile.name}
+        </Typography>
         <Box
           sx={{
             width: 6,
@@ -137,122 +219,226 @@ export function Palette({
   return (
     <Box
       sx={{
-        width: 236,
+        width: 256,
         flexShrink: 0,
         bgcolor: 'background.paper',
         borderRadius: 3,
-        p: 1.5,
         display: 'flex',
         flexDirection: 'column',
-        gap: 1,
-        overflow: 'auto',
+        minHeight: 0,
+        overflow: 'hidden',
       }}
     >
-      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-        <TextField
-          size="small"
-          placeholder="Search services"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          sx={{ flex: 1 }}
-        />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={view}
-          onChange={(_, next: 'button' | 'list' | null) => {
-            if (next) setView(next)
-          }}
-          aria-label="Palette layout"
-          sx={{
-            height: 32,
-            '& .MuiToggleButton-root': { px: 0.5, minWidth: 28 },
-          }}
-        >
-          <ToggleButton value="button" aria-label="Button view">
-            <AppsIcon sx={{ fontSize: 16 }} />
-          </ToggleButton>
-          <ToggleButton value="list" aria-label="List view">
-            <MenuIcon sx={{ fontSize: 16 }} />
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
-      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-        Drag a service onto the canvas. Generic is the default folder.
-      </Typography>
-      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-        ● limits on official page · ◐ partial · ○ none listed
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Icons</Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={mode}
-          onChange={(_, next: 'service' | 'normal' | null) => {
-            if (next) setMode(next)
-          }}
-          aria-label="Icon style"
-          sx={{ height: 29, '& .MuiToggleButton-root': { px: 1, fontSize: 11, py: 0 } }}
-        >
-          <ToggleButton value="service">Service</ToggleButton>
-          <ToggleButton value="normal">Normal</ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
-      {PALETTE_PROVIDERS.map((item) => {
-        const groups = paletteGroupsFor(item.id, query)
-        const count = groups.reduce((sum, group) => sum + group.count, 0)
-        const open = openProviders[item.id]
-        return (
-          <Box key={item.id}>
-            <Typography
-              onClick={() => toggle(item.id)}
-              sx={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {open ? '▾' : '▸'} {item.label} ({count})
-            </Typography>
-            {open
-              ? groups.map((group) => (
-                  <Box key={group.category} sx={{ pl: 1, mt: 0.5 }}>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>
-                        {group.category}
-                      </Typography>
-                      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{group.count}</Typography>
-                    </Stack>
-                    {view === 'list' ? (
-                      group.tiles.map((tile) => tileNode(tile, group.category))
-                    ) : (
-                      <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-                        {group.tiles.map((tile) => tileNode(tile, group.category))}
-                      </Stack>
-                    )}
-                  </Box>
-                ))
-              : null}
-          </Box>
-        )
-      })}
-      <Stack spacing={0.75} sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-        {mappedProviders.map((provider) => (
-          <Button
-            key={provider}
+      <Stack spacing={1} sx={{ p: 1.5, pb: 1, flexShrink: 0 }}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+          <TextField
             size="small"
-            variant={provider === 'generic' ? 'outlined' : 'text'}
-            onClick={() => onLoadReference(provider)}
+            placeholder="Search services"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            sx={{ flex: 1 }}
+            slotProps={{ htmlInput: { 'aria-label': 'Search services' } }}
+          />
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={view}
+            onChange={(_, next: 'button' | 'list' | null) => {
+              if (next) setView(next)
+            }}
+            aria-label="Palette layout"
+            sx={{
+              height: 32,
+              '& .MuiToggleButton-root': { px: 0.5, minWidth: 28 },
+            }}
           >
-            Load{' '}
-            {provider === 'generic' ? 'generic' : provider === 'aws' ? 'AWS' : provider === 'gcp' ? 'GCP' : 'Azure'}{' '}
-            reference
-          </Button>
-        ))}
-        <Button size="small" onClick={onRestoreExample}>
-          Restore YouTube example
+            <ToggleButton value="button" aria-label="Button view">
+              <AppsIcon sx={{ fontSize: 16 }} />
+            </ToggleButton>
+            <ToggleButton value="list" aria-label="List view">
+              <MenuIcon sx={{ fontSize: 16 }} />
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={mode}
+            onChange={(_, next: 'service' | 'normal' | null) => {
+              if (next) setMode(next)
+            }}
+            aria-label="Icon style"
+            sx={{ height: 26, '& .MuiToggleButton-root': { px: 1, fontSize: 11, py: 0 } }}
+          >
+            <ToggleButton value="service">Service</ToggleButton>
+            <ToggleButton value="normal">Normal</ToggleButton>
+          </ToggleButtonGroup>
+          <Stack direction="row" spacing={0.5} sx={{ ml: 'auto', alignItems: 'center' }} title="Limits on official page">
+            <Dot color="success.main" />
+            <Dot color="warning.main" />
+            <Dot color="divider" />
+          </Stack>
+        </Stack>
+      </Stack>
+
+      <Box sx={{ flex: 1, overflow: 'auto', px: 1, pb: 1 }}>
+        {PALETTE_PROVIDERS.map((item) => {
+          const groups = groupsByProvider[item.id]
+          const count = groups.reduce((sum, group) => sum + group.count, 0)
+          if (query.trim() && count === 0) return null
+          const open = providersOpen[item.id]
+          return (
+            <Box key={item.id} sx={{ mb: 0.25 }}>
+              <Stack
+                component="button"
+                type="button"
+                direction="row"
+                onClick={() => toggleProvider(item.id)}
+                aria-expanded={open}
+                sx={{
+                  width: '100%',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  px: 0.75,
+                  py: 0.5,
+                  border: 0,
+                  borderRadius: 1,
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 1,
+                  bgcolor: open ? 'primary.light' : 'background.paper',
+                  cursor: 'pointer',
+                  color: 'text.primary',
+                  '&:hover': { bgcolor: open ? 'primary.light' : 'action.hover' },
+                }}
+              >
+                {open ? (
+                  <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                ) : (
+                  <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                )}
+                <Typography sx={{ fontSize: 12, fontWeight: 600, flex: 1, textAlign: 'left' }}>
+                  {item.label}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{count}</Typography>
+              </Stack>
+              {open
+                ? groups.map((group) => {
+                    const hideHeading = item.id === 'generic' && groups.length === 1
+                    const catOpen =
+                      hideHeading ||
+                      groups.length === 1 ||
+                      Boolean(categoriesOpen[folderKey(item.id, group.category)])
+                    return (
+                      <Box key={group.category} sx={{ pl: hideHeading ? 0.5 : 1.25 }}>
+                        {hideHeading ? null : (
+                          <Stack
+                            component="button"
+                            type="button"
+                            direction="row"
+                            onClick={() => toggleCategory(item.id, group.category)}
+                            aria-expanded={catOpen}
+                            sx={{
+                              width: '100%',
+                              alignItems: 'center',
+                              gap: 0.25,
+                              px: 0.5,
+                              py: 0.35,
+                              border: 0,
+                              borderRadius: 1,
+                              bgcolor: 'transparent',
+                              cursor: 'pointer',
+                              color: 'text.secondary',
+                              '&:hover': { bgcolor: 'action.hover' },
+                            }}
+                          >
+                            {catOpen ? (
+                              <ExpandMoreIcon sx={{ fontSize: 16 }} />
+                            ) : (
+                              <ChevronRightIcon sx={{ fontSize: 16 }} />
+                            )}
+                            <Typography sx={{ fontSize: 11, fontWeight: 600, flex: 1, textAlign: 'left' }}>
+                              {categoryLabel(group.category)}
+                            </Typography>
+                            <Typography sx={{ fontSize: 11 }}>{group.count}</Typography>
+                          </Stack>
+                        )}
+                        {catOpen ? (
+                          view === 'list' ? (
+                            group.tiles.map((tile) => tileNode(tile, group.category))
+                          ) : (
+                            <Box
+                              sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                                gap: 0.75,
+                                px: 0.5,
+                                py: 0.5,
+                              }}
+                            >
+                              {group.tiles.map((tile) => tileNode(tile, group.category))}
+                            </Box>
+                          )
+                        ) : null}
+                      </Box>
+                    )
+                  })
+                : null}
+            </Box>
+          )
+        })}
+      </Box>
+
+      <Stack
+        direction="row"
+        spacing={0.75}
+        sx={{
+          p: 1.25,
+          borderTop: 1,
+          borderColor: 'divider',
+          flexShrink: 0,
+          alignItems: 'center',
+        }}
+      >
+        <Select
+          size="small"
+          value={template}
+          onChange={(event) => setTemplate(event.target.value as MappedProvider | 'youtube')}
+          aria-label="Reference template"
+          sx={{ flex: 1, fontSize: 12 }}
+        >
+          {mappedProviders.map((provider) => (
+            <MenuItem key={provider} value={provider}>
+              {TEMPLATE_LABEL[provider]} reference
+            </MenuItem>
+          ))}
+          <MenuItem value="youtube">YouTube example</MenuItem>
+        </Select>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            if (template === 'youtube') onRestoreExample()
+            else onLoadReference(template)
+          }}
+        >
+          Load
         </Button>
-        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          Same 9 blocks. Catalog bindings only. Capacities stay Estimated until a lab test exists.
-        </Typography>
       </Stack>
     </Box>
+  )
+}
+
+function Dot({ color }: { color: string }) {
+  return (
+    <Box
+      sx={{
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        bgcolor: color,
+      }}
+    />
   )
 }
