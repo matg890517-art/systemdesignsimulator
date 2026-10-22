@@ -10,8 +10,10 @@ import {
   catalogEntries,
   catalogReadOn,
   catalogStats,
+  catalogValueKey,
   catalogValuesFor,
   comparisonRows,
+  formatCatalogValue,
   exampleNodesFor,
   filterCatalog,
 } from './catalog.ts'
@@ -223,7 +225,7 @@ export function CatalogPage() {
                       {row.ceilings.length === 0
                         ? 'No sourced ceiling'
                         : row.ceilings.map((item) => (
-                            <Typography key={item.text} sx={{ fontSize: 12 }}>
+                            <Typography key={item.key} sx={{ fontSize: 12 }}>
                               {item.text}
                               {item.mayCap ? ' · may cap' : ' · does not cap'}
                             </Typography>
@@ -337,12 +339,15 @@ export function CatalogPage() {
               </Link>
               {catalogValuesFor(selected.id).map((value) => (
                 <Box
-                  key={`${value.conditions.metric ?? value.unit}-${value.value}`}
+                  key={catalogValueKey(value)}
                   sx={{ p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}
                 >
                   <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
-                    {value.value.toLocaleString('en-US')} {value.unit}
+                    {formatCatalogValue(value)}
                   </Typography>
+                  {value.note ? (
+                    <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{value.note}</Typography>
+                  ) : null}
                   <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
                     {value.limitType.replaceAll('_', ' ')} · {value.scope} · {value.retrievedOn} ·{' '}
                     {value.status}

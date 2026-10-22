@@ -1,6 +1,6 @@
 import { genericBlocks, usableAsCeiling, type ProviderBinding } from '@sds/engine'
 import { catalogEntries, catalogReadOn } from './entries.ts'
-import { catalogValuesFor } from './verified-limits.ts'
+import { catalogValueKey, catalogValuesFor, formatCatalogValue } from './verified-limits.ts'
 import type {
   CatalogEntry,
   CatalogProvider,
@@ -10,7 +10,14 @@ import type {
 } from './types.ts'
 
 export { catalogEntries, catalogReadOn }
-export { catalogValuesFor, verifiedCatalogValues } from './verified-limits.ts'
+export {
+  CANONICAL_VERIFIED_CATALOG_IDS,
+  PARTIAL_RECORDED_CATALOG_IDS,
+  catalogValueKey,
+  catalogValuesFor,
+  formatCatalogValue,
+  verifiedCatalogValues,
+} from './verified-limits.ts'
 export type { CatalogEntry, CatalogProvider, LimitsOnPage, PaletteGroup, PaletteProvider }
 
 export const CATALOG_PROVIDERS: { id: CatalogProvider; label: string }[] = [
@@ -166,6 +173,7 @@ export const COMPARISON_CATEGORIES = [
 ] as const
 
 export type ComparisonCeiling = {
+  key: string
   text: string
   mayCap: boolean
   limitType: string
@@ -191,7 +199,8 @@ export function comparisonRows(category: string): ComparisonRow[] {
       name: entry.name,
       limitsOnPage: entry.limitsOnPage,
       ceilings: catalogValuesFor(entry.id).map((value) => ({
-        text: `${value.value.toLocaleString('en-US')} ${value.unit} · ${value.limitType.replaceAll('_', ' ')}`,
+        key: catalogValueKey(value),
+        text: formatCatalogValue(value),
         mayCap: usableAsCeiling(value),
         limitType: value.limitType,
       })),

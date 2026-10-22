@@ -32,6 +32,14 @@ describe('F26 catalog ceilings', () => {
     expect(usableAsCeiling({ ...sourcedHard, status: 'estimated' })).toBe(false)
     expect(usableAsCeiling({ ...sourcedHard, status: 'unknown' })).toBe(false)
     expect(usableAsCeiling({ ...sourcedHard, sourceUrl: '' })).toBe(false)
+    expect(usableAsCeiling({ ...sourcedHard, value: undefined })).toBe(false)
+  })
+
+  it('does not infer a servers cap from unit count when caps is omitted', () => {
+    const open = applyCatalogCeilings(behavior(), [
+      { ...sourcedHard, value: 4, unit: 'count', caps: undefined },
+    ])
+    expect(open.servers).toEqual(behavior().servers)
   })
 
   it('applies a documented hard rps ceiling and ignores guidance', () => {

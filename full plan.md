@@ -476,7 +476,11 @@ function usableAsCeiling(v: CatalogValue): boolean {
 
 ### Verified limits
 
-The 18 services of the first reference architecture (load balancer, service, queue, cache, database) were read on official AWS, Azure and GCP pages; the table below lists what each page stated. Unknown means the page read did not state a value, not that no limit exists. These are the 18 Verified services in Components by provider (Oct 20, 2026 audit of 137 services: 18 Verified, 6 Partial, 104 Listed (not checked), 9 No limits on page). The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships.
+**Canonical 18 Verified** is the Components by provider counts table (Oct 20, 2026: AWS 9 + Azure 4 + GCP 5 = 18). That list is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub.
+
+The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda and CloudFront are Verified from the Oct 18, 2026 AWS spot check (M6 states the Lambda timeouts; this plan does not state a CloudFront number). **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18 Verified services.
+
+Unknown in Still open means the page read did not state a value, not that no limit exists. The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships. Do not invent a quota. These figures are Vendor figure (documented), not Measured. Phase 1 and Phase 5 stay open until a real load test of the reference stack exists.
 
 | Service | Verified | Still open |
 | --- | --- | --- |
@@ -498,6 +502,20 @@ The 18 services of the first reference architecture (load balancer, service, que
 | GCP Pub/Sub | At-least-once, optional ordering, exactly-once supported; 4 GB/s per region publish in large regions | None found |
 | GCP Memorystore | 65,000 clients; asynchronous, about 30 s unavailable on repair; acknowledged writes can be lost | Memory sizes |
 | GCP Cloud SQL | Synchronous HA, about 60 s failover; PostgreSQL connection sum up to 262,142; storage up to 64 TB | Standby reads; consistency |
+
+**Limit type from Verified-limits prose (M1 + Decision 11)**
+
+| Plan cue | limitType | May cap |
+| --- | --- | --- |
+| "fixed" | hard_limit | yes, if a number is stated |
+| "adjustable" | adjustable_quota | yes, if a number is stated |
+| "best-effort" | best_effort_target | no |
+| "guidance" | performance_guidance | no |
+| a default or range the operator sets | configurable_setting | no |
+| delivery, failover, ordering, replication, durability | documented_behavior | no |
+| a stated number with no "fixed" or "adjustable" | quota_adjustability_unknown | no |
+
+If the plan text does not state a number, omit the value and set status unknown. Only hard_limit or adjustable_quota may cap, and only when the value is present.
 
 **Rules this adds to the catalog (proposed)**
 
@@ -866,7 +884,7 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 
 #### 3. Which services are P0
 
-- **What it is.** P0 means the service must exist in the first catalog. Verified limits covers 18 services at priority 1 (catalog statuses: see Components by provider).
+- **What it is.** P0 means the service must exist in the first catalog. The 18 Verified services are those with Status = Verified in Components by provider (not the figure table, which splits SQS and includes Azure Load Balancer as a Partial reading).
 - **Options.** Keep all 18. Shrink to what the reference topology needs (load balancer, app compute, cache, relational database, queue and worker). Or add priority 2 services.
 - **Recommendation.** Treat the 18 as the ceiling for the first provider, and build in the order the reference topology needs so the first demo does not wait for all 18. A service with an engine-capping limit still marked Unknown does not ship until that row is resolved.
 - **Blocks.** Catalog build order, and how many Unknown and Partial rows I must close first.
@@ -1010,3 +1028,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 20, 2026 | Catalog audit applied. "Components by provider" rewritten: one table per provider with a verify link per service (read Oct 20, 2026), the limits-on-page value and four statuses (Verified, Partial, Listed (not checked), No limits on page) replacing the "Limits checked" column. 17 services that were marked checked without a recorded reading were reclassified (13 to Listed (not checked); Azure Front Door, Cloud CDN, Apigee to Partial; Azure Content Delivery Network to No limits on page), plus S3 and Azure Load Balancer to Partial. Pub/Sub link fixed to https://docs.cloud.google.com/pubsub/quotas. Dataproc noted as renamed to Managed Service for Apache Spark (new quotas link). Kubernetes cluster size limits get their own row (Kubernetes scalability thresholds, Partial). Naming: "Application Load Balancer" (ALB only as a short label); canvas "Viewers" and "Uploaders" are the Generic Clients component; ECR is not a catalog entry. Counts: 137 services, 18 Verified, 6 Partial, 104 Listed (not checked), 9 No limits on page. Provider catalogs intro, Verified limits intro and the P0 services decision updated to match. |
 | Oct 21, 2026 | Component link file merged: the earlier link list and the Oct 20 catalog PDF were compared and combined into one file, component-links.md (Project). Both list the same 137 services with the same limits-on-page values; the only link differences were Pub/Sub and Dataproc, and the plan already uses the confirmed new links. The plan tables match the merged file row for row. |
 | Oct 22, 2026 | Workspace canvas UX written into F1/F2 and the product notes: easy delete (Delete/Backspace, toolbar, Config; edges drop with the node), easy connect (four-side handles plus Connect then two clicks), icons on every tile and card from Real-base DS/Icons (Service vs Normal), and the two palette layouts as the ▦ / ☰ toggle in the search row — not hidden text links. Same day: Worker pool icon path was a self-overlapping gear that filled as a blob (nonzero fill, inner circle not a hole). Connection rule: Clients only emit; one hop per pair; source handles right/bottom, target left/top — any-to-any was not the engine model. |
+| Oct 22, 2026 | Canonical Verified 18 is the Components-by-provider counts table, not the Verified-limits figure table. Azure Load Balancer stays Partial; idle timeout is a recorded configurable_setting. Limit-type mapping for plan prose (M1 + Decision 11) added. CatalogValue rows encoded from stated figures only; unknown stays unknown; no Phase 1/5 or Measured claim. |

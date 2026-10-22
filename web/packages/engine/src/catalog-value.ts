@@ -5,6 +5,7 @@ export function usableAsCeiling(value: CatalogValue): boolean {
   if (value.limitType !== 'hard_limit' && value.limitType !== 'adjustable_quota') return false
   if (value.status === 'unknown' || value.status === 'estimated') return false
   if (!value.sourceUrl || !value.retrievedOn) return false
+  if (value.value === undefined || !Number.isFinite(value.value)) return false
   return true
 }
 
@@ -13,11 +14,7 @@ function confidenceOf(value: CatalogValue): Confidence {
 }
 
 function capKind(value: CatalogValue): CatalogValue['caps'] {
-  if (value.caps) return value.caps
-  if (value.unit === 'rps') return 'throughputRps'
-  if (value.unit === 'count') return 'servers'
-  if (value.unit === 'bps') return 'bandwidthBps'
-  return undefined
+  return value.caps
 }
 
 function minIfSet(
@@ -55,7 +52,7 @@ export function applyCatalogCeilings(
 ): ComponentBehavior {
   let next = behavior
   for (const value of values) {
-    if (!usableAsCeiling(value)) continue
+    if (!usableAsCeiling(value) || value.value === undefined) continue
     const kind = capKind(value)
     const confidence = confidenceOf(value)
     const sourceId = value.sourceUrl

@@ -265,7 +265,8 @@ export type CatalogValueCap = 'throughputRps' | 'servers' | 'bandwidthBps'
 
 /** Sourced catalog figure. Only hard_limit and adjustable_quota may cap the engine. */
 export interface CatalogValue {
-  value: number
+  /** Omitted when the plan did not state a number (status unknown or prose-only). */
+  value?: number
   unit: string
   scope: CatalogValueScope
   limitType: LimitType
@@ -274,4 +275,6 @@ export interface CatalogValue {
   retrievedOn: string
   status: CatalogValueStatus
   caps?: CatalogValueCap
+  /** Plan prose when there is no number, or a qualifier such as "about" / "usually under". */
+  note?: string
 }
