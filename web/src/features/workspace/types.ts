@@ -1,3 +1,5 @@
+import type { Node } from '@xyflow/react'
+
 export type ProviderId = 'aws' | 'azure' | 'gcp' | 'kubernetes' | 'generic'
 export type NodeHealth = 'default' | 'watch' | 'bottleneck'
 
@@ -20,6 +22,8 @@ export type ZoneNodeData = {
   provider: ProviderId
   nested?: boolean
 }
+
+export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
 
 export type Bottleneck = {
   id: string

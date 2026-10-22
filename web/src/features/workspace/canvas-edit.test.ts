@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+import { connectComponents, deleteSelection } from './canvas-edit.ts'
+import { initialEdges, initialNodes } from './graph.ts'
+
+describe('canvas edit', () => {
+  it('deletes a service and every attached edge, and leaves zones', () => {
+    const next = deleteSelection(initialNodes, initialEdges, ['alb'], [])
+    expect(next.nodes.some((node) => node.id === 'alb')).toBe(false)
+    expect(next.nodes.some((node) => node.id === 'aws' && node.type === 'zone')).toBe(true)
+    expect(next.edges.some((edge) => edge.source === 'alb' || edge.target === 'alb')).toBe(false)
+  })
+
+  it('deletes a selected edge without removing nodes', () => {
+    const next = deleteSelection(initialNodes, initialEdges, [], ['cf-alb'])
+    expect(next.nodes).toHaveLength(initialNodes.length)
+    expect(next.edges.some((edge) => edge.id === 'cf-alb')).toBe(false)
+  })
+
+  it('ignores zone ids so layout groups are not removed as components', () => {
+    const next = deleteSelection(initialNodes, initialEdges, ['aws'], [])
+    expect(next.nodes.some((node) => node.id === 'aws')).toBe(true)
+    expect(next.edges).toHaveLength(initialEdges.length)
+  })
+
+  it('connects two services with a typed edge and labels a cross-provider hop Estimated', () => {
+    const same = connectComponents(initialNodes, initialEdges, 'alb', 'blob')
+    if ('error' in same) throw new Error(same.error)
+    const added = same.edges.find((edge) => edge.source === 'alb' && edge.target === 'blob')
+    expect(added?.type).toBe('smoothstep')
+    expect(String(added?.label)).toMatch(/cross · Estimated/)
+    expect(connectComponents(initialNodes, initialEdges, 'alb', 'ecs')).toMatchObject({
+      error: 'Already connected',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'alb', 'alb')).toMatchObject({
+      error: 'Pick a different component',
+    })
+  })
+})

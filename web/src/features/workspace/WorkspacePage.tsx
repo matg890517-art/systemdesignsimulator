@@ -6,6 +6,8 @@ import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
 import { ClassFilterChips } from './ClassFilterChips.tsx'
 import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
+import { IconModeProvider } from './icon-mode.tsx'
+import { deleteSelection } from './canvas-edit.ts'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
 import { costFromProfiles } from '@sds/engine'
@@ -130,6 +132,9 @@ export function WorkspacePage() {
   const [selected, setSelected] = useState<{ id: string; title: string; catalogId?: string }>()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>()
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([])
+  const [connectClick, setConnectClick] = useState(false)
+  const [connectFromId, setConnectFromId] = useState<string>()
   const [challengeId] = useState(challengeFromHref)
   const [ran, setRan] = useState(false)
   const [runError, setRunError] = useState<string>()
@@ -180,6 +185,10 @@ export function WorkspacePage() {
 
   const onSelectIds = useCallback((ids: string[]) => {
     setSelectedIds((current) => (current.join(',') === ids.join(',') ? current : ids))
+  }, [])
+
+  const onSelectEdgeIds = useCallback((ids: string[]) => {
+    setSelectedEdgeIds((current) => (current.join(',') === ids.join(',') ? current : ids))
   }, [])
 
   useEffect(() => {
@@ -439,6 +448,32 @@ export function WorkspacePage() {
     setRunError(undefined)
   }
 
+  function onDeleteSelection() {
+    const edgeIds = selectedEdgeIds.length
+      ? selectedEdgeIds
+      : selectedEdgeId
+        ? [selectedEdgeId]
+        : []
+    if (selectedIds.length === 0 && edgeIds.length === 0) return
+    const next = deleteSelection(nodes, edges, selectedIds, edgeIds)
+    setNodes(next.nodes)
+    setEdges(next.edges)
+    setSelected(undefined)
+    setSelectedIds([])
+    setSelectedEdgeId(undefined)
+    setSelectedEdgeIds([])
+    setConnectFromId(undefined)
+    setScene('custom')
+    setSavedHint('Deleted selection')
+    setRunError(undefined)
+  }
+
+  function onToggleConnect() {
+    setConnectClick((current) => !current)
+    setConnectFromId(undefined)
+    setRunError(undefined)
+  }
+
   function onImportFile(file: File) {
     void file.text().then((text) => {
       const snapshot = parseSnapshot(text)
@@ -532,7 +567,30 @@ export function WorkspacePage() {
     return () => window.clearTimeout(handle)
   }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      const hasEdge = selectedEdgeIds.length > 0 || Boolean(selectedEdgeId)
+      if (selectedIds.length === 0 && !hasEdge) return
+      event.preventDefault()
+      onDeleteSelection()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   return (
+    <IconModeProvider>
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopNav page="workspace" />
       <Stack
@@ -560,6 +618,20 @@ export function WorkspacePage() {
         </Button>
         <Button variant="outlined" onClick={onInventory}>
           Inventory
+        </Button>
+        <Button
+          variant={connectClick ? 'contained' : 'outlined'}
+          onClick={onToggleConnect}
+        >
+          {connectFromId ? 'Click target' : 'Connect'}
+        </Button>
+        <Button
+          variant="outlined"
+          color="error"
+          onClick={onDeleteSelection}
+          disabled={selectedIds.length === 0 && selectedEdgeIds.length === 0 && !selectedEdgeId}
+        >
+          Delete
         </Button>
         <Button variant="outlined" onClick={onGroup} disabled={selectedIds.length < 2}>
           Group
@@ -690,6 +762,11 @@ export function WorkspacePage() {
                 onSelect={onSelectNode}
                 onSelectEdge={onSelectCanvasEdge}
                 onSelectIds={onSelectIds}
+                onSelectEdgeIds={onSelectEdgeIds}
+                connectClick={connectClick}
+                connectFromId={connectFromId}
+                onConnectFrom={setConnectFromId}
+                onConnectError={setRunError}
               />
             ) : (
               <Box
@@ -712,6 +789,8 @@ export function WorkspacePage() {
               onEdgeChange={(edge) =>
                 setEdges((current) => current.map((item) => (item.id === edge.id ? edge : item)))
               }
+              onDeleteNode={onDeleteSelection}
+              onDeleteEdge={onDeleteSelection}
               affectedIds={lastRun?.affectedComponentIds ?? []}
               blastOriginId={lastRun?.blastOriginId}
               breakerOpenEdges={lastRun?.breakerOpenEdges ?? []}
@@ -722,5 +801,6 @@ export function WorkspacePage() {
         {tab === 2 && <FaultsPanel />}
       </Box>
     </Box>
+    </IconModeProvider>
   )
 }

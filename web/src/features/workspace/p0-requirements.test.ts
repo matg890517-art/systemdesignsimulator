@@ -12,6 +12,19 @@ describe('remaining P0 requirements', () => {
     expect(PALETTE_PROVIDERS[0]?.id).toBe('generic')
   })
 
+  it('F1 drops a service and its edges, and F2 maps a tile to a named icon', async () => {
+    const { deleteSelection } = await import('./canvas-edit.ts')
+    const { iconGlyphFor } = await import('./kind-icon.ts')
+    const { initialEdges, initialNodes } = await import('./graph.ts')
+    const next = deleteSelection(initialNodes, initialEdges, ['ecs'], [])
+    expect(next.nodes.some((node) => node.id === 'ecs')).toBe(false)
+    expect(next.edges.some((edge) => edge.source === 'ecs' || edge.target === 'ecs')).toBe(false)
+    expect(iconGlyphFor({ mode: 'service', name: 'EC2', catalogId: 'aws-ec2' })).toBe('compute')
+    expect(iconGlyphFor({ mode: 'normal', name: 'Clients', catalogId: 'generic-clients' })).toBe(
+      'clients',
+    )
+  })
+
   it('F29 marks Azure→AWS copy-link as a cross-provider edge', () => {
     expect(isCrossProviderEdge(initialNodes, { source: 'blob', target: 'cloudfront' })).toBe(true)
     expect(isCrossProviderEdge(initialNodes, { source: 'alb', target: 'ecs' })).toBe(false)

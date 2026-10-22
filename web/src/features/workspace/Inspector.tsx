@@ -16,10 +16,12 @@ function ConfigPanel({
   nodeId,
   title,
   catalogId,
+  onDelete,
 }: {
   nodeId?: string
   title?: string
   catalogId?: string
+  onDelete?: () => void
 }) {
   const library = useLibrary()
   const catalog = nodeId ? catalogForNode(nodeId, catalogId) : undefined
@@ -152,6 +154,11 @@ function ConfigPanel({
       >
         Reset to default
       </Button>
+      {onDelete ? (
+        <Button size="small" color="error" variant="outlined" onClick={onDelete}>
+          Delete component
+        </Button>
+      ) : null}
     </Stack>
   )
 }
@@ -159,9 +166,11 @@ function ConfigPanel({
 function EdgePanel({
   edge,
   onChange,
+  onDelete,
 }: {
   edge?: RfEdge
   onChange: (edge: RfEdge) => void
+  onDelete?: () => void
 }) {
   if (!edge) {
     return (
@@ -190,6 +199,11 @@ function EdgePanel({
       <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
         {edge.source} → {edge.target}
       </Typography>
+      {onDelete ? (
+        <Button size="small" color="error" variant="outlined" onClick={onDelete}>
+          Delete connection
+        </Button>
+      ) : null}
       {data.crossProvider ? (
         <Typography sx={{ fontSize: 11, color: 'warning.dark' }}>
           Leaves a provider. Latency and capacity stay Estimated until measured (F29).
@@ -322,6 +336,8 @@ export function Inspector({
   selected,
   selectedEdge,
   onEdgeChange,
+  onDeleteNode,
+  onDeleteEdge,
   affectedIds = [],
   blastOriginId,
   breakerOpenEdges = [],
@@ -330,6 +346,8 @@ export function Inspector({
   selected?: { id: string; title: string; catalogId?: string }
   selectedEdge?: RfEdge
   onEdgeChange: (edge: RfEdge) => void
+  onDeleteNode?: () => void
+  onDeleteEdge?: () => void
   affectedIds?: string[]
   blastOriginId?: string
   breakerOpenEdges?: string[]
@@ -360,9 +378,12 @@ export function Inspector({
           nodeId={selected?.id}
           title={selected?.title}
           catalogId={selected?.catalogId}
+          onDelete={selected ? onDeleteNode : undefined}
         />
       )}
-      {tab === 1 && <EdgePanel edge={selectedEdge} onChange={onEdgeChange} />}
+      {tab === 1 && (
+        <EdgePanel edge={selectedEdge} onChange={onEdgeChange} onDelete={selectedEdge ? onDeleteEdge : undefined} />
+      )}
       {tab === 2 && (
         <>
           {selected ? (

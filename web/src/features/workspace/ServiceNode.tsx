@@ -4,6 +4,9 @@ import { heatFill } from './heat.ts'
 import { formatPct, nodeHealth } from './simulate.ts'
 import { useClassFilter } from './class-filter.ts'
 import { nodeCarriesClass } from './compile.ts'
+import { useIconMode } from './icon-mode.tsx'
+import { KindIcon } from './KindIcon.tsx'
+import { iconGlyphFor } from './kind-icon.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import { zoneColors } from '../../theme/sdsTheme.ts'
 
@@ -19,8 +22,16 @@ const utilColor = {
   bottleneck: '#B3261E',
 } as const
 
+const HANDLE_SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const
+
 export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) {
   const { filter, edges } = useClassFilter()
+  const { mode } = useIconMode()
+  const glyph = iconGlyphFor({
+    mode,
+    name: data.title,
+    catalogId: data.catalogId,
+  })
   const onPath = nodeCarriesClass(
     { id, type: 'service', position: { x: 0, y: 0 }, data },
     edges,
@@ -40,9 +51,19 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
         opacity: onPath ? 1 : 0.28,
       }}
     >
-      <Handle type="target" position={Position.Left} />
+      {HANDLE_SIDES.map((side) => (
+        <Handle key={`t-${side}`} id={`t-${side}`} type="target" position={side} />
+      ))}
+      {HANDLE_SIDES.map((side) => (
+        <Handle key={`s-${side}`} id={`s-${side}`} type="source" position={side} />
+      ))}
       <Stack spacing={0.5}>
-        <Typography sx={{ fontWeight: 600, fontSize: 12 }}>{data.title}</Typography>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <KindIcon glyph={glyph} size={16} title={data.title} />
+          <Typography sx={{ fontWeight: 600, fontSize: 12, minWidth: 0 }}>
+            {data.title}
+          </Typography>
+        </Stack>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
           <Typography
             sx={{
@@ -76,7 +97,6 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
           </Typography>
         ) : null}
       </Stack>
-      <Handle type="source" position={Position.Right} />
     </Box>
   )
 }

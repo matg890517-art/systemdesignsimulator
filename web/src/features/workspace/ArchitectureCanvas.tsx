@@ -1,6 +1,15 @@
-import { useCallback, useMemo, useRef, type Dispatch, type DragEvent, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  type Dispatch,
+  type DragEvent,
+  type MouseEvent,
+  type SetStateAction,
+} from 'react'
 import {
   Background,
+  ConnectionMode,
   Controls,
   MiniMap,
   ReactFlow,
@@ -16,21 +25,17 @@ import {
   type OnNodesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Box } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
 import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-filter.ts'
 import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
-import {
-  decorateEdges,
-  defaultEdgeData,
-  isCrossProviderEdge,
-  styleCrossProviderEdge,
-} from './edge-data.ts'
+import { decorateEdges } from './edge-data.ts'
+import { connectComponents, edgeDraftFromConnection } from './canvas-edit.ts'
 import { heatStroke } from './heat.ts'
-import type { ServiceNodeData, ZoneNodeData } from './types.ts'
+import type { ServiceNodeData, WorkspaceNode } from './types.ts'
 
-export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
+export type { WorkspaceNode }
 
 const nodeTypes = {
   service: ServiceNodeView,
@@ -70,6 +75,11 @@ function CanvasInner({
   onSelect,
   onSelectEdge,
   onSelectIds,
+  onSelectEdgeIds,
+  connectClick,
+  connectFromId,
+  onConnectFrom,
+  onConnectError,
 }: {
   nodes: WorkspaceNode[]
   edges: Edge[]
@@ -79,6 +89,11 @@ function CanvasInner({
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
   onSelectEdge: (edge?: Edge) => void
   onSelectIds: (ids: string[]) => void
+  onSelectEdgeIds: (ids: string[]) => void
+  connectClick: boolean
+  connectFromId?: string
+  onConnectFrom: (id?: string) => void
+  onConnectError: (message?: string) => void
 }) {
   const { screenToFlowPosition } = useReactFlow()
   const selectionKey = useRef('')
@@ -91,6 +106,7 @@ function CanvasInner({
       selectionKey.current = key
       const serviceIds = selectedNodes.filter((item) => item.type === 'service').map((item) => item.id)
       onSelectIds(serviceIds)
+      onSelectEdgeIds(selectedEdges.map((edge) => edge.id))
       if (key.startsWith('e:')) {
         const edge = selectedEdges[0]
         onSelect(undefined)
@@ -106,27 +122,44 @@ function CanvasInner({
       const data = node.data as ServiceNodeData
       onSelect({ id: node.id, title: data.title, catalogId: data.catalogId })
     },
-    [onSelect, onSelectEdge, onSelectIds],
+    [onSelect, onSelectEdge, onSelectEdgeIds, onSelectIds],
   )
 
   const onConnect = useCallback(
-    (connection: Connection) =>
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return
+      const sourceNode = nodes.find((node) => node.id === connection.source)
+      const targetNode = nodes.find((node) => node.id === connection.target)
+      if (sourceNode?.type !== 'service' || targetNode?.type !== 'service') return
       setEdges((current) => {
-        const cross = isCrossProviderEdge(nodes, connection)
-        const data = { ...defaultEdgeData(), crossProvider: cross }
-        const style = styleCrossProviderEdge(cross)
-        return addEdge(
-          {
-            ...connection,
-            type: 'smoothstep',
-            data,
-            label: cross ? 'cross · Estimated' : undefined,
-            style,
-          },
-          current,
-        )
-      }),
+        if (current.some((edge) => edge.source === connection.source && edge.target === connection.target)) {
+          return current
+        }
+        return addEdge(edgeDraftFromConnection(nodes, connection), current)
+      })
+    },
     [nodes, setEdges],
+  )
+
+  const onNodeClick = useCallback(
+    (_event: MouseEvent, node: Node) => {
+      if (!connectClick || node.type !== 'service') return
+      if (!connectFromId) {
+        onConnectFrom(node.id)
+        onConnectError(undefined)
+        return
+      }
+      if (connectFromId === node.id) return
+      const next = connectComponents(nodes, edges, connectFromId, node.id)
+      if ('error' in next) {
+        onConnectError(next.error)
+        return
+      }
+      setEdges(next.edges)
+      onConnectFrom(undefined)
+      onConnectError(undefined)
+    },
+    [connectClick, connectFromId, edges, nodes, onConnectError, onConnectFrom, setEdges],
   )
 
   const onDrop = useCallback(
@@ -175,9 +208,19 @@ function CanvasInner({
         flex: 1,
         minWidth: 0,
         height: '100%',
+        position: 'relative',
         bgcolor: 'background.paper',
         borderRadius: 3,
         overflow: 'hidden',
+        '& .react-flow__handle': {
+          width: 10,
+          height: 10,
+          background: '#FFFFFF',
+          border: '2px solid #2744C7',
+          opacity: 1,
+        },
+        '& .react-flow__handle-connecting': { background: '#2744C7' },
+        '& .react-flow__pane': connectClick ? { cursor: 'crosshair' } : undefined,
       }}
       onDragOver={(event) => {
         event.preventDefault()
@@ -191,6 +234,7 @@ function CanvasInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -201,6 +245,14 @@ function CanvasInner({
         minZoom={0.4}
         snapToGrid
         snapGrid={[16, 16]}
+        deleteKeyCode={null}
+        multiSelectionKeyCode="Shift"
+        connectionMode={ConnectionMode.Loose}
+        connectionRadius={28}
+        nodesConnectable
+        edgesReconnectable
+        connectionLineStyle={{ stroke: '#2744C7', strokeWidth: 2 }}
+        panOnDrag={!connectClick}
       >
         <Background gap={16} color="#D5DBE3" />
         <Controls />
@@ -211,6 +263,15 @@ function CanvasInner({
           }}
         />
       </ReactFlow>
+      <Box sx={{ position: 'absolute', left: 16, top: 12, pointerEvents: 'none' }}>
+        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+          {connectClick
+            ? connectFromId
+              ? 'Click a target component'
+              : 'Click a source component'
+            : 'Drag a blue handle, or use Connect and click two components. Delete or Backspace removes the selection.'}
+        </Typography>
+      </Box>
     </Box>
   )
 }
@@ -225,6 +286,11 @@ export function ArchitectureCanvas(props: {
   onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
   onSelectEdge: (edge?: Edge) => void
   onSelectIds: (ids: string[]) => void
+  onSelectEdgeIds: (ids: string[]) => void
+  connectClick: boolean
+  connectFromId?: string
+  onConnectFrom: (id?: string) => void
+  onConnectError: (message?: string) => void
 }) {
   const filterValue = useMemo(
     () => ({ filter: props.classFilter, edges: props.edges }),
@@ -242,6 +308,11 @@ export function ArchitectureCanvas(props: {
           onSelect={props.onSelect}
           onSelectEdge={props.onSelectEdge}
           onSelectIds={props.onSelectIds}
+          onSelectEdgeIds={props.onSelectEdgeIds}
+          connectClick={props.connectClick}
+          connectFromId={props.connectFromId}
+          onConnectFrom={props.onConnectFrom}
+          onConnectError={props.onConnectError}
         />
       </ClassFilterProvider>
     </ReactFlowProvider>
