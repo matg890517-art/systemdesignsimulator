@@ -13,7 +13,7 @@ import { HeatLegend } from './HeatLegend.tsx'
 import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { IconModeProvider } from './icon-mode.tsx'
-import { deleteSelection } from './canvas-edit.ts'
+import { deleteSelection, patchServiceTitle } from './canvas-edit.ts'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
 import { costFromProfiles, expectedArrivals } from '@sds/engine'
@@ -829,6 +829,12 @@ export function WorkspacePage() {
                       : current,
                   )
                 }
+              }}
+              onServiceTitleChange={(id, title) => {
+                setNodes((current) => patchServiceTitle(current, id, title))
+                setSelected((current) =>
+                  current?.id === id ? { ...current, title } : current,
+                )
               }}
               onReleaseFromZone={() => {
                 if (!selected?.id) return

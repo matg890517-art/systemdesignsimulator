@@ -7,6 +7,12 @@ describe('kind icons', () => {
     expect(
       iconGlyphFor({ mode: 'normal', name: 'Clients', catalogId: 'generic-clients' }),
     ).toBe('clients')
+    expect(
+      iconGlyphFor({ mode: 'normal', name: 'Viewers', catalogId: 'generic-clients' }),
+    ).toBe('clients')
+    expect(
+      iconGlyphFor({ mode: 'normal', name: 'Uploaders', catalogId: 'generic-clients' }),
+    ).toBe('clients')
     expect(iconGlyphFor({ mode: 'normal', name: 'ECS', catalogId: 'aws-ecs' })).toBe('k8s')
     expect(
       iconGlyphFor({ mode: 'normal', name: 'Cache', catalogId: 'generic-cache' }),

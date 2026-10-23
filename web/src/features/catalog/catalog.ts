@@ -48,6 +48,8 @@ const CATEGORY_ORDER = [
 
 /** Example canvas node id → catalog row. Binding only; no quota numbers. */
 export const exampleNodeCatalogIds: Record<string, string> = {
+  viewers: 'generic-clients',
+  uploaders: 'generic-clients',
   cloudfront: 'aws-cloudfront',
   alb: 'aws-application-load-balancer',
   ecs: 'aws-ecs',

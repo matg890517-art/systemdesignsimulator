@@ -180,11 +180,21 @@ export function kindForNode(node: Node<ServiceNodeData>): CanonicalKind {
   return 'service'
 }
 
-export function classesForGenerator(nodeId: string, kind: CanonicalKind): WorkspaceClassId[] {
-  if (nodeId === 'uploaders') return ['bulk']
-  if (nodeId === 'viewers') return ['read', 'write', 'async']
-  if (kind === 'traffic_generator') return [...REQUEST_CLASSES]
-  return []
+export function classesForGenerator(
+  nodeId: string,
+  kind: CanonicalKind,
+  edges: { id: string; source: string; data?: unknown }[] = [],
+): WorkspaceClassId[] {
+  if (kind !== 'traffic_generator') return []
+  const outgoing = edges.filter((edge) => edge.source === nodeId)
+  if (outgoing.length === 0) return [...REQUEST_CLASSES]
+  const active = new Set<WorkspaceClassId>()
+  for (const edge of outgoing) {
+    for (const classId of classesForEdge(edge.id, nodeId, [...REQUEST_CLASSES], edge)) {
+      active.add(classId as WorkspaceClassId)
+    }
+  }
+  return REQUEST_CLASSES.filter((id) => active.has(id))
 }
 
 export type ClassFilter = 'all' | WorkspaceClassId
@@ -225,7 +235,7 @@ export function nodeCarriesClass(
 ): boolean {
   if (filter === 'all') return true
   const kind = kindForNode(node)
-  if (classesForGenerator(node.id, kind).includes(filter)) return true
+  if (classesForGenerator(node.id, kind, edges).includes(filter)) return true
   return edges.some(
     (edge) =>
       (edge.source === node.id || edge.target === node.id) &&
@@ -371,7 +381,7 @@ export function compileCanvas(
   const offered: Workload['offered'] = {}
   for (const component of components) {
     if (component.kind !== 'traffic_generator') continue
-    const ids = classesForGenerator(component.id, component.kind)
+    const ids = classesForGenerator(component.id, component.kind, rfEdges)
     const rates: Record<string, number> = {}
     for (const classId of ids) {
       const rps = draft.classes[classId]

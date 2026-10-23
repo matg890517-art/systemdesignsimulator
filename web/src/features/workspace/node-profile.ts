@@ -82,5 +82,8 @@ export function configProfileForNode(
   title: string,
   catalogId?: string,
 ): CalibrationProfile {
-  return mergeConfigProfile(bound, blankProfileForNode(nodeId, title, catalogId))
+  return {
+    ...mergeConfigProfile(bound, blankProfileForNode(nodeId, title, catalogId)),
+    name: title,
+  }
 }

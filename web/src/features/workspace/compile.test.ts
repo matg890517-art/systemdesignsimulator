@@ -40,7 +40,20 @@ describe('compileCanvas', () => {
     expect(copy?.network.bandwidthBps).toBeUndefined()
     expect(ecs?.behavior.servers.state).toBe('unknown')
     expect(workload.offered.viewers.read).toBe(50_000)
+    expect(workload.offered.viewers.write).toBe(1_200)
+    expect(workload.offered.viewers.async).toBeUndefined()
     expect(workload.offered.uploaders.bulk).toBe(2)
+    expect(topology.components.find((component) => component.id === 'viewers')?.kind).toBe(
+      'traffic_generator',
+    )
+    expect(initialNodes.find((node) => node.id === 'viewers')?.data).toMatchObject({
+      catalogId: 'generic-clients',
+      title: 'Viewers',
+    })
+    expect(initialNodes.find((node) => node.id === 'uploaders')?.data).toMatchObject({
+      catalogId: 'generic-clients',
+      title: 'Uploaders',
+    })
     expect(expectedArrivals(workload)).toBeGreaterThan(DISCRETE_EVENT_GUARD)
   })
 
@@ -212,7 +225,8 @@ describe('F24 class filter', () => {
     expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'read')).toBe(true)
     expect(nodeCarriesClass(service('alb'), initialEdges, 'bulk')).toBe(false)
     expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'bulk')).toBe(true)
-    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(true)
+    expect(nodeCarriesClass(service('viewers'), initialEdges, 'read')).toBe(true)
+    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(false)
   })
 
   it('exposes per-class util so a bulk filter can still see AKS saturation', () => {

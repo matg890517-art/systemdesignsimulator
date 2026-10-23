@@ -39,8 +39,8 @@ export function WorkloadEditor() {
     <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
       <Typography variant="h2">Workload</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-        Viewers send read, write, and async. Uploaders send bulk. Run compiles the canvas; unknown
-        capacity does not cap the engine.
+        Each Clients card emits the classes on its outgoing edges. In YouTube, Viewers send R/W and
+        Uploaders send Bulk. Run compiles the canvas; unknown capacity does not cap the engine.
       </Typography>
 
       <Typography sx={{ mt: 3, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>

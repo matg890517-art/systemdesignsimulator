@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectComponents, deleteSelection } from './canvas-edit.ts'
+import { connectComponents, deleteSelection, patchServiceTitle } from './canvas-edit.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 
 describe('canvas edit', () => {
@@ -48,5 +48,15 @@ describe('canvas edit', () => {
     expect(connectComponents(initialNodes, initialEdges, 'ecs', 'alb')).toMatchObject({
       error: 'Already connected. One hop per pair; extra classes go on that edge.',
     })
+  })
+
+  it('renames a service card without changing catalog kind', () => {
+    const next = patchServiceTitle(initialNodes, 'viewers', 'Viewers (web)')
+    const node = next.find((item) => item.id === 'viewers')
+    expect(node?.type).toBe('service')
+    expect(node && 'title' in node.data ? node.data.title : undefined).toBe('Viewers (web)')
+    expect(node && 'catalogId' in node.data ? node.data.catalogId : undefined).toBe(
+      'generic-clients',
+    )
   })
 })

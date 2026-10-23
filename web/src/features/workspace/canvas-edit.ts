@@ -78,6 +78,17 @@ export function connectComponents(
   }
 }
 
+export function patchServiceTitle(
+  nodes: WorkspaceNode[],
+  nodeId: string,
+  title: string,
+): WorkspaceNode[] {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== 'service') return node
+    return { ...node, data: { ...node.data, title } }
+  })
+}
+
 export function deleteSelection(
   nodes: WorkspaceNode[],
   edges: Edge[],

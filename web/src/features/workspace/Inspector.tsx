@@ -54,12 +54,14 @@ function ConfigPanel({
   nodeId,
   title,
   catalogId,
+  onTitleChange,
   onDelete,
   onRelease,
 }: {
   nodeId?: string
   title?: string
   catalogId?: string
+  onTitleChange?: (title: string) => void
   onDelete?: () => void
   onRelease?: () => void
 }) {
@@ -115,7 +117,13 @@ function ConfigPanel({
             : `${title ?? nodeId} has no catalog page. Set capacity below; unknown does not cap the engine.`}
         </Typography>
       )}
-      <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{draft.name}</Typography>
+      <TextField
+        size="small"
+        label="Title"
+        value={title ?? ''}
+        onChange={(event) => onTitleChange?.(event.target.value)}
+        helperText="Shown on the card. Catalog kind does not change."
+      />
       <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{draft.notes}</Typography>
       <TextField
         size="small"
@@ -507,6 +515,7 @@ export function Inspector({
   selectedEdge,
   onEdgeChange,
   onZoneChange,
+  onServiceTitleChange,
   onReleaseFromZone,
   onDeleteNode,
   onDeleteEdge,
@@ -523,6 +532,7 @@ export function Inspector({
     id: string,
     next: { data?: { label?: string; provider?: ProviderId }; width?: number; height?: number },
   ) => void
+  onServiceTitleChange?: (id: string, title: string) => void
   onReleaseFromZone?: () => void
   onDeleteNode?: () => void
   onDeleteEdge?: () => void
@@ -579,6 +589,9 @@ export function Inspector({
             nodeId={selected?.id}
             title={selected?.title}
             catalogId={selected?.catalogId}
+            onTitleChange={
+              selected ? (next) => onServiceTitleChange?.(selected.id, next) : undefined
+            }
             onDelete={selected ? onDeleteNode : undefined}
             onRelease={selected?.parentId ? onReleaseFromZone : undefined}
           />

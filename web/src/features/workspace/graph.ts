@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import { exampleNodeCatalogIds } from '../catalog/catalog.ts'
+import { activeClassMap, type WorkspaceClassId } from './edge-data.ts'
 import {
   createEnvironment,
   defaultEnvironmentSize,
@@ -53,6 +54,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = orderZonesBe
     p99: '51.2k rps',
     meta: 'Poisson arrivals',
     provider: 'generic',
+    catalogId: exampleNodeCatalogIds.viewers,
   }),
   zone('aws', 'aws', envY(0)),
   service('cloudfront', 'aws', envCell(0, 0), {
@@ -169,6 +171,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = orderZonesBe
     meta: 'Poisson arrivals',
     provider: 'generic',
     engineId: 'uploaders',
+    catalogId: exampleNodeCatalogIds.uploaders,
   }),
 ])
 
@@ -177,22 +180,28 @@ function hop(
   source: string,
   target: string,
   label: string,
-  extra?: { cross?: boolean },
+  extra?: { cross?: boolean; classes?: WorkspaceClassId[] },
 ): Edge {
   const cross = extra?.cross === true
+  const classes = extra?.classes ? activeClassMap(extra.classes) : undefined
   return {
     id,
     source,
     target,
     label: cross ? `${label} · cross · Estimated` : label,
     ...(cross ? { style: { strokeDasharray: '6 4', stroke: '#B7791F' } } : {}),
-    ...(cross
+    ...(cross || classes
       ? {
           data: {
-            crossProvider: true,
-            routing: { mode: 'single' as const },
-            fanOut: 1,
-            call: { kind: 'sync' as const },
+            ...(classes ? { classes } : {}),
+            ...(cross
+              ? {
+                  crossProvider: true,
+                  routing: { mode: 'single' as const },
+                  fanOut: 1,
+                  call: { kind: 'sync' as const },
+                }
+              : {}),
           },
         }
       : {}),
@@ -200,7 +209,7 @@ function hop(
 }
 
 export const initialEdges: Edge[] = [
-  hop('v-cf', 'viewers', 'cloudfront', 'R/W'),
+  hop('v-cf', 'viewers', 'cloudfront', 'R/W', { classes: ['read', 'write'] }),
   hop('cf-alb', 'cloudfront', 'alb', 'R/W'),
   hop('alb-ecs', 'alb', 'ecs', 'R/W'),
   hop('ecs-cache', 'ecs', 'elasticache', 'R'),
@@ -209,7 +218,7 @@ export const initialEdges: Edge[] = [
   hop('gke-ps', 'gke', 'pubsub', 'R/A'),
   hop('ps-run', 'pubsub', 'cloudrun', 'R/A'),
   hop('run-fs', 'cloudrun', 'firestore', 'R/A'),
-  hop('up-aks', 'uploaders', 'aks', 'B'),
+  hop('up-aks', 'uploaders', 'aks', 'B', { classes: ['bulk'] }),
   hop('aks-sb', 'aks', 'servicebus', 'B'),
   hop('sb-blob', 'servicebus', 'blob', 'B'),
   hop('blob-fd', 'blob', 'frontdoor', 'B'),

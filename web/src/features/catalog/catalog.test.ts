@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { usableAsCeiling } from '@sds/engine'
+import { genericBlocks, usableAsCeiling } from '@sds/engine'
 import {
   catalogEntries,
   catalogReadOn,
@@ -49,9 +49,12 @@ describe('catalog data', () => {
 
   it('maps the example canvas to catalog rows without inventing measurements', () => {
     for (const catalogId of Object.values(exampleNodeCatalogIds)) {
+      const generic = genericBlocks.find((block) => block.id === catalogId)
       const entry = catalogEntries.find((item) => item.id === catalogId)
-      expect(entry, catalogId).toBeDefined()
+      expect(generic ?? entry, catalogId).toBeDefined()
     }
+    expect(exampleNodeCatalogIds.viewers).toBe('generic-clients')
+    expect(exampleNodeCatalogIds.uploaders).toBe('generic-clients')
     const aks = catalogEntries.find((entry) => entry.id === 'azure-aks')
     expect(aks?.docsUrl).toContain('aks/quotas')
     expect(aks?.limitsOnPage).toBe('yes')
