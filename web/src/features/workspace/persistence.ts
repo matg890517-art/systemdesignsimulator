@@ -2,7 +2,8 @@ import type { CalibrationProfile } from '@sds/engine'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 import type { FaultMode } from '../calibration/types.ts'
 import { compileCanvas, type WorkloadDraft } from './compile.ts'
-import type { ServiceNodeData, ZoneNodeData } from './types.ts'
+import { orderZonesBeforeChildren } from './environment.ts'
+import type { ServiceNodeData, ZoneNodeData, WorkspaceNode } from './types.ts'
 
 export const SNAPSHOT_VERSION = 1 as const
 export const CURRENT_KEY = 'sds.current.v1'
@@ -118,7 +119,7 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
     }
     if (parsed.draft.mode !== 'fluid' && parsed.draft.mode !== 'discrete') return undefined
     if (!Array.isArray(parsed.profiles)) return undefined
-    parsed.nodes = parsed.nodes.map((node) => {
+    const normalized = parsed.nodes.map((node) => {
       if (node.type === 'zone') {
         const data = node.data as ZoneNodeData
         const label =
@@ -127,12 +128,12 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
           ...node,
           draggable: true,
           selectable: true,
-          zIndex: 0,
           data: { ...data, label },
         }
       }
-      return { ...node, extent: undefined, zIndex: 1 }
-    })
+      return { ...node, extent: undefined }
+    }) as WorkspaceNode[]
+    parsed.nodes = orderZonesBeforeChildren(normalized)
     return parsed as TopologySnapshot
   } catch {
     return undefined

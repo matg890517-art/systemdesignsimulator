@@ -4,6 +4,7 @@ import {
   createEnvironment,
   defaultEnvironmentSize,
   ENV_GRID,
+  orderZonesBeforeChildren,
 } from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
@@ -42,11 +43,10 @@ function service(
     parentId,
     position,
     data,
-    zIndex: 1,
   }
 }
 
-export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
+export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = orderZonesBeforeChildren([
   service('viewers', undefined, { x: 16, y: envY(0) + envCell(0, 0).y }, {
     title: 'Viewers',
     util: 0,
@@ -170,7 +170,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'generic',
     engineId: 'uploaders',
   }),
-]
+])
 
 function hop(
   id: string,

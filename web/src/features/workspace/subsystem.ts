@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { createEnvironment } from './environment.ts'
+import { createEnvironment, orderZonesBeforeChildren } from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export type WorkspaceGraphNode = Node<ServiceNodeData | ZoneNodeData>
@@ -46,5 +46,5 @@ export function wrapInSubsystem(
       },
     }
   })
-  return { nodes: [zone, ...rest], id }
+  return { nodes: orderZonesBeforeChildren([zone, ...rest]), id }
 }

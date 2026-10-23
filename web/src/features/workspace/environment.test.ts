@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   adoptIntoZone,
+  appendServiceInZone,
   createEnvironment,
   defaultEnvironmentSize,
   droppedServicePosition,
   environmentLabel,
+  orderZonesBeforeChildren,
   releaseFromZone,
   reparentOnDragStop,
+  SERVICE_Z,
+  serviceDraftFromDrop,
   ungroupZone,
   zoneContaining,
 } from './environment.ts'
@@ -75,5 +79,44 @@ describe('environment boxes', () => {
     expect(stillInside.find((node) => node.id === 'alb')?.parentId).toBe('aws')
     const outside = reparentOnDragStop(adopted, 'alb', { x: 10, y: 10 })
     expect(outside.find((node) => node.id === 'alb')?.parentId).toBeUndefined()
+  })
+
+  it('keeps the zone before children so parenting matches the YouTube example', () => {
+    const env = createEnvironment({ id: 'aws', provider: 'aws', position: { x: 100, y: 20 } })
+    const alb = service('alb', 300, 80)
+    const adopted = adoptIntoZone([alb, env], 'alb', 'aws')
+    const awsIndex = adopted.findIndex((node) => node.id === 'aws')
+    const albIndex = adopted.findIndex((node) => node.id === 'alb')
+    expect(awsIndex).toBeGreaterThanOrEqual(0)
+    expect(awsIndex).toBeLessThan(albIndex)
+    expect(orderZonesBeforeChildren(adopted)[awsIndex]?.id).toBe('aws')
+
+    const withDrop = appendServiceInZone(
+      [alb, env],
+      serviceDraftFromDrop({ name: 'ECS', provider: 'aws', kind: 'service' }, { x: 0, y: 0 }),
+      { x: 140, y: 60 },
+    )
+    const envAt = withDrop.findIndex((node) => node.id === 'aws')
+    const child = withDrop.find((node) => node.parentId === 'aws')
+    expect(child).toBeDefined()
+    expect(envAt).toBeLessThan(withDrop.findIndex((node) => node.id === child?.id))
+  })
+
+  it('keeps every environment behind every service card', () => {
+    const aws = createEnvironment({ id: 'aws', provider: 'aws', position: { x: 100, y: 20 } })
+    const azure = createEnvironment({ id: 'azure', provider: 'azure', position: { x: 100, y: 400 } })
+    const clients = service('clients', 16, 80)
+    const alb = service('alb', 300, 80)
+    const stacked = adoptIntoZone([clients, alb, aws, azure], 'alb', 'aws')
+    const clientsZ = stacked.find((node) => node.id === 'clients')?.zIndex ?? 0
+    const awsZ = stacked.find((node) => node.id === 'aws')?.zIndex ?? 0
+    const albZ = stacked.find((node) => node.id === 'alb')?.zIndex ?? 0
+    const azureZ = stacked.find((node) => node.id === 'azure')?.zIndex ?? 0
+    expect(awsZ).toBeLessThan(SERVICE_Z)
+    expect(azureZ).toBeLessThan(SERVICE_Z)
+    expect(clientsZ).toBe(SERVICE_Z)
+    expect(albZ).toBe(SERVICE_Z)
+    expect(awsZ).toBeLessThan(albZ)
+    expect(awsZ).toBeLessThan(clientsZ)
   })
 })

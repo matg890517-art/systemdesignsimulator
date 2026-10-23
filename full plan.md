@@ -61,7 +61,7 @@ The requirements for this section are F15 to F19 in the Requirements table.
 - Calibration is a full page, not a side panel. It is where every number's source, date and confidence is kept.
 - **T**he provider is chosen per component, not per project. The Workspace palette lists provider services directly (AWS, Azure, GCP, Kubernetes) plus a Generic group, so one design can mix providers. The Catalog page is for browsing catalogs and comparing providers; a design does not have to start there.
 - **Delete a component.** Select it, then press Delete or Backspace, or use Delete in the toolbar or Config panel. Attached edges go with the node. Deleting a service leaves its environment box. Deleting a selected environment ungroups; the services stay. Typing in a field does not delete.
-- **Environment boxes.** Drop Environment from AWS, Azure, GCP or Kubernetes only. Generic has no Environment tile and no Environment inspector option — Generic is the nine canonical blocks, not a cloud account. Group still makes a Subsystem box. Drag the box to move it, drag a corner or type width/height to resize, rename and recolor in Config. The box stays behind service cards. Drop or drag a service onto the box to contain it; drag it out of the box, or Config “Remove from environment”, to disconnect. One level only. The box is layout, not an engine node, and is not F13 nested-as-one-node.
+- **Environment boxes.** Drop Environment from AWS, Azure, GCP or Kubernetes only. Generic has no Environment tile and no Environment inspector option — Generic is the nine canonical blocks, not a cloud account. Group still makes a Subsystem box. Same behavior as the YouTube example boxes: drag the box and contained services move with it; drag a corner or type width/height to resize; rename and recolor in Config. The box is a background layer: every service card paints above it. Drop or drag a service onto the box to contain it; drag it out of the box, or Config “Remove from environment”, to disconnect. One drop creates one box. One level only. The box is layout, not an engine node, and is not F13 nested-as-one-node.
 - **Connect components.** Drag from a source handle (right or bottom) to a target handle (left or top), or click Connect and then two components. Clients only emit load: they cannot be a target, and two Clients cannot connect. One directed hop per pair; extra request classes live on that edge (F4, F19), not a second parallel line. Cross-provider edges stay Estimated (Decision 17).
 - **Icons.** Follow Real-base DS/Icons. Palette tiles and canvas cards always show a 20px / 16px glyph. Service is the original service mark; Normal is the generic kind shape. Switch with Icons → Service | Normal under the palette search row.
 - **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word) and is the default. One provider folder is open at a time; Generic starts open; categories collapse under it. Search opens every matching folder. Load at the bottom replaces the canvas with Generic, AWS, Azure or GCP (same 9-block wiring, catalog bindings only) or the YouTube example.
@@ -258,11 +258,11 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 
 | Provider | Services | Verified | Partial | Listed (not checked) | No limits on page |
 | --- | --- | --- | --- | --- | --- |
-| AWS | 50 | 9 | 1 | 40 | 0 |
+| AWS | 50 | 10 | 1 | 39 | 0 |
 | Azure | 44 | 4 | 2 | 36 | 2 |
 | Google Cloud | 35 | 5 | 2 | 28 | 0 |
 | Kubernetes | 8 | 0 | 1 | 0 | 7 |
-| Total | 137 | 18 | 6 | 104 | 9 |
+| Total | 137 | 19 | 6 | 103 | 9 |
 
 **AWS (50 services)**
 
@@ -271,7 +271,7 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 | Compute | [EC2](https://docs.aws.amazon.com/general/latest/gr/ec2-service.html) | yes | Listed (not checked) |  |
 |  | [Lambda](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) | yes | Verified |  |
 |  | [Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html) | yes | Listed (not checked) | Indirect: ECS throttling page (Fargate launch rates). |
-|  | [Batch](https://docs.aws.amazon.com/batch/latest/userguide/service_limits.html) | yes | Listed (not checked) |  |
+|  | [Batch](https://docs.aws.amazon.com/batch/latest/userguide/service_limits.html) | yes | Verified | Unchanged quotas, each Region-specific. Read 2026-10-23. Outside the canonical 18. |
 |  | [App Runner](https://docs.aws.amazon.com/general/latest/gr/apprunner.html) | yes | Listed (not checked) |  |
 |  | [Elastic Beanstalk](https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html) | yes | Listed (not checked) |  |
 |  | [Lightsail](https://docs.aws.amazon.com/general/latest/gr/lightsail.html) | yes | Listed (not checked) |  |
@@ -491,9 +491,9 @@ function usableAsCeiling(v: CatalogValue): boolean {
 
 ### Verified limits
 
-**Canonical 18 Verified** is the Components by provider counts table (Oct 20, 2026: AWS 9 + Azure 4 + GCP 5 = 18). That list is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub.
+**Canonical 18** is the first provider compare (Decision 3, amended Oct 23). It is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub. The Components by provider counts are no longer equal to that 18: AWS Batch was read on Oct 23, 2026 and is Verified in the status table, and it stays outside the 18.
 
-The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda and CloudFront are Verified from the Oct 18, 2026 AWS spot check (M6 states the Lambda timeouts; this plan does not state a CloudFront number). **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18 Verified services.
+The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda and CloudFront are Verified from the Oct 18, 2026 AWS spot check (M6 states the Lambda timeouts; this plan does not state a CloudFront number). **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18. **AWS Batch** is a later reading (Oct 23, 2026), Verified in the status table, and outside the 18.
 
 Unknown in Still open means the page read did not state a value, not that no limit exists. The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships. Do not invent a quota. These figures are Vendor figure (documented), not Measured. Phase 1 and Phase 5 stay open until a real load test of the reference stack exists.
 
@@ -517,6 +517,7 @@ Unknown in Still open means the page read did not state a value, not that no lim
 | GCP Pub/Sub | At-least-once, optional ordering, exactly-once supported; 4 GB/s per region publish in large regions | None found |
 | GCP Memorystore | 65,000 clients; asynchronous, about 30 s unavailable on repair; acknowledged writes can be lost | Memory sizes |
 | GCP Cloud SQL | Synchronous HA, about 60 s failover; PostgreSQL connection sum up to 262,142; storage up to 64 TB | Standby reads; consistency |
+| AWS Batch | Unchanged, Region-specific: 50 job queues; 50 compute environments across ECS and EKS; 5 per EKS cluster; 3 per job queue; 20 job dependencies; job definition 24 KiB; SubmitJob payload 30 KiB; array size 10,000; 1,000,000 jobs in SUBMITTED; SubmitJob 50 TPS per account; 50,000 consumable resources (page writes 50k); 50 service environments; 1 per job queue; 1 job queue per quota-management service environment; 20 quota shares; SubmitServiceJob request 30 KiB; payload 10 KiB; SubmitServiceJob 5 TPS per account; 10 retry attempts | EC2, ECS, and EKS quotas may also apply; those numbers are not on this page. Not applied as worker throughput or server count. |
 
 **Limit type from Verified-limits prose (M1 + Decision 11)**
 
@@ -1061,3 +1062,7 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 22, 2026 | Workspace run and palette behavior written into F2, F4, F6, F7, N6 and the product notes: palette is a one-folder-open file explorer (☰ default) with Load Generic/AWS/Azure/GCP/YouTube; Fluid/Discrete sit next to Run; cards show completed rate not "unknown · fluid"; generators are not 100% loss; KPI tails stay unknown in fluid; Discrete refuses above 20_000 arrivals (tab safety, Decision 8 still open). Generic reference edges set R/W vs A/B explicitly; empty class map is zero flow. Load-test CSV, calibration CSV and recorded-test JSON stay three different files; none of them close J12 or stamp Measured. |
 | Oct 22, 2026 | Environment boxes are droppable layout groups: drag, resize, rename, provider color, services join on drop. Deleting a box ungroups. Not F13 nested-as-one-node. |
 | Oct 23, 2026 | Generic Environment removed completely (no palette tile, no inspector option, no drop). Provider Environment boxes contain a service on drop or drag-in and disconnect on drag-out or Config remove. Decision 3 amended: reducing Listed (not checked) by reading official pages is in-scope human work; 18 Verified remains the recorded-figure set; Phase 1/5 still need a real 9-block load test. Catalog files listed under Components by provider. |
+| Oct 23, 2026 | New Environment boxes match YouTube parenting: zone stays before its children in the node list so dragging the box moves contained services; palette drop onto a box joins the same way. |
+| Oct 23, 2026 | Environment stacking is per group: a box sits behind the services it contains, not behind every card. Uncontained nodes (Clients) can pass under the box. |
+| Oct 23, 2026 | Palette drop of Environment is a single handler (no duplicate boxes). Environments stay a background layer under every service card; selecting a box no longer pulls it over the cards. |
+| Oct 23, 2026 | AWS Batch service quotas recorded from the official page (read 2026-10-23): 19 unchanged Region-specific figures. Status moves from Listed (not checked) to Verified. Counts: 19 Verified, 103 Listed (not checked). Batch stays outside the canonical 18 used for the first provider compare. Figures are Vendor figure, not Measured, and are not applied as worker throughput or server count. |

@@ -47,6 +47,11 @@ describe('remaining P0 requirements', () => {
     expect(initialNodes.filter((node) => node.parentId).every((node) => node.extent !== 'parent')).toBe(
       true,
     )
+    const viewersZ = initialNodes.find((node) => node.id === 'viewers')?.zIndex ?? 0
+    const awsZ = initialNodes.find((node) => node.id === 'aws')?.zIndex ?? 0
+    const cloudfrontZ = initialNodes.find((node) => node.id === 'cloudfront')?.zIndex ?? 0
+    expect(awsZ).toBeLessThan(viewersZ)
+    expect(awsZ).toBeLessThan(cloudfrontZ)
   })
 
   it('F29 marks Azure→AWS copy-link as a cross-provider edge', () => {

@@ -33,8 +33,9 @@ import { decorateEdges } from './edge-data.ts'
 import { connectComponents } from './canvas-edit.ts'
 import {
   absolutePosition,
+  appendServiceInZone,
   createEnvironment,
-  droppedServicePosition,
+  orderZonesBeforeChildren,
   parsePaletteDrop,
   reparentOnDragStop,
   serviceDraftFromDrop,
@@ -201,6 +202,7 @@ function CanvasInner({
   const onDrop = useCallback(
     (event: DragEvent) => {
       event.preventDefault()
+      event.stopPropagation()
       const raw = event.dataTransfer.getData('application/sds-service')
       if (!raw) return
       const payload = parsePaletteDrop(raw)
@@ -215,16 +217,20 @@ function CanvasInner({
           position,
           provider: payload.provider,
         })
-        setNodes((current) => [...current, env])
+        setNodes((current) => orderZonesBeforeChildren([...current, env]))
         return
       }
-      setNodes((current) => {
-        const placed = droppedServicePosition(current, position)
-        return [...current, { ...serviceDraftFromDrop(payload, placed.position), ...placed }]
-      })
+      setNodes((current) =>
+        appendServiceInZone(current, serviceDraftFromDrop(payload, position), position),
+      )
     },
     [screenToFlowPosition, setNodes],
   )
+
+  const onDragOver = useCallback((event: DragEvent) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent, node: Node) => {
@@ -266,14 +272,10 @@ function CanvasInner({
         },
         '& .react-flow__handle-connecting': { background: '#2744C7' },
         '& .react-flow__node-zone': { zIndex: '0 !important' },
-        '& .react-flow__node-service': { zIndex: 1 },
+        '& .react-flow__node-service': { zIndex: '1 !important' },
         '& .react-flow__pane': connectClick ? { cursor: 'crosshair' } : undefined,
       }}
-      onDragOver={(event) => {
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-      }}
-      onDrop={onDrop}
+      onDragOver={onDragOver}
     >
       <ReactFlow
         nodes={nodes}
@@ -283,6 +285,8 @@ function CanvasInner({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         elevateNodesOnSelect={false}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

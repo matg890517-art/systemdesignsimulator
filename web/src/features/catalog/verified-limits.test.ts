@@ -10,7 +10,7 @@ import {
 import { catalogEntries } from './entries.ts'
 
 describe('canonical Verified 18 vs figure table', () => {
-  it('uses the counts table as the 18, not Azure Load Balancer', () => {
+  it('keeps the first-compare 18, not Azure Load Balancer and not AWS Batch', () => {
     expect(CANONICAL_VERIFIED_CATALOG_IDS).toHaveLength(18)
     expect(CANONICAL_VERIFIED_CATALOG_IDS).toEqual([
       'aws-lambda',
@@ -147,6 +147,28 @@ describe('batched Verified figures from plan prose', () => {
     expect(fifoRate).toMatchObject({ value: 3_000, limitType: 'performance_guidance' })
     expect(usableAsCeiling(fifoRate!)).toBe(false)
     expect(sqs.find((value) => value.conditions.metric === 'numeric-quota')?.status).toBe('unknown')
+  })
+
+  it('records the Oct 23 AWS Batch page outside the canonical 18 and does not cap the worker', () => {
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('aws-batch')
+    const batch = catalogValuesFor('aws-batch')
+    expect(batch).toHaveLength(19)
+    expect(batch.every((value) => value.retrievedOn === '2026-10-23')).toBe(true)
+    expect(batch.every((value) => value.sourceUrl.endsWith('/service_limits.html'))).toBe(true)
+    expect(batch.every((value) => value.status === 'documented')).toBe(true)
+    expect(batch.every((value) => value.limitType === 'hard_limit')).toBe(true)
+    expect(batch.every((value) => value.scope === 'region')).toBe(true)
+    expect(batch.every((value) => value.caps === undefined)).toBe(true)
+    expect(batch.find((value) => value.conditions.metric === 'job-queues')).toMatchObject({ value: 50 })
+    expect(batch.find((value) => value.conditions.metric === 'SubmitJob-tps')).toMatchObject({
+      value: 50,
+      unit: 'tps',
+      conditions: { account: 'each', operation: 'SubmitJob' },
+    })
+    expect(batch.find((value) => value.conditions.metric === 'consumable-resources')?.value).toBe(50_000)
+    expect(batch.find((value) => value.conditions.metric === 'jobs-in-SUBMITTED')?.value).toBe(1_000_000)
+    expect(batch.find((value) => value.conditions.metric === 'SubmitServiceJob-tps')?.value).toBe(5)
+    expect(batch.every((value) => usableAsCeiling(value))).toBe(true)
   })
 
   it('does not encode the unverified 86,400 s GCP load balancer maximum', () => {

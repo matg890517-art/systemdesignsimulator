@@ -46,6 +46,8 @@ export function createEnvironment(input: {
     id: input.id ?? `env-${crypto.randomUUID()}`,
     type: 'zone',
     position: input.position,
+    width,
+    height,
     style: { width, height },
     data: {
       label: input.label ?? environmentLabel(input.provider),
@@ -62,13 +64,70 @@ export function isZone(node: WorkspaceNode): node is Node<ZoneNodeData> {
   return node.type === 'zone'
 }
 
-export function zoneSize(node: WorkspaceNode): { width: number; height: number } {
-  const width = Number(node.style?.width)
-  const height = Number(node.style?.height)
-  return {
-    width: Number.isFinite(width) && width > 0 ? width : defaultEnvironmentSize.width,
-    height: Number.isFinite(height) && height > 0 ? height : defaultEnvironmentSize.height,
+/** Services always paint above every environment box. */
+export const SERVICE_Z = 100
+const ZONE_Z_STEP = 1
+
+function sortZonesBeforeChildren(nodes: WorkspaceNode[]): WorkspaceNode[] {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+  const ordered: WorkspaceNode[] = []
+
+  function visit(id: string) {
+    if (visited.has(id) || visiting.has(id)) return
+    const node = byId.get(id)
+    if (!node) return
+    visiting.add(id)
+    if (node.parentId) visit(node.parentId)
+    visiting.delete(id)
+    visited.add(id)
+    ordered.push(node)
   }
+
+  for (const node of nodes) visit(node.id)
+  return ordered
+}
+
+function stackEnvironmentLayers(nodes: WorkspaceNode[]): WorkspaceNode[] {
+  const zoneZ = new Map<string, number>()
+  let layer = 0
+  for (const node of nodes) {
+    if (node.type === 'zone' && !node.parentId) {
+      zoneZ.set(node.id, layer)
+      layer += ZONE_Z_STEP
+    }
+  }
+  return nodes.map((node) => {
+    if (node.type === 'zone' && !node.parentId) {
+      return { ...node, zIndex: zoneZ.get(node.id) ?? 0 }
+    }
+    return { ...node, zIndex: SERVICE_Z }
+  })
+}
+
+/** React Flow only parents when the zone appears before its children in the nodes array.
+ *  Environment boxes stay in the background; every service paints above them. */
+export function orderZonesBeforeChildren(nodes: WorkspaceNode[]): WorkspaceNode[] {
+  return stackEnvironmentLayers(sortZonesBeforeChildren(nodes))
+}
+
+export function zoneSize(node: WorkspaceNode): { width: number; height: number } {
+  const fromStyleW = Number(node.style?.width)
+  const fromStyleH = Number(node.style?.height)
+  const width =
+    Number.isFinite(fromStyleW) && fromStyleW > 0
+      ? fromStyleW
+      : Number.isFinite(node.width) && (node.width ?? 0) > 0
+        ? (node.width as number)
+        : defaultEnvironmentSize.width
+  const height =
+    Number.isFinite(fromStyleH) && fromStyleH > 0
+      ? fromStyleH
+      : Number.isFinite(node.height) && (node.height ?? 0) > 0
+        ? (node.height as number)
+        : defaultEnvironmentSize.height
+  return { width, height }
 }
 
 export function absolutePosition(
@@ -123,15 +182,17 @@ export function adoptIntoZone(
   if (zone.parentId) return nodes
   const abs = absolutePosition(nodes, service)
   const origin = absolutePosition(nodes, zone)
-  return nodes.map((node) =>
-    node.id === serviceId
-      ? {
-          ...node,
-          parentId: zoneId,
-          extent: undefined,
-          position: { x: abs.x - origin.x, y: abs.y - origin.y },
-        }
-      : node,
+  return orderZonesBeforeChildren(
+    nodes.map((node) =>
+      node.id === serviceId
+        ? {
+            ...node,
+            parentId: zoneId,
+            extent: undefined,
+            position: { x: abs.x - origin.x, y: abs.y - origin.y },
+          }
+        : node,
+    ),
   )
 }
 
@@ -139,10 +200,12 @@ export function releaseFromZone(nodes: WorkspaceNode[], serviceId: string): Work
   const service = nodes.find((node) => node.id === serviceId)
   if (!service?.parentId || service.type !== 'service') return nodes
   const abs = absolutePosition(nodes, service)
-  return nodes.map((node) =>
-    node.id === serviceId
-      ? { ...node, parentId: undefined, extent: undefined, position: abs }
-      : node,
+  return orderZonesBeforeChildren(
+    nodes.map((node) =>
+      node.id === serviceId
+        ? { ...node, parentId: undefined, extent: undefined, position: abs }
+        : node,
+    ),
   )
 }
 
@@ -150,17 +213,19 @@ export function ungroupZone(nodes: WorkspaceNode[], zoneId: string): WorkspaceNo
   const zone = nodes.find((node) => node.id === zoneId && node.type === 'zone')
   if (!zone) return nodes
   const origin = absolutePosition(nodes, zone)
-  return nodes
-    .filter((node) => node.id !== zoneId)
-    .map((node) => {
-      if (node.parentId !== zoneId) return node
-      return {
-        ...node,
-        parentId: undefined,
-        extent: undefined,
-        position: { x: origin.x + node.position.x, y: origin.y + node.position.y },
-      }
-    })
+  return orderZonesBeforeChildren(
+    nodes
+      .filter((node) => node.id !== zoneId)
+      .map((node) => {
+        if (node.parentId !== zoneId) return node
+        return {
+          ...node,
+          parentId: undefined,
+          extent: undefined,
+          position: { x: origin.x + node.position.x, y: origin.y + node.position.y },
+        }
+      }),
+  )
 }
 
 export function ungroupZones(nodes: WorkspaceNode[], zoneIds: string[]): WorkspaceNode[] {
@@ -198,6 +263,19 @@ export function reparentOnDragStop(
   return adoptIntoZone(released, serviceId, zone.id)
 }
 
+export function appendServiceInZone(
+  nodes: WorkspaceNode[],
+  draft: Node<ServiceNodeData>,
+  dropPosition: { x: number; y: number },
+): WorkspaceNode[] {
+  const placed = droppedServicePosition(nodes, dropPosition)
+  const next: WorkspaceNode = {
+    ...draft,
+    ...placed,
+  }
+  return orderZonesBeforeChildren([...nodes, next])
+}
+
 export function patchZone(
   nodes: WorkspaceNode[],
   zoneId: string,
@@ -206,13 +284,17 @@ export function patchZone(
   return nodes.map((node) => {
     if (node.id !== zoneId || node.type !== 'zone') return node
     const size = zoneSize(node)
+    const width = next.width ?? size.width
+    const height = next.height ?? size.height
     return {
       ...node,
+      width,
+      height,
       data: next.data ? { ...(node.data as ZoneNodeData), ...next.data } : node.data,
       style: {
         ...node.style,
-        width: next.width ?? size.width,
-        height: next.height ?? size.height,
+        width,
+        height,
       },
     }
   })
@@ -243,7 +325,6 @@ export function serviceDraftFromDrop(
     id: `${payload.name}-${crypto.randomUUID()}`,
     type: 'service',
     position,
-    zIndex: 1,
     data: {
       title: payload.name,
       util: 0,

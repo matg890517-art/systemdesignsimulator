@@ -2,9 +2,10 @@ import type { CatalogValue, CatalogValueCap, CatalogValueScope, CatalogValueStat
 import { catalogEntries, catalogReadOn } from './entries.ts'
 
 /**
- * Canonical 18 Verified = Components by provider counts (AWS 9 + Azure 4 + GCP 5).
- * The Verified-limits table is a figure reading: it splits SQS and includes
- * Azure Load Balancer, which is Partial, not one of these 18.
+ * Canonical 18 = the first provider compare (Decision 3, amended Oct 23).
+ * Later page readings (AWS Batch, Oct 23) are recorded figures and can be
+ * Verified in the status table without joining this list.
+ * The figure table also includes Azure Load Balancer, which is Partial.
  */
 export const CANONICAL_VERIFIED_CATALOG_IDS = [
   'aws-lambda',
@@ -60,6 +61,25 @@ function unknown(metric: string, note: string, scope: CatalogValueScope = 'servi
     conditions: { metric },
     status: 'unknown',
     note,
+  }
+}
+
+/** AWS Batch service quotas page: unchanged, and each quota is Region specific. */
+function batchQuota(
+  metric: string,
+  value: number,
+  unit: string,
+  note: string,
+  extra: Record<string, string> = {},
+): Draft {
+  return {
+    value,
+    unit,
+    scope: 'region',
+    limitType: 'hard_limit',
+    conditions: { metric, ...extra },
+    status: 'documented',
+    note: `${note} Unchanged quota. Each quota is Region specific. Not applied as worker throughput or server count.`,
   }
 }
 
@@ -778,6 +798,110 @@ export const verifiedCatalogValues: Record<string, CatalogValue[]> = {
     unknown('standby-reads', 'Standby reads: the plan does not state a figure.'),
     unknown('consistency', 'Consistency: the plan does not state a figure.'),
   ]),
+
+  // Quoted from the AWS Batch service quotas page, read 2026-10-23.
+  // Outside the canonical 18. No caps: SubmitJob TPS is an API rate, not completed jobs.
+  'aws-batch': rows(
+    'aws-batch',
+    [
+      batchQuota('job-queues', 50, 'count', 'Maximum number of job queues.'),
+      batchQuota(
+        'compute-environments-ecs-and-eks',
+        50,
+        'count',
+        'Maximum number of compute environments across Amazon ECS and Amazon EKS.',
+      ),
+      batchQuota(
+        'compute-environments-per-eks-cluster',
+        5,
+        'count',
+        'Maximum number of compute environments per Amazon EKS cluster.',
+      ),
+      batchQuota(
+        'compute-environments-per-job-queue',
+        3,
+        'count',
+        'Maximum number of compute environments for each job queue.',
+      ),
+      batchQuota('job-dependencies', 20, 'count', 'Maximum number of job dependencies for a job.'),
+      batchQuota(
+        'job-definition-size',
+        24,
+        'KiB',
+        'Maximum job definition size for RegisterJobDefinition API operations.',
+        { operation: 'RegisterJobDefinition' },
+      ),
+      batchQuota(
+        'job-payload-size',
+        30,
+        'KiB',
+        'Maximum job payload size for SubmitJob API operations.',
+        { operation: 'SubmitJob' },
+      ),
+      batchQuota('array-job-size', 10_000, 'count', 'Maximum array size for array jobs.'),
+      batchQuota('jobs-in-SUBMITTED', 1_000_000, 'count', 'Maximum number of jobs in SUBMITTED state.'),
+      batchQuota(
+        'SubmitJob-tps',
+        50,
+        'tps',
+        'Maximum transactions per second for each account for SubmitJob operations.',
+        { operation: 'SubmitJob', account: 'each' },
+      ),
+      batchQuota(
+        'consumable-resources',
+        50_000,
+        'count',
+        'Maximum number of consumable resources. The page writes 50k.',
+      ),
+      batchQuota('service-environments', 50, 'count', 'Maximum number of service environments.'),
+      batchQuota(
+        'service-environments-per-job-queue',
+        1,
+        'count',
+        'Maximum number of service environments for each job queue.',
+      ),
+      batchQuota(
+        'job-queues-per-quota-management-service-environment',
+        1,
+        'count',
+        'Maximum number of job queues associated for each quota management enabled service environment.',
+      ),
+      batchQuota(
+        'quota-shares-per-quota-management-job-queue',
+        20,
+        'count',
+        'Maximum number of quota shares for each quota management job queue.',
+      ),
+      batchQuota(
+        'SubmitServiceJob-request-size',
+        30,
+        'KiB',
+        'Maximum size of a SubmitServiceJob request.',
+        { operation: 'SubmitServiceJob' },
+      ),
+      batchQuota(
+        'SubmitServiceJob-payload-size',
+        10,
+        'KiB',
+        'Maximum job service request payload size for SubmitServiceJob API operations.',
+        { operation: 'SubmitServiceJob' },
+      ),
+      batchQuota(
+        'SubmitServiceJob-tps',
+        5,
+        'tps',
+        'Maximum transactions per second for each account for SubmitServiceJob operations.',
+        { operation: 'SubmitServiceJob', account: 'each' },
+      ),
+      batchQuota(
+        'service-job-retry-attempts',
+        10,
+        'count',
+        'Maximum number of attempts with retry strategy for a service job.',
+      ),
+    ],
+    '2026-10-23',
+  ),
 }
 
 export function catalogValuesFor(catalogId?: string): CatalogValue[] {
