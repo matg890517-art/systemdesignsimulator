@@ -14,6 +14,12 @@ describe('kind icons', () => {
     expect(
       iconGlyphFor({ mode: 'normal', name: 'Queue', catalogId: 'generic-queue' }),
     ).toBe('queue')
+    expect(iconGlyphFor({ mode: 'normal', name: 'Blocks', category: 'GENERIC' })).toBe(
+      'blocks',
+    )
+    expect(iconGlyphFor({ mode: 'normal', name: 'Compute', category: 'COMPUTE' })).toBe(
+      'compute',
+    )
   })
 
   it('Service mode falls back to a named glyph when no official mark is mapped', () => {

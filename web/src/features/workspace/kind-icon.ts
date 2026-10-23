@@ -5,6 +5,7 @@ export type IconMode = 'service' | 'normal'
 
 /** Glyphs in the Real-base 20px slot. Service is the original service mark; Normal is the kind shape. */
 export type IconGlyph =
+  | 'blocks'
   | 'clients'
   | 'lb'
   | 'service'
@@ -48,7 +49,7 @@ const CATEGORY_GLYPH: Record<string, IconGlyph> = {
   Analytics: 'service',
   Media: 'cdn',
   'Kubernetes object': 'k8s',
-  GENERIC: 'service',
+  GENERIC: 'blocks',
   ENVIRONMENT: 'zone',
 }
 

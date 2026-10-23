@@ -391,7 +391,7 @@ export function Palette({
                                 name: categoryLabel(group.category),
                                 category: group.category,
                               })}
-                              size={14}
+                              size={16}
                             />
                             <Typography sx={{ fontSize: 11, fontWeight: 600, flex: 1, textAlign: 'left' }}>
                               {categoryLabel(group.category)}
@@ -502,5 +502,5 @@ function ProviderMark({ provider }: { provider: PaletteProvider }) {
       />
     )
   }
-  return <KindIcon glyph="service" size={16} />
+  return <KindIcon glyph="blocks" size={16} />
 }
