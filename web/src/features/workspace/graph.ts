@@ -42,7 +42,7 @@ function service(
     parentId,
     position,
     data,
-    extent: parentId ? 'parent' : undefined,
+    zIndex: 1,
   }
 }
 

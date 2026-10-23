@@ -29,7 +29,7 @@ export function environmentLabel(provider: ProviderId): string {
   if (provider === 'gcp') return 'GCP'
   if (provider === 'azure') return 'Azure'
   if (provider === 'kubernetes') return 'Kubernetes'
-  return 'Environment'
+  return 'Subsystem'
 }
 
 export function createEnvironment(input: {
@@ -128,7 +128,7 @@ export function adoptIntoZone(
       ? {
           ...node,
           parentId: zoneId,
-          extent: 'parent' as const,
+          extent: undefined,
           position: { x: abs.x - origin.x, y: abs.y - origin.y },
         }
       : node,
@@ -172,15 +172,30 @@ export function ungroupZones(nodes: WorkspaceNode[], zoneIds: string[]): Workspa
 export function droppedServicePosition(
   nodes: WorkspaceNode[],
   position: { x: number; y: number },
-): { position: { x: number; y: number }; parentId?: string; extent?: 'parent' } {
+): { position: { x: number; y: number }; parentId?: string } {
   const zone = zoneContaining(nodes, { x: position.x + 24, y: position.y + 24 })
   if (!zone) return { position }
   const origin = absolutePosition(nodes, zone)
   return {
     parentId: zone.id,
-    extent: 'parent',
     position: { x: position.x - origin.x, y: position.y - origin.y },
   }
+}
+
+export function reparentOnDragStop(
+  nodes: WorkspaceNode[],
+  serviceId: string,
+  center: { x: number; y: number },
+): WorkspaceNode[] {
+  const service = nodes.find((node) => node.id === serviceId)
+  if (!service || service.type !== 'service') return nodes
+  const zone = zoneContaining(nodes, center, serviceId)
+  if (!zone) {
+    return service.parentId ? releaseFromZone(nodes, serviceId) : nodes
+  }
+  if (service.parentId === zone.id) return nodes
+  const released = service.parentId ? releaseFromZone(nodes, serviceId) : nodes
+  return adoptIntoZone(released, serviceId, zone.id)
 }
 
 export function patchZone(
@@ -228,6 +243,7 @@ export function serviceDraftFromDrop(
     id: `${payload.name}-${crypto.randomUUID()}`,
     type: 'service',
     position,
+    zIndex: 1,
     data: {
       title: payload.name,
       util: 0,

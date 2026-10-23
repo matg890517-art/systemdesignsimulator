@@ -208,7 +208,7 @@ function ConfigPanel({
   )
 }
 
-const PROVIDERS: ProviderId[] = ['generic', 'aws', 'azure', 'gcp', 'kubernetes']
+const CLOUD_PROVIDERS: ProviderId[] = ['aws', 'azure', 'gcp', 'kubernetes']
 
 function EnvironmentPanel({
   selected,
@@ -227,8 +227,8 @@ function EnvironmentPanel({
     <Stack spacing={1.5}>
       <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{selected.title}</Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-        Layout group. It does not compile into the engine. Services dropped on the box move with it.
-        Nested-as-one-node stays out of this build.
+        Provider container. Drop a service on the box to contain it. Drag the service out, or use
+        Remove from environment, to disconnect. The box stays behind cards. Not an engine node.
       </Typography>
       <TextField
         size="small"
@@ -252,7 +252,10 @@ function EnvironmentPanel({
           })
         }}
       >
-        {PROVIDERS.map((id) => (
+        {(selected.provider === 'generic'
+          ? (['generic', ...CLOUD_PROVIDERS] as ProviderId[])
+          : CLOUD_PROVIDERS
+        ).map((id) => (
           <MenuItem key={id} value={id}>
             {environmentLabel(id)}
           </MenuItem>

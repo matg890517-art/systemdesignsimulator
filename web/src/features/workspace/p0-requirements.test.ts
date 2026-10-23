@@ -44,6 +44,9 @@ describe('remaining P0 requirements', () => {
       expect(node.draggable).toBe(true)
       expect(node.selectable).toBe(true)
     }
+    expect(initialNodes.filter((node) => node.parentId).every((node) => node.extent !== 'parent')).toBe(
+      true,
+    )
   })
 
   it('F29 marks Azure→AWS copy-link as a cross-provider edge', () => {

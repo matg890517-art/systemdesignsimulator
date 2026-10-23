@@ -61,7 +61,7 @@ The requirements for this section are F15 to F19 in the Requirements table.
 - Calibration is a full page, not a side panel. It is where every number's source, date and confidence is kept.
 - **T**he provider is chosen per component, not per project. The Workspace palette lists provider services directly (AWS, Azure, GCP, Kubernetes) plus a Generic group, so one design can mix providers. The Catalog page is for browsing catalogs and comparing providers; a design does not have to start there.
 - **Delete a component.** Select it, then press Delete or Backspace, or use Delete in the toolbar or Config panel. Attached edges go with the node. Deleting a service leaves its environment box. Deleting a selected environment ungroups; the services stay. Typing in a field does not delete.
-- **Environment boxes.** Drop Environment from AWS, Azure, GCP or Kubernetes — not Generic. Generic is the canonical blocks, not a cloud account. Drag to move, drag a corner or type width/height to resize, rename and recolor in Config. The box stays behind service cards. A service dropped onto a box joins it and moves with it. One level only. The box is layout, not an engine node, and is not F13 nested-as-one-node.
+- **Environment boxes.** Drop Environment from AWS, Azure, GCP or Kubernetes only. Generic has no Environment tile and no Environment inspector option — Generic is the nine canonical blocks, not a cloud account. Group still makes a Subsystem box. Drag the box to move it, drag a corner or type width/height to resize, rename and recolor in Config. The box stays behind service cards. Drop or drag a service onto the box to contain it; drag it out of the box, or Config “Remove from environment”, to disconnect. One level only. The box is layout, not an engine node, and is not F13 nested-as-one-node.
 - **Connect components.** Drag from a source handle (right or bottom) to a target handle (left or top), or click Connect and then two components. Clients only emit load: they cannot be a target, and two Clients cannot connect. One directed hop per pair; extra request classes live on that edge (F4, F19), not a second parallel line. Cross-provider edges stay Estimated (Decision 17).
 - **Icons.** Follow Real-base DS/Icons. Palette tiles and canvas cards always show a 20px / 16px glyph. Service is the original service mark; Normal is the generic kind shape. Switch with Icons → Service | Normal under the palette search row.
 - **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word) and is the default. One provider folder is open at a time; Generic starts open; categories collapse under it. Search opens every matching folder. Load at the bottom replaces the canvas with Generic, AWS, Azure or GCP (same 9-block wiring, catalog bindings only) or the YouTube example.
@@ -228,11 +228,21 @@ Block and file storage that attaches to compute (for example EBS or EFS) is mode
 
 The Workspace palette and the Catalog page list these services directly. Software engines such as PostgreSQL or Redis are not palette items: they are a configuration of a service (for example the engine of RDS). The AWS and GCP lists confirm candidate names against the official product pages; the Azure list is the full official list. Every service name links to the official page used to verify it, read Oct 20, 2026. A link shows where to look; it does not mean the limits were read. Dataset licenses are not checked. The same list, with every link, status and note, is saved as component-links.md in the Project.
 
+**Catalog files** (this is the catalog, not a Postgres database; auth/Postgres stay out until Phase 4):
+
+- `web/src/features/catalog/entries.ts` — the 137 services (id, name, provider, category, docsUrl, limitsOnPage)
+- `web/src/features/catalog/verified-limits.ts` — recorded Vendor-figure rows for Verified and Partial readings
+- `web/src/features/catalog/catalog.ts` — palette grouping (Generic is the nine blocks; Environment tiles only on AWS, Azure, GCP, Kubernetes)
+- `web/src/features/catalog/provider-maps.ts` — 9-block AWS / Azure / GCP bindings
+- `web/src/features/catalog/limit-type-map.ts` — M1 + Decision 11 mapping
+- `component-links.md` — the same 137 rows as a link + status table
+- this plan’s Components by provider and Verified limits tables
+
 **Status labels**
 
 - **Verified:** limits read and recorded in the Verified limits table or the Oct 18, 2026 AWS spot check (Lambda, SQS, S3, CloudFront).
 - **Partial:** the page states some limits but not all, or the figures are guidance rather than quotas.
-- **Listed (not checked):** an official limits page exists and is linked, but its figures are not yet recorded in the plan.
+- **Listed (not checked):** an official limits page exists and is linked, but its figures are not yet recorded. Reducing this grey set is in-scope human work (Oct 23, 2026): open the linked page, quote the figure, URL and date; the agent encodes it. Do not invent SKU prices, latencies or quotas. The 18 Verified remain the recorded-figure set for the first provider compare. Phase 1 and Phase 5 still need a real load test of the 9-block reference stack.
 - **No limits on page:** the linked official page states no limits (concept or overview pages).
 
 **Changes on Oct 20, 2026**
@@ -906,6 +916,8 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 
 **Decided Oct 19, 2026.** The 18 are the ceiling, built in reference-topology order; a service with an engine-capping limit still Unknown does not ship.
 
+**Amended Oct 23, 2026.** The 18 Verified stay the recorded-figure set for the first provider compare (capacity and limits only; Decision 2). Reducing Listed (not checked) by reading official pages is now in-scope: quote the figure, URL and date; do not invent numbers. Kubernetes objects that are “no limits on page” stay that way until an official limits page exists. SKU prices stay out of the first compare. Closing Phase 1 or Phase 5 still requires a real load test of the 9-block reference stack (Decision 6), not more catalog greys.
+
 #### 4. Pub/Sub as one entry under Queue and Event bus
 
 - **What it is.** Google Pub/Sub works as a queue (pull) and as an event bus (push, fan-out). The catalog has the kinds Queue and Event bus.
@@ -1048,3 +1060,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 22, 2026 | Canonical Verified 18 is the Components-by-provider counts table, not the Verified-limits figure table. Azure Load Balancer stays Partial; idle timeout is a recorded configurable_setting. Limit-type mapping for plan prose (M1 + Decision 11) added. CatalogValue rows encoded from stated figures only; unknown stays unknown; no Phase 1/5 or Measured claim. |
 | Oct 22, 2026 | Workspace run and palette behavior written into F2, F4, F6, F7, N6 and the product notes: palette is a one-folder-open file explorer (☰ default) with Load Generic/AWS/Azure/GCP/YouTube; Fluid/Discrete sit next to Run; cards show completed rate not "unknown · fluid"; generators are not 100% loss; KPI tails stay unknown in fluid; Discrete refuses above 20_000 arrivals (tab safety, Decision 8 still open). Generic reference edges set R/W vs A/B explicitly; empty class map is zero flow. Load-test CSV, calibration CSV and recorded-test JSON stay three different files; none of them close J12 or stamp Measured. |
 | Oct 22, 2026 | Environment boxes are droppable layout groups: drag, resize, rename, provider color, services join on drop. Deleting a box ungroups. Not F13 nested-as-one-node. |
+| Oct 23, 2026 | Generic Environment removed completely (no palette tile, no inspector option, no drop). Provider Environment boxes contain a service on drop or drag-in and disconnect on drag-out or Config remove. Decision 3 amended: reducing Listed (not checked) by reading official pages is in-scope human work; 18 Verified remains the recorded-figure set; Phase 1/5 still need a real 9-block load test. Catalog files listed under Components by provider. |

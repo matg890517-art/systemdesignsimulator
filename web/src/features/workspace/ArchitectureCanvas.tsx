@@ -32,12 +32,12 @@ import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges } from './edge-data.ts'
 import { connectComponents } from './canvas-edit.ts'
 import {
-  adoptIntoZone,
+  absolutePosition,
   createEnvironment,
   droppedServicePosition,
   parsePaletteDrop,
+  reparentOnDragStop,
   serviceDraftFromDrop,
-  zoneContaining,
 } from './environment.ts'
 import { heatStroke } from './heat.ts'
 import type { CanvasSelection, ServiceNodeData, WorkspaceNode, ZoneNodeData } from './types.ts'
@@ -210,9 +210,10 @@ function CanvasInner({
         y: event.clientY,
       })
       if (payload.kind === 'environment') {
+        if (!payload.provider || payload.provider === 'generic') return
         const env = createEnvironment({
           position,
-          provider: payload.provider ?? 'generic',
+          provider: payload.provider,
         })
         setNodes((current) => [...current, env])
         return
@@ -227,15 +228,15 @@ function CanvasInner({
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent, node: Node) => {
-      if (node.type !== 'service' || node.parentId) return
+      if (node.type !== 'service') return
       setNodes((current) => {
-        const zone = zoneContaining(
-          current,
-          { x: node.position.x + 75, y: node.position.y + 44 },
-          node.id,
+        const live = current.map((item) =>
+          item.id === node.id ? { ...item, position: node.position } : item,
         )
-        if (!zone) return current
-        return adoptIntoZone(current, node.id, zone.id)
+        const moved = live.find((item) => item.id === node.id)
+        if (!moved) return current
+        const abs = absolutePosition(live, moved)
+        return reparentOnDragStop(live, node.id, { x: abs.x + 75, y: abs.y + 44 })
       })
     },
     [setNodes],
@@ -282,6 +283,7 @@ function CanvasInner({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
+        elevateNodesOnSelect={false}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -316,7 +318,7 @@ function CanvasInner({
             ? connectFromId
               ? 'Click a target component'
               : 'Click a source component'
-            : 'Drop an Environment box, then drag services onto it. Drag a corner to resize. Delete or Backspace removes the selection.'}
+            : 'Drop an Environment from AWS, Azure, GCP or Kubernetes. Drop a service on the box to contain it; drag it out to disconnect.'}
         </Typography>
       </Box>
     </Box>

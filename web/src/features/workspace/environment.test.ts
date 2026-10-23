@@ -6,6 +6,7 @@ import {
   droppedServicePosition,
   environmentLabel,
   releaseFromZone,
+  reparentOnDragStop,
   ungroupZone,
   zoneContaining,
 } from './environment.ts'
@@ -17,7 +18,6 @@ function service(id: string, x: number, y: number, parentId?: string): Workspace
     type: 'service',
     position: { x, y },
     parentId,
-    extent: parentId ? 'parent' : undefined,
     data: {
       title: id,
       util: 0,
@@ -37,13 +37,14 @@ describe('environment boxes', () => {
     expect(box.data.label).toBe('AWS')
     expect(box.style?.width).toBe(defaultEnvironmentSize.width)
     expect(environmentLabel('azure')).toBe('Azure')
+    expect(environmentLabel('generic')).toBe('Subsystem')
   })
 
   it('parents a dropped service that lands inside the box', () => {
     const env = createEnvironment({ id: 'aws', provider: 'aws', position: { x: 100, y: 20 } })
     const placed = droppedServicePosition([env], { x: 140, y: 60 })
     expect(placed.parentId).toBe('aws')
-    expect(placed.extent).toBe('parent')
+    expect(placed.extent).toBeUndefined()
     expect(placed.position.x).toBe(40)
     expect(placed.position.y).toBe(40)
   })
@@ -62,5 +63,17 @@ describe('environment boxes', () => {
     expect(ungrouped.some((node) => node.id === 'aws')).toBe(false)
     expect(ungrouped.find((node) => node.id === 'alb')?.parentId).toBeUndefined()
     expect(ungrouped.find((node) => node.id === 'alb')?.position).toEqual({ x: 300, y: 80 })
+  })
+
+  it('contains a service inside the box and disconnects when the center leaves it', () => {
+    const env = createEnvironment({ id: 'aws', provider: 'aws', position: { x: 100, y: 20 } })
+    const alb = service('alb', 300, 80)
+    const adopted = adoptIntoZone([env, alb], 'alb', 'aws')
+    expect(adopted.find((node) => node.id === 'alb')?.parentId).toBe('aws')
+    expect(adopted.find((node) => node.id === 'alb')?.extent).toBeUndefined()
+    const stillInside = reparentOnDragStop(adopted, 'alb', { x: 140, y: 60 })
+    expect(stillInside.find((node) => node.id === 'alb')?.parentId).toBe('aws')
+    const outside = reparentOnDragStop(adopted, 'alb', { x: 10, y: 10 })
+    expect(outside.find((node) => node.id === 'alb')?.parentId).toBeUndefined()
   })
 })

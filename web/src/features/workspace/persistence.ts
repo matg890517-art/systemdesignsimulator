@@ -52,7 +52,6 @@ function persistableNodes(nodes: Node<ServiceNodeData | ZoneNodeData>[]) {
     position: node.position,
     data: node.data,
     parentId: node.parentId,
-    extent: node.extent,
     style: node.style,
     draggable: node.draggable,
     selectable: node.selectable,
@@ -119,9 +118,21 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
     }
     if (parsed.draft.mode !== 'fluid' && parsed.draft.mode !== 'discrete') return undefined
     if (!Array.isArray(parsed.profiles)) return undefined
-    parsed.nodes = parsed.nodes.map((node) =>
-      node.type === 'zone' ? { ...node, draggable: true, selectable: true } : node,
-    )
+    parsed.nodes = parsed.nodes.map((node) => {
+      if (node.type === 'zone') {
+        const data = node.data as ZoneNodeData
+        const label =
+          data?.provider === 'generic' && data.label === 'Environment' ? 'Subsystem' : data?.label
+        return {
+          ...node,
+          draggable: true,
+          selectable: true,
+          zIndex: 0,
+          data: { ...data, label },
+        }
+      }
+      return { ...node, extent: undefined, zIndex: 1 }
+    })
     return parsed as TopologySnapshot
   } catch {
     return undefined

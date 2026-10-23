@@ -39,7 +39,7 @@ export function wrapInSubsystem(
     return {
       ...node,
       parentId: id,
-      extent: 'parent' as const,
+      extent: undefined,
       position: {
         x: node.position.x - (minX - PAD),
         y: node.position.y - (minY - PAD),

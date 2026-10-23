@@ -90,6 +90,8 @@ describe('catalog data', () => {
     expect(paletteGroupsFor('generic')[0]?.tiles.some((tile) => tile.kind === 'environment')).toBe(
       false,
     )
+    expect(paletteGroupsFor('generic').some((group) => group.category === 'ENVIRONMENT')).toBe(false)
+    expect(paletteGroupsFor('generic', 'environment')).toEqual([])
     expect(paletteGroupsFor('aws').at(-1)?.tiles[0]).toMatchObject({
       name: 'Environment',
       kind: 'environment',
