@@ -34,6 +34,11 @@ import {
   environmentLabel,
 } from './environment.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import {
+  inspectorFocusLabel,
+  inspectorPane,
+  type InspectorRunTab,
+} from './inspector-pane.ts'
 import { formatPct } from './simulate.ts'
 import type { Bottleneck, CanvasSelection, ProviderId } from './types.ts'
 
@@ -540,11 +545,12 @@ export function Inspector({
   blastOriginId?: string
   breakerOpenEdges?: string[]
 }) {
-  const [tab, setTab] = useState(0)
+  const [runTab, setRunTab] = useState<InspectorRunTab>('focus')
+  const hasSelectedEdge = Boolean(selectedEdge)
+  const pane = inspectorPane(runTab, hasSelectedEdge)
   useEffect(() => {
-    if (selectedEdge) setTab(1)
-    else if (selected) setTab(0)
-  }, [selectedEdge, selected])
+    setRunTab('focus')
+  }, [selected?.id, selectedEdge?.id])
   return (
     <Box
       sx={{
@@ -563,19 +569,18 @@ export function Inspector({
       }}
     >
       <Tabs
-        value={tab}
-        onChange={(_, value) => setTab(value)}
+        value={runTab}
+        onChange={(_, value: InspectorRunTab) => setRunTab(value)}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ flexShrink: 0, minHeight: 36 }}
       >
-        <Tab label="Config" />
-        <Tab label="Edge" />
-        <Tab label={<TabLabel label="Bottlenecks" count={bottlenecks.length} />} />
-        <Tab label={<TabLabel label="Blast" count={affectedIds.length} />} />
+        <Tab value="focus" label={inspectorFocusLabel(hasSelectedEdge)} />
+        <Tab value="bottlenecks" label={<TabLabel label="Bottlenecks" count={bottlenecks.length} />} />
+        <Tab value="blast" label={<TabLabel label="Blast" count={affectedIds.length} />} />
       </Tabs>
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-      {tab === 0 &&
+      {pane === 'config' &&
         (selected?.kind === 'zone' ? (
           <EnvironmentPanel
             selected={selected}
@@ -596,10 +601,10 @@ export function Inspector({
             onRelease={selected?.parentId ? onReleaseFromZone : undefined}
           />
         ))}
-      {tab === 1 && (
+      {pane === 'edge' && (
         <EdgePanel edge={selectedEdge} onChange={onEdgeChange} onDelete={selectedEdge ? onDeleteEdge : undefined} />
       )}
-      {tab === 2 && (
+      {pane === 'bottlenecks' && (
         <>
           {selected ? (
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
@@ -648,7 +653,7 @@ export function Inspector({
           ))}
         </>
       )}
-      {tab === 3 && (
+      {pane === 'blast' && (
         <Stack spacing={1}>
           <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
             Downstream of a crash, from the engine graph. Unknown capacity still does not cap.

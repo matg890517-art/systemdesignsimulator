@@ -12,6 +12,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
@@ -50,6 +51,24 @@ const TEMPLATE_LABEL: Record<MappedProvider, string> = {
   azure: 'Azure',
   gcp: 'GCP',
 }
+
+const quietToggleSx = {
+  height: 28,
+  bgcolor: 'action.hover',
+  '& .MuiToggleButton-root': {
+    border: 0,
+    px: 0.75,
+    py: 0,
+    fontSize: 11,
+    minWidth: 28,
+    color: 'text.secondary',
+    '&.Mui-selected': {
+      bgcolor: 'background.paper',
+      color: 'text.primary',
+      boxShadow: '0 0 0 1px rgba(19, 27, 38, 0.08)',
+    },
+  },
+} as const
 
 export function Palette({
   onLoadReference,
@@ -127,13 +146,15 @@ export function Palette({
           title={`${tile.name} · ${limitsWord(tile)}`}
           sx={{
             alignItems: 'center',
-            gap: 0.75,
-            px: 0.75,
-            py: 0.5,
-            mx: 0.25,
+            gap: 1,
+            minHeight: 32,
+            px: 1,
+            py: 0.25,
+            mx: 0.5,
             borderRadius: 1,
             cursor: 'grab',
-            '&:hover': { bgcolor: 'primary.light' },
+            '&:hover': { bgcolor: 'action.hover' },
+            '&:active': { cursor: 'grabbing' },
           }}
         >
           <CatalogIcon
@@ -143,15 +164,6 @@ export function Palette({
             category={category}
             size={16}
             title={tile.name}
-          />
-          <Box
-            sx={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              bgcolor: limitsDot(tile),
-              flexShrink: 0,
-            }}
           />
           <Typography
             sx={{
@@ -187,7 +199,7 @@ export function Palette({
           height: 68,
           border: '1px solid',
           borderColor: 'divider',
-          borderRadius: '6px',
+          borderRadius: '8px',
           px: 0.5,
           py: 0.75,
           textAlign: 'center',
@@ -199,7 +211,8 @@ export function Palette({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 0.5,
-          '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.light' },
+          '&:hover': { bgcolor: 'action.hover' },
+          '&:active': { cursor: 'grabbing' },
         }}
       >
         <CatalogIcon
@@ -229,8 +242,8 @@ export function Palette({
             borderRadius: '50%',
             bgcolor: limitsDot(tile),
             position: 'absolute',
-            top: 4,
-            right: 4,
+            top: 6,
+            right: 6,
           }}
         />
       </Box>
@@ -240,7 +253,7 @@ export function Palette({
   return (
     <Box
       sx={{
-        width: 256,
+        width: 264,
         flexShrink: 0,
         bgcolor: 'background.paper',
         borderRadius: 3,
@@ -250,16 +263,25 @@ export function Palette({
         overflow: 'hidden',
       }}
     >
-      <Stack spacing={1} sx={{ p: 1.5, pb: 1, flexShrink: 0 }}>
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-          <TextField
-            size="small"
-            placeholder="Search services"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            sx={{ flex: 1 }}
-            slotProps={{ htmlInput: { 'aria-label': 'Search services' } }}
-          />
+      <Stack spacing={1} sx={{ px: 1.5, pt: 1.5, pb: 1, flexShrink: 0 }}>
+        <TextField
+          size="small"
+          placeholder="Search services"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          slotProps={{ htmlInput: { 'aria-label': 'Search services' } }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              height: 36,
+              borderRadius: 2,
+              bgcolor: 'background.default',
+              '& fieldset': { borderColor: 'transparent' },
+              '&:hover fieldset': { borderColor: 'divider' },
+              '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+            },
+          }}
+        />
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minHeight: 32 }}>
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -268,10 +290,7 @@ export function Palette({
               if (next) setView(next)
             }}
             aria-label="Palette layout"
-            sx={{
-              height: 32,
-              '& .MuiToggleButton-root': { px: 0.5, minWidth: 28 },
-            }}
+            sx={quietToggleSx}
           >
             <ToggleButton value="button" aria-label="Button view">
               <AppsIcon sx={{ fontSize: 16 }} />
@@ -280,8 +299,6 @@ export function Palette({
               <MenuIcon sx={{ fontSize: 16 }} />
             </ToggleButton>
           </ToggleButtonGroup>
-        </Stack>
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -290,25 +307,20 @@ export function Palette({
               if (next) setMode(next)
             }}
             aria-label="Icon style"
-            sx={{ height: 26, '& .MuiToggleButton-root': { px: 1, fontSize: 11, py: 0 } }}
+            sx={{ ...quietToggleSx, ml: 'auto' }}
           >
             <ToggleButton value="service">Service</ToggleButton>
             <ToggleButton value="normal">Normal</ToggleButton>
           </ToggleButtonGroup>
-          <Stack
-            direction="row"
-            spacing={0.75}
-            sx={{ ml: 'auto', alignItems: 'center' }}
-            title="Limits on official page"
-          >
-            <LegendSwatch color="success.main" label="listed" />
-            <LegendSwatch color="warning.main" label="partial" />
-            <LegendSwatch color="divider" label="none" />
-          </Stack>
         </Stack>
+        <Tooltip title="Limits on official page">
+          <Typography sx={{ fontSize: 11, color: 'text.secondary', px: 0.25, lineHeight: 1.2 }}>
+            listed · partial · none
+          </Typography>
+        </Tooltip>
       </Stack>
 
-      <Box sx={{ flex: 1, overflow: 'auto', px: 1, pb: 1 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', px: 0.75, pb: 1 }}>
         {PALETTE_PROVIDERS.map((item) => {
           const groups = groupsByProvider[item.id]
           const count = groups.reduce((sum, group) => sum + group.count, 0)
@@ -325,18 +337,18 @@ export function Palette({
                 sx={{
                   width: '100%',
                   alignItems: 'center',
-                  gap: 0.5,
-                  px: 0.75,
+                  gap: 0.75,
+                  minHeight: 36,
+                  px: 1,
                   py: 0.5,
                   border: 0,
                   borderRadius: 1,
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 1,
-                  bgcolor: open ? 'primary.light' : 'background.paper',
+                  borderLeft: '2px solid',
+                  borderColor: open ? 'primary.main' : 'transparent',
+                  bgcolor: open ? 'action.hover' : 'transparent',
                   cursor: 'pointer',
                   color: 'text.primary',
-                  '&:hover': { bgcolor: open ? 'primary.light' : 'action.hover' },
+                  '&:hover': { bgcolor: 'action.hover' },
                 }}
               >
                 {open ? (
@@ -345,7 +357,7 @@ export function Palette({
                   <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 )}
                 <ProviderMark provider={item.id} />
-                <Typography sx={{ fontSize: 12, fontWeight: 600, flex: 1, textAlign: 'left' }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: 'left' }}>
                   {item.label}
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{count}</Typography>
@@ -358,7 +370,7 @@ export function Palette({
                       groups.length === 1 ||
                       Boolean(categoriesOpen[folderKey(item.id, group.category)])
                     return (
-                      <Box key={group.category} sx={{ pl: hideHeading ? 0.5 : 1.25 }}>
+                      <Box key={group.category} sx={{ pl: hideHeading ? 0.25 : 0.75 }}>
                         {hideHeading ? null : (
                           <Stack
                             component="button"
@@ -369,9 +381,10 @@ export function Palette({
                             sx={{
                               width: '100%',
                               alignItems: 'center',
-                              gap: 0.25,
-                              px: 0.5,
-                              py: 0.35,
+                              gap: 0.5,
+                              minHeight: 28,
+                              px: 0.75,
+                              py: 0.25,
                               border: 0,
                               borderRadius: 1,
                               bgcolor: 'transparent',
@@ -408,8 +421,8 @@ export function Palette({
                                 display: 'grid',
                                 gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                                 gap: 0.75,
-                                px: 0.5,
-                                py: 0.5,
+                                px: 0.75,
+                                py: 0.75,
                               }}
                             >
                               {group.tiles.map((tile) => tileNode(tile, group.category))}
@@ -429,9 +442,11 @@ export function Palette({
         direction="row"
         spacing={0.75}
         sx={{
-          p: 1.25,
+          px: 1.5,
+          py: 1.25,
           borderTop: 1,
           borderColor: 'divider',
+          bgcolor: 'background.default',
           flexShrink: 0,
           alignItems: 'center',
         }}
@@ -441,7 +456,7 @@ export function Palette({
           value={template}
           onChange={(event) => setTemplate(event.target.value as MappedProvider | 'youtube')}
           aria-label="Reference template"
-          sx={{ flex: 1, fontSize: 12 }}
+          sx={{ flex: 1, fontSize: 12, bgcolor: 'background.paper' }}
         >
           {mappedProviders.map((provider) => (
             <MenuItem key={provider} value={provider}>
@@ -462,29 +477,6 @@ export function Palette({
         </Button>
       </Stack>
     </Box>
-  )
-}
-
-function Dot({ color }: { color: string }) {
-  return (
-    <Box
-      sx={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        bgcolor: color,
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-
-function LegendSwatch({ color, label }: { color: string; label: string }) {
-  return (
-    <Stack direction="row" spacing={0.35} sx={{ alignItems: 'center' }}>
-      <Dot color={color} />
-      <Typography sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1 }}>{label}</Typography>
-    </Stack>
   )
 }
 
