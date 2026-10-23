@@ -18,6 +18,7 @@ export type PaletteTile = {
   catalogId?: string
   provider: PaletteProvider
   limitsOnPage?: LimitsOnPage
+  kind?: 'service' | 'environment'
 }
 
 export type PaletteGroup = {

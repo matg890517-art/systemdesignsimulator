@@ -25,6 +25,15 @@ export type ZoneNodeData = {
 
 export type WorkspaceNode = Node<ServiceNodeData | ZoneNodeData>
 
+export type CanvasSelection = {
+  id: string
+  title: string
+  catalogId?: string
+  kind?: 'service' | 'zone'
+  provider?: ProviderId
+  parentId?: string
+}
+
 export type Bottleneck = {
   id: string
   title: string

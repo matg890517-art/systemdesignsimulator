@@ -86,7 +86,13 @@ describe('catalog data', () => {
       'Worker pool',
       'CDN',
       'Object store',
+      'Environment',
     ])
+    expect(paletteGroupsFor('aws').at(-1)?.tiles[0]).toMatchObject({
+      name: 'Environment',
+      kind: 'environment',
+      provider: 'aws',
+    })
   })
 
   it('does not live in the engine package', () => {

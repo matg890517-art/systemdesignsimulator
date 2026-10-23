@@ -15,6 +15,7 @@ describe('canvas selection during drag', () => {
     expect(canvasSelectionKey([{ id: 'ecs', type: 'service' }, { id: 'aks', type: 'service' }], [])).toBe(
       'n:aks,ecs',
     )
+    expect(canvasSelectionKey([{ id: 'aws', type: 'zone' }], [])).toBe('n:aws')
   })
 
   it('does not allocate new edge objects when paint is already applied', () => {

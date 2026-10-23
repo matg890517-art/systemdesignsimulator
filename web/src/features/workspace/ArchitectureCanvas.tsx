@@ -31,8 +31,16 @@ import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges } from './edge-data.ts'
 import { connectComponents } from './canvas-edit.ts'
+import {
+  adoptIntoZone,
+  createEnvironment,
+  droppedServicePosition,
+  parsePaletteDrop,
+  serviceDraftFromDrop,
+  zoneContaining,
+} from './environment.ts'
 import { heatStroke } from './heat.ts'
-import type { ServiceNodeData, WorkspaceNode } from './types.ts'
+import type { CanvasSelection, ServiceNodeData, WorkspaceNode, ZoneNodeData } from './types.ts'
 
 export type { WorkspaceNode }
 
@@ -77,6 +85,7 @@ function CanvasInner({
   edges,
   onNodesChange,
   onEdgesChange,
+  setNodes,
   setEdges,
   onSelect,
   onSelectEdge,
@@ -91,8 +100,9 @@ function CanvasInner({
   edges: Edge[]
   onNodesChange: OnNodesChange<WorkspaceNode>
   onEdgesChange: OnEdgesChange<Edge>
+  setNodes: Dispatch<SetStateAction<WorkspaceNode[]>>
   setEdges: Dispatch<SetStateAction<Edge[]>>
-  onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
+  onSelect: (node?: CanvasSelection) => void
   onSelectEdge: (edge?: Edge) => void
   onSelectIds: (ids: string[]) => void
   onSelectEdgeIds: (ids: string[]) => void
@@ -110,8 +120,7 @@ function CanvasInner({
       const key = canvasSelectionKey(selectedNodes, selectedEdges)
       if (key === selectionKey.current) return
       selectionKey.current = key
-      const serviceIds = selectedNodes.filter((item) => item.type === 'service').map((item) => item.id)
-      onSelectIds(serviceIds)
+      onSelectIds(selectedNodes.map((item) => item.id))
       onSelectEdgeIds(selectedEdges.map((edge) => edge.id))
       if (key.startsWith('e:')) {
         const edge = selectedEdges[0]
@@ -120,13 +129,31 @@ function CanvasInner({
         return
       }
       onSelectEdge(undefined)
-      const node = selectedNodes.find((item) => item.type === 'service')
-      if (!node) {
+      const service = selectedNodes.find((item) => item.type === 'service')
+      if (service) {
+        const data = service.data as ServiceNodeData
+        onSelect({
+          id: service.id,
+          title: data.title,
+          catalogId: data.catalogId,
+          kind: 'service',
+          provider: data.provider,
+          parentId: service.parentId,
+        })
+        return
+      }
+      const zone = selectedNodes.find((item) => item.type === 'zone')
+      if (!zone) {
         onSelect(undefined)
         return
       }
-      const data = node.data as ServiceNodeData
-      onSelect({ id: node.id, title: data.title, catalogId: data.catalogId })
+      const data = zone.data as ZoneNodeData
+      onSelect({
+        id: zone.id,
+        title: data.label,
+        kind: 'zone',
+        provider: data.provider,
+      })
     },
     [onSelect, onSelectEdge, onSelectEdgeIds, onSelectIds],
   )
@@ -176,34 +203,42 @@ function CanvasInner({
       event.preventDefault()
       const raw = event.dataTransfer.getData('application/sds-service')
       if (!raw) return
-      let payload: { name: string; provider?: ServiceNodeData['provider']; catalogId?: string }
-      try {
-        payload = JSON.parse(raw) as { name: string; provider?: ServiceNodeData['provider']; catalogId?: string }
-      } catch {
-        payload = { name: raw, provider: 'aws' }
-      }
+      const payload = parsePaletteDrop(raw)
+      if (!payload) return
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       })
-      const node: WorkspaceNode = {
-        id: `${payload.name}-${crypto.randomUUID()}`,
-        type: 'service',
-        position,
-        data: {
-          title: payload.name,
-          util: 0,
-          p99: 'not run',
-          meta: payload.catalogId
-            ? 'Dropped from catalog · quotas unknown'
-            : 'Dropped from palette · Estimated',
+      if (payload.kind === 'environment') {
+        const env = createEnvironment({
+          position,
           provider: payload.provider ?? 'generic',
-          catalogId: payload.catalogId,
-        },
+        })
+        setNodes((current) => [...current, env])
+        return
       }
-      onNodesChange([{ type: 'add', item: node }])
+      setNodes((current) => {
+        const placed = droppedServicePosition(current, position)
+        return [...current, { ...serviceDraftFromDrop(payload, placed.position), ...placed }]
+      })
     },
-    [onNodesChange, screenToFlowPosition],
+    [screenToFlowPosition, setNodes],
+  )
+
+  const onNodeDragStop = useCallback(
+    (_event: MouseEvent, node: Node) => {
+      if (node.type !== 'service' || node.parentId) return
+      setNodes((current) => {
+        const zone = zoneContaining(
+          current,
+          { x: node.position.x + 75, y: node.position.y + 44 },
+          node.id,
+        )
+        if (!zone) return current
+        return adoptIntoZone(current, node.id, zone.id)
+      })
+    },
+    [setNodes],
   )
 
   const defaultEdgeOptions = useMemo(
@@ -244,6 +279,7 @@ function CanvasInner({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -278,7 +314,7 @@ function CanvasInner({
             ? connectFromId
               ? 'Click a target component'
               : 'Click a source component'
-            : 'Drag from the right or bottom handle to a left or top handle. Delete or Backspace removes the selection.'}
+            : 'Drop an Environment box, then drag services onto it. Drag a corner to resize. Delete or Backspace removes the selection.'}
         </Typography>
       </Box>
     </Box>
@@ -291,8 +327,9 @@ export function ArchitectureCanvas(props: {
   classFilter: ClassFilter
   onNodesChange: OnNodesChange<WorkspaceNode>
   onEdgesChange: OnEdgesChange<Edge>
+  setNodes: Dispatch<SetStateAction<WorkspaceNode[]>>
   setEdges: Dispatch<SetStateAction<Edge[]>>
-  onSelect: (node?: { id: string; title: string; catalogId?: string }) => void
+  onSelect: (node?: CanvasSelection) => void
   onSelectEdge: (edge?: Edge) => void
   onSelectIds: (ids: string[]) => void
   onSelectEdgeIds: (ids: string[]) => void
@@ -313,6 +350,7 @@ export function ArchitectureCanvas(props: {
           edges={props.edges}
           onNodesChange={props.onNodesChange}
           onEdgesChange={props.onEdgesChange}
+          setNodes={props.setNodes}
           setEdges={props.setEdges}
           onSelect={props.onSelect}
           onSelectEdge={props.onSelectEdge}

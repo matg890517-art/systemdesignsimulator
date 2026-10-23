@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/react'
+import { createEnvironment } from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export type WorkspaceGraphNode = Node<ServiceNodeData | ZoneNodeData>
@@ -25,15 +26,14 @@ export function wrapInSubsystem(
   const maxX = Math.max(...services.map((node) => node.position.x + NODE_W))
   const maxY = Math.max(...services.map((node) => node.position.y + NODE_H))
   const id = `sub-${now}`
-  const zone: WorkspaceGraphNode = {
+  const zone: WorkspaceGraphNode = createEnvironment({
     id,
-    type: 'zone',
+    provider: 'generic',
+    label: 'Subsystem',
+    nested: true,
     position: { x: minX - PAD, y: minY - PAD },
-    style: { width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 },
-    data: { label: 'Subsystem', provider: 'generic', nested: true },
-    draggable: true,
-    selectable: true,
-  }
+    size: { width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 },
+  })
   const rest = nodes.map((node) => {
     if (!ids.has(node.id) || node.type !== 'service') return node
     return {

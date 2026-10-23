@@ -16,9 +16,11 @@ describe('canvas edit', () => {
     expect(next.edges.some((edge) => edge.id === 'cf-alb')).toBe(false)
   })
 
-  it('ignores zone ids so layout groups are not removed as components', () => {
+  it('ungroups a selected environment and keeps the services', () => {
     const next = deleteSelection(initialNodes, initialEdges, ['aws'], [])
-    expect(next.nodes.some((node) => node.id === 'aws')).toBe(true)
+    expect(next.nodes.some((node) => node.id === 'aws')).toBe(false)
+    expect(next.nodes.some((node) => node.id === 'ecs')).toBe(true)
+    expect(next.nodes.find((node) => node.id === 'ecs')?.parentId).toBeUndefined()
     expect(next.edges).toHaveLength(initialEdges.length)
   })
 

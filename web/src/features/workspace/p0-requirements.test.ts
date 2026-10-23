@@ -11,7 +11,7 @@ import {
   setEdgeClassActive,
 } from './edge-data.ts'
 import { explainFromModel } from './explain.ts'
-import { initialEdges, initialNodes } from './graph.ts'
+import { initialEdges, initialNodes, youtubeEnvSize } from './graph.ts'
 import { getProfiles } from '../calibration/library.ts'
 import { defaultWorkloadDraft } from './compile.ts'
 
@@ -31,6 +31,19 @@ describe('remaining P0 requirements', () => {
     expect(iconGlyphFor({ mode: 'normal', name: 'Clients', catalogId: 'generic-clients' })).toBe(
       'clients',
     )
+    expect(iconGlyphFor({ mode: 'normal', name: 'Environment', category: 'ENVIRONMENT' })).toBe('zone')
+  })
+
+  it('YouTube AWS, GCP, and Azure environments share one box size', () => {
+    const zones = initialNodes.filter((node) => node.type === 'zone')
+    expect(zones.map((node) => (node.data as { label: string }).label)).toEqual(['AWS', 'GCP', 'Azure'])
+    for (const node of zones) {
+      expect(node.position.x).toBe(zones[0]?.position.x)
+      expect(node.style?.width).toBe(youtubeEnvSize.width)
+      expect(node.style?.height).toBe(youtubeEnvSize.height)
+      expect(node.draggable).toBe(true)
+      expect(node.selectable).toBe(true)
+    }
   })
 
   it('F29 marks Azure→AWS copy-link as a cross-provider edge', () => {

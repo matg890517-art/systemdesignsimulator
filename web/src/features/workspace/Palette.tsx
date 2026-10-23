@@ -35,6 +35,7 @@ function limitsDot(tile: PaletteTile) {
 }
 
 function limitsWord(tile: PaletteTile) {
+  if (tile.kind === 'environment') return 'layout'
   if (tile.limitsOnPage === 'yes') return 'listed'
   if (tile.limitsOnPage === 'partial') return 'partial'
   if (tile.limitsOnPage === 'no') return 'none'
@@ -108,6 +109,7 @@ export function Palette({
       name: tile.name,
       provider: tile.provider,
       catalogId: tile.catalogId,
+      kind: tile.kind ?? 'service',
     })
     const glyph = iconGlyphFor({
       mode,
@@ -122,7 +124,7 @@ export function Palette({
     if (view === 'list') {
       return (
         <Stack
-          key={tile.catalogId ?? tile.name}
+          key={tile.catalogId ?? `${tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
           direction="row"
           draggable
           onDragStart={onDragStart}
@@ -165,7 +167,7 @@ export function Palette({
     }
     return (
       <Box
-        key={tile.catalogId ?? tile.name}
+        key={tile.catalogId ?? `${tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
         draggable
         onDragStart={onDragStart}
         title={`${tile.name} · ${limitsWord(tile)}`}

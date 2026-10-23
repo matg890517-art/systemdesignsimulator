@@ -56,7 +56,12 @@ import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
 import { AKS_HEADROOM_CHALLENGE, scoreAksHeadroom } from '../challenge/challenge.ts'
-import type { Bottleneck, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
+import {
+  patchZone,
+  releaseFromZone,
+  zoneSize,
+} from './environment.ts'
+import type { Bottleneck, CanvasSelection, KpiState, ServiceNodeData, WorkspaceRun } from './types.ts'
 
 function readBootSnapshot(): TopologySnapshot | undefined {
   if (typeof window !== 'undefined') {
@@ -138,7 +143,7 @@ export function WorkspacePage() {
   const [tab, setTab] = useState(0)
   const [kpis, setKpis] = useState<KpiState>(idleKpis)
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(seedBottlenecks)
-  const [selected, setSelected] = useState<{ id: string; title: string; catalogId?: string }>()
+  const [selected, setSelected] = useState<CanvasSelection>()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>()
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([])
@@ -169,21 +174,20 @@ export function WorkspacePage() {
   const maxPaintMs = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
 
-  const onSelectNode = useCallback(
-    (next?: { id: string; title: string; catalogId?: string }) => {
-      setSelected((current) => {
-        if (
-          current?.id === next?.id &&
-          current?.title === next?.title &&
-          current?.catalogId === next?.catalogId
-        ) {
-          return current
-        }
-        return next
-      })
-    },
-    [],
-  )
+  const onSelectNode = useCallback((next?: CanvasSelection) => {
+    setSelected((current) => {
+      if (
+        current?.id === next?.id &&
+        current?.title === next?.title &&
+        current?.catalogId === next?.catalogId &&
+        current?.kind === next?.kind &&
+        current?.parentId === next?.parentId
+      ) {
+        return current
+      }
+      return next
+    })
+  }, [])
 
   const onSelectCanvasEdge = useCallback((edge?: Edge) => {
     setSelectedEdgeId((current) => {
@@ -792,6 +796,7 @@ export function WorkspacePage() {
                 classFilter={classFilter}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
+                setNodes={setNodes}
                 setEdges={setEdges}
                 onSelect={onSelectNode}
                 onSelectEdge={onSelectCanvasEdge}
@@ -819,10 +824,34 @@ export function WorkspacePage() {
             <Inspector
               bottlenecks={shownBottlenecks}
               selected={selected}
+              selectedSize={(() => {
+                if (selected?.kind !== 'zone') return undefined
+                const zone = nodes.find((node) => node.id === selected.id)
+                return zone ? zoneSize(zone) : undefined
+              })()}
               selectedEdge={edges.find((edge) => edge.id === selectedEdgeId)}
               onEdgeChange={(edge) =>
                 setEdges((current) => current.map((item) => (item.id === edge.id ? edge : item)))
               }
+              onZoneChange={(id, next) => {
+                setNodes((current) => patchZone(current, id, next))
+                if (next.data?.label || next.data?.provider) {
+                  setSelected((current) =>
+                    current?.id === id
+                      ? {
+                          ...current,
+                          title: next.data?.label ?? current.title,
+                          provider: next.data?.provider ?? current.provider,
+                        }
+                      : current,
+                  )
+                }
+              }}
+              onReleaseFromZone={() => {
+                if (!selected?.id) return
+                setNodes((current) => releaseFromZone(current, selected.id))
+                setSelected((current) => (current ? { ...current, parentId: undefined } : current))
+              }}
               onDeleteNode={onDeleteSelection}
               onDeleteEdge={onDeleteSelection}
               affectedIds={lastRun?.affectedComponentIds ?? []}

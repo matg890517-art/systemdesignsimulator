@@ -25,6 +25,7 @@ const paths: Record<IconGlyph, string> = {
   api: 'M4 4.2h5.2v2.2H6.2v7.2h3V15.8H4V4.2Zm6.8 0H16v11.6h-5.2v-2.2h3V6.4h-3V4.2Z',
   dns: 'M10 2.3 17.4 6.4v7.2L10 17.7 2.6 13.6V6.4L10 2.3Zm0 2.4L5 7.4v5.2l5 2.7 5-2.7V7.4l-5-2.7Z',
   bus: 'M3.2 6.2h13.6v7.6H3.2V6.2Zm2 2.1v3.4h9.6V8.3H5.2Z',
+  zone: 'M3.2 3.4h13.6v13.2H3.2V3.4Zm1.7 2.2v8.8h10.2V5.6H4.9Z',
 }
 
 export function KindIcon({

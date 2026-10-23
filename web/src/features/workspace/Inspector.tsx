@@ -28,9 +28,14 @@ import {
   type WorkspaceClassId,
   type WorkspaceEdgeData,
 } from './edge-data.ts'
+import {
+  ENV_MIN_HEIGHT,
+  ENV_MIN_WIDTH,
+  environmentLabel,
+} from './environment.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
 import { formatPct } from './simulate.ts'
-import type { Bottleneck } from './types.ts'
+import type { Bottleneck, CanvasSelection, ProviderId } from './types.ts'
 
 const CLASS_NAME: Record<WorkspaceClassId, string> = {
   read: 'Read',
@@ -50,11 +55,13 @@ function ConfigPanel({
   title,
   catalogId,
   onDelete,
+  onRelease,
 }: {
   nodeId?: string
   title?: string
   catalogId?: string
   onDelete?: () => void
+  onRelease?: () => void
 }) {
   const library = useLibrary()
   const catalog = nodeId ? catalogForNode(nodeId, catalogId) : undefined
@@ -71,8 +78,8 @@ function ConfigPanel({
   if (!nodeId || !draft) {
     return (
       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-        Select a service on the canvas to edit servers, service time, queue, and hit rate.
-        Empty fields stay unknown and do not cap the engine.
+        Select a service to edit capacity, or an environment box to rename, recolor, and resize.
+        Empty service fields stay unknown and do not cap the engine.
       </Typography>
     )
   }
@@ -187,9 +194,96 @@ function ConfigPanel({
       >
         Reset to default
       </Button>
+      {onRelease ? (
+        <Button size="small" variant="outlined" onClick={onRelease}>
+          Remove from environment
+        </Button>
+      ) : null}
       {onDelete ? (
         <Button size="small" color="error" variant="outlined" onClick={onDelete}>
           Delete component
+        </Button>
+      ) : null}
+    </Stack>
+  )
+}
+
+const PROVIDERS: ProviderId[] = ['generic', 'aws', 'azure', 'gcp', 'kubernetes']
+
+function EnvironmentPanel({
+  selected,
+  width,
+  height,
+  onChange,
+  onDelete,
+}: {
+  selected: CanvasSelection
+  width: number
+  height: number
+  onChange: (next: { data?: { label?: string; provider?: ProviderId }; width?: number; height?: number }) => void
+  onDelete?: () => void
+}) {
+  return (
+    <Stack spacing={1.5}>
+      <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{selected.title}</Typography>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Layout group. It does not compile into the engine. Services dropped on the box move with it.
+        Nested-as-one-node stays out of this build.
+      </Typography>
+      <TextField
+        size="small"
+        label="Name"
+        value={selected.title}
+        onChange={(event) => onChange({ data: { label: event.target.value } })}
+      />
+      <TextField
+        select
+        size="small"
+        label="Provider color"
+        value={selected.provider ?? 'generic'}
+        onChange={(event) => {
+          const provider = event.target.value as ProviderId
+          const keepCustom = selected.title !== environmentLabel(selected.provider ?? 'generic')
+          onChange({
+            data: {
+              provider,
+              label: keepCustom ? selected.title : environmentLabel(provider),
+            },
+          })
+        }}
+      >
+        {PROVIDERS.map((id) => (
+          <MenuItem key={id} value={id}>
+            {environmentLabel(id)}
+          </MenuItem>
+        ))}
+      </TextField>
+      <Stack direction="row" spacing={1}>
+        <TextField
+          size="small"
+          type="number"
+          label="Width"
+          value={Math.round(width)}
+          onChange={(event) =>
+            onChange({ width: Math.max(ENV_MIN_WIDTH, Number(event.target.value) || ENV_MIN_WIDTH) })
+          }
+        />
+        <TextField
+          size="small"
+          type="number"
+          label="Height"
+          value={Math.round(height)}
+          onChange={(event) =>
+            onChange({ height: Math.max(ENV_MIN_HEIGHT, Number(event.target.value) || ENV_MIN_HEIGHT) })
+          }
+        />
+      </Stack>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Or drag a corner on the canvas. Deleting the box ungroups; services stay.
+      </Typography>
+      {onDelete ? (
+        <Button size="small" color="error" variant="outlined" onClick={onDelete}>
+          Remove environment
         </Button>
       ) : null}
     </Stack>
@@ -381,8 +475,11 @@ function EdgePanel({
 export function Inspector({
   bottlenecks,
   selected,
+  selectedSize,
   selectedEdge,
   onEdgeChange,
+  onZoneChange,
+  onReleaseFromZone,
   onDeleteNode,
   onDeleteEdge,
   affectedIds = [],
@@ -390,9 +487,15 @@ export function Inspector({
   breakerOpenEdges = [],
 }: {
   bottlenecks: Bottleneck[]
-  selected?: { id: string; title: string; catalogId?: string }
+  selected?: CanvasSelection
+  selectedSize?: { width: number; height: number }
   selectedEdge?: RfEdge
   onEdgeChange: (edge: RfEdge) => void
+  onZoneChange?: (
+    id: string,
+    next: { data?: { label?: string; provider?: ProviderId }; width?: number; height?: number },
+  ) => void
+  onReleaseFromZone?: () => void
   onDeleteNode?: () => void
   onDeleteEdge?: () => void
   affectedIds?: string[]
@@ -424,14 +527,24 @@ export function Inspector({
         <Tab label={`Bottlenecks ${bottlenecks.length}`} />
         <Tab label={`Blast ${affectedIds.length}`} />
       </Tabs>
-      {tab === 0 && (
-        <ConfigPanel
-          nodeId={selected?.id}
-          title={selected?.title}
-          catalogId={selected?.catalogId}
-          onDelete={selected ? onDeleteNode : undefined}
-        />
-      )}
+      {tab === 0 &&
+        (selected?.kind === 'zone' ? (
+          <EnvironmentPanel
+            selected={selected}
+            width={selectedSize?.width ?? ENV_MIN_WIDTH}
+            height={selectedSize?.height ?? ENV_MIN_HEIGHT}
+            onChange={(next) => onZoneChange?.(selected.id, next)}
+            onDelete={onDeleteNode}
+          />
+        ) : (
+          <ConfigPanel
+            nodeId={selected?.id}
+            title={selected?.title}
+            catalogId={selected?.catalogId}
+            onDelete={selected ? onDeleteNode : undefined}
+            onRelease={selected?.parentId ? onReleaseFromZone : undefined}
+          />
+        ))}
       {tab === 1 && (
         <EdgePanel edge={selectedEdge} onChange={onEdgeChange} onDelete={selectedEdge ? onDeleteEdge : undefined} />
       )}

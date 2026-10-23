@@ -119,6 +119,9 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
     }
     if (parsed.draft.mode !== 'fluid' && parsed.draft.mode !== 'discrete') return undefined
     if (!Array.isArray(parsed.profiles)) return undefined
+    parsed.nodes = parsed.nodes.map((node) =>
+      node.type === 'zone' ? { ...node, draggable: true, selectable: true } : node,
+    )
     return parsed as TopologySnapshot
   } catch {
     return undefined

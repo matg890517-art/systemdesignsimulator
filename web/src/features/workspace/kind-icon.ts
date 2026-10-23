@@ -20,6 +20,7 @@ export type IconGlyph =
   | 'api'
   | 'dns'
   | 'bus'
+  | 'zone'
 
 const KIND_GLYPH: Record<string, IconGlyph> = {
   traffic_generator: 'clients',
@@ -48,6 +49,7 @@ const CATEGORY_GLYPH: Record<string, IconGlyph> = {
   Media: 'cdn',
   'Kubernetes object': 'k8s',
   GENERIC: 'service',
+  ENVIRONMENT: 'zone',
 }
 
 export function iconGlyphFor(input: {
@@ -64,6 +66,7 @@ export function iconGlyphFor(input: {
     return kindGlyph ?? CATEGORY_GLYPH[category ?? ''] ?? 'service'
   }
   const label = `${input.catalogId ?? ''} ${input.name}`.toLowerCase()
+  if (/\benvironment\b/.test(label) || input.category === 'ENVIRONMENT') return 'zone'
   if (/\blambda\b|cloud functions|cloud run|app runner|functions?/.test(label)) return 'function'
   if (/\b(eks|ecs|gke|aks|kubernetes|k8s|fargate)\b/.test(label)) return 'k8s'
   if (/\b(ec2|compute engine|virtual machine|\bvm\b|lightsail|batch)\b/.test(label)) return 'compute'

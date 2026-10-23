@@ -1,27 +1,33 @@
 import type { Edge, Node } from '@xyflow/react'
 import { exampleNodeCatalogIds } from '../catalog/catalog.ts'
+import {
+  createEnvironment,
+  defaultEnvironmentSize,
+  ENV_GRID,
+} from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 export const workspaceNodeTypes = ['service', 'zone'] as const
 
-function zone(
-  id: string,
-  label: string,
-  provider: ZoneNodeData['provider'],
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): Node<ZoneNodeData> {
+export const youtubeEnvSize = defaultEnvironmentSize
+
+function envY(index: number): number {
+  return ENV_GRID.y + index * (youtubeEnvSize.height + ENV_GRID.stackGap)
+}
+
+function envCell(col: number, row: number): { x: number; y: number } {
   return {
-    id,
-    type: 'zone',
-    position: { x, y },
-    style: { width, height },
-    data: { label, provider },
-    draggable: false,
-    selectable: false,
+    x: ENV_GRID.padX + col * (ENV_GRID.cardW + ENV_GRID.gap),
+    y: ENV_GRID.padTop + row * (ENV_GRID.cardH + ENV_GRID.gap),
   }
+}
+
+function zone(id: string, provider: ZoneNodeData['provider'], y: number): Node<ZoneNodeData> {
+  return createEnvironment({
+    id,
+    provider,
+    position: { x: ENV_GRID.x, y },
+  })
 }
 
 function service(
@@ -41,15 +47,15 @@ function service(
 }
 
 export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
-  service('viewers', undefined, { x: 16, y: 88 }, {
+  service('viewers', undefined, { x: 16, y: envY(0) + envCell(0, 0).y }, {
     title: 'Viewers',
     util: 0,
     p99: '51.2k rps',
     meta: 'Poisson arrivals',
     provider: 'generic',
   }),
-  zone('aws', 'AWS', 'aws', 168, 16, 980, 168),
-  service('cloudfront', 'aws', { x: 16, y: 40 }, {
+  zone('aws', 'aws', envY(0)),
+  service('cloudfront', 'aws', envCell(0, 0), {
     title: 'CloudFront',
     util: 0.41,
     p99: 'p99 38 ms',
@@ -57,7 +63,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'aws',
     catalogId: exampleNodeCatalogIds.cloudfront,
   }),
-  service('alb', 'aws', { x: 188, y: 40 }, {
+  service('alb', 'aws', envCell(1, 0), {
     title: 'Application LB',
     util: 0.22,
     p99: 'p99 5 ms',
@@ -65,7 +71,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'aws',
     catalogId: exampleNodeCatalogIds.alb,
   }),
-  service('ecs', 'aws', { x: 360, y: 40 }, {
+  service('ecs', 'aws', envCell(2, 0), {
     title: 'ECS ×60',
     util: 0.74,
     p99: 'p99 210 ms',
@@ -73,7 +79,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'aws',
     catalogId: exampleNodeCatalogIds.ecs,
   }),
-  service('elasticache', 'aws', { x: 532, y: 40 }, {
+  service('elasticache', 'aws', envCell(0, 1), {
     title: 'ElastiCache',
     util: 0.58,
     p99: 'p99 3 ms',
@@ -81,7 +87,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'aws',
     catalogId: exampleNodeCatalogIds.elasticache,
   }),
-  service('dynamodb', 'aws', { x: 704, y: 40 }, {
+  service('dynamodb', 'aws', envCell(1, 1), {
     title: 'DynamoDB',
     util: 0.71,
     p99: 'p99 14 ms',
@@ -89,8 +95,8 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'aws',
     catalogId: exampleNodeCatalogIds.dynamodb,
   }),
-  zone('gcp', 'GCP', 'gcp', 168, 204, 720, 168),
-  service('gke', 'gcp', { x: 16, y: 40 }, {
+  zone('gcp', 'gcp', envY(1)),
+  service('gke', 'gcp', envCell(0, 0), {
     title: 'GKE ×12',
     util: 0.62,
     p99: 'p99 90 ms',
@@ -98,7 +104,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'gcp',
     catalogId: exampleNodeCatalogIds.gke,
   }),
-  service('pubsub', 'gcp', { x: 188, y: 40 }, {
+  service('pubsub', 'gcp', envCell(1, 0), {
     title: 'Pub/Sub',
     util: 0.24,
     p99: 'p99 18 ms',
@@ -106,7 +112,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'gcp',
     catalogId: exampleNodeCatalogIds.pubsub,
   }),
-  service('cloudrun', 'gcp', { x: 360, y: 40 }, {
+  service('cloudrun', 'gcp', envCell(2, 0), {
     title: 'Cloud Run',
     util: 0.46,
     p99: 'p99 120 ms',
@@ -114,7 +120,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'gcp',
     catalogId: exampleNodeCatalogIds.cloudrun,
   }),
-  service('firestore', 'gcp', { x: 532, y: 40 }, {
+  service('firestore', 'gcp', envCell(0, 1), {
     title: 'Firestore',
     util: 0.39,
     p99: 'p99 18 ms',
@@ -122,8 +128,8 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'gcp',
     catalogId: exampleNodeCatalogIds.firestore,
   }),
-  zone('azure', 'AZURE', 'azure', 168, 392, 720, 176),
-  service('aks', 'azure', { x: 16, y: 44 }, {
+  zone('azure', 'azure', envY(2)),
+  service('aks', 'azure', envCell(0, 0), {
     title: 'AKS ×84',
     util: 0.95,
     p99: '84 slots',
@@ -132,7 +138,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     engineId: 'aks',
     catalogId: exampleNodeCatalogIds.aks,
   }),
-  service('servicebus', 'azure', { x: 188, y: 44 }, {
+  service('servicebus', 'azure', envCell(1, 0), {
     title: 'Service Bus',
     util: 0.04,
     p99: 'p99 2.1 s',
@@ -140,7 +146,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'azure',
     catalogId: exampleNodeCatalogIds.servicebus,
   }),
-  service('blob', 'azure', { x: 360, y: 44 }, {
+  service('blob', 'azure', envCell(2, 0), {
     title: 'Blob Storage',
     util: 0.28,
     p99: 'p99 110 ms',
@@ -148,7 +154,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'azure',
     catalogId: exampleNodeCatalogIds.blob,
   }),
-  service('frontdoor', 'azure', { x: 532, y: 44 }, {
+  service('frontdoor', 'azure', envCell(0, 1), {
     title: 'Front Door',
     util: 0.12,
     p99: 'p99 25 ms',
@@ -156,7 +162,7 @@ export const initialNodes: Node<ServiceNodeData | ZoneNodeData>[] = [
     provider: 'azure',
     catalogId: exampleNodeCatalogIds.frontdoor,
   }),
-  service('uploaders', undefined, { x: 912, y: 428 }, {
+  service('uploaders', undefined, { x: 16, y: envY(2) + envCell(0, 0).y }, {
     title: 'Uploaders',
     util: 0,
     p99: '2 /s',

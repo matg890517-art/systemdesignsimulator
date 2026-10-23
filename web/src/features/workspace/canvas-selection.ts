@@ -5,9 +5,6 @@ export function canvasSelectionKey(
 ): string {
   const edgeId = selectedEdges[0]?.id
   if (edgeId) return `e:${edgeId}`
-  const ids = selectedNodes
-    .filter((item) => item.type === 'service')
-    .map((item) => item.id)
-    .sort()
+  const ids = selectedNodes.map((item) => item.id).sort()
   return ids.length ? `n:${ids.join(',')}` : ''
 }

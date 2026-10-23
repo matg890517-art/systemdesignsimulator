@@ -7,6 +7,7 @@ import type {
   LimitsOnPage,
   PaletteGroup,
   PaletteProvider,
+  PaletteTile,
 } from './types.ts'
 
 export { catalogEntries, catalogReadOn }
@@ -62,15 +63,22 @@ export const exampleNodeCatalogIds: Record<string, string> = {
   frontdoor: 'azure-front-door',
 }
 
+function environmentTile(provider: PaletteProvider): PaletteTile {
+  return { name: 'Environment', provider, kind: 'environment' }
+}
+
 const genericGroups: PaletteGroup[] = [
   {
     category: 'GENERIC',
-    count: genericBlocks.length,
-    tiles: genericBlocks.map((block) => ({
-      name: block.name,
-      catalogId: block.id,
-      provider: 'generic' as const,
-    })),
+    count: genericBlocks.length + 1,
+    tiles: [
+      ...genericBlocks.map((block) => ({
+        name: block.name,
+        catalogId: block.id,
+        provider: 'generic' as const,
+      })),
+      environmentTile('generic'),
+    ],
   },
 ]
 
@@ -149,7 +157,7 @@ export function paletteGroupsFor(provider: PaletteProvider, query = ''): Palette
     ...[...grouped.keys()].filter((category) => !CATEGORY_ORDER.includes(category)),
   ]
 
-  return categories.map((category) => {
+  const serviceGroups = categories.map((category) => {
     const entries = grouped.get(category) ?? []
     return {
       category: category.toUpperCase(),
@@ -162,6 +170,13 @@ export function paletteGroupsFor(provider: PaletteProvider, query = ''): Palette
       })),
     }
   })
+  if (needle && !'environment'.includes(needle) && !needle.includes('environment')) {
+    return serviceGroups
+  }
+  return [
+    ...serviceGroups,
+    { category: 'ENVIRONMENT', count: 1, tiles: [environmentTile(provider)] },
+  ]
 }
 
 export const COMPARISON_CATEGORIES = [

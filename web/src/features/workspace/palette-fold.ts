@@ -21,6 +21,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   MEDIA: 'Media',
   'KUBERNETES OBJECT': 'Objects',
   'CLUSTER LIMITS': 'Cluster',
+  ENVIRONMENT: 'Environment',
 }
 
 export function categoryLabel(category: string): string {

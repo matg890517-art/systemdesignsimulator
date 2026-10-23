@@ -6,6 +6,7 @@ import {
   isCrossProviderEdge,
   styleCrossProviderEdge,
 } from './edge-data.ts'
+import { ungroupZones } from './environment.ts'
 import type { ServiceNodeData, WorkspaceNode } from './types.ts'
 
 function asService(node: WorkspaceNode | undefined): Node<ServiceNodeData> | undefined {
@@ -83,14 +84,19 @@ export function deleteSelection(
   selectedNodeIds: string[],
   selectedEdgeIds: string[],
 ): { nodes: WorkspaceNode[]; edges: Edge[] } {
-  const dropNodes = new Set(
+  const dropServices = new Set(
     selectedNodeIds.filter((id) => nodes.some((node) => node.id === id && node.type === 'service')),
   )
+  const dropZones = selectedNodeIds.filter((id) =>
+    nodes.some((node) => node.id === id && node.type === 'zone'),
+  )
   const dropEdges = new Set(selectedEdgeIds)
+  const withoutServices = nodes.filter((node) => !dropServices.has(node.id))
   return {
-    nodes: nodes.filter((node) => !dropNodes.has(node.id)),
+    nodes: ungroupZones(withoutServices, dropZones),
     edges: edges.filter(
-      (edge) => !dropEdges.has(edge.id) && !dropNodes.has(edge.source) && !dropNodes.has(edge.target),
+      (edge) =>
+        !dropEdges.has(edge.id) && !dropServices.has(edge.source) && !dropServices.has(edge.target),
     ),
   }
 }

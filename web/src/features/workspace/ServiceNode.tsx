@@ -1,5 +1,5 @@
 import { Box, Stack, Typography } from '@mui/material'
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflow/react'
 import { heatFill } from './heat.ts'
 import { formatPct, nodeHealth } from './simulate.ts'
 import { useClassFilter } from './class-filter.ts'
@@ -7,6 +7,7 @@ import { nodeCarriesClass } from './compile.ts'
 import { useIconMode } from './icon-mode.tsx'
 import { KindIcon } from './KindIcon.tsx'
 import { iconGlyphFor } from './kind-icon.ts'
+import { ENV_MIN_HEIGHT, ENV_MIN_WIDTH } from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import { zoneColors } from '../../theme/sdsTheme.ts'
 
@@ -102,7 +103,7 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
   )
 }
 
-export function ZoneNodeView({ data }: NodeProps<Node<ZoneNodeData>>) {
+export function ZoneNodeView({ data, selected }: NodeProps<Node<ZoneNodeData>>) {
   const colors = zoneColors[data.provider]
   return (
     <Box
@@ -111,12 +112,20 @@ export function ZoneNodeView({ data }: NodeProps<Node<ZoneNodeData>>) {
         height: '100%',
         bgcolor: colors.bg,
         border: '1px solid',
-        borderColor: colors.line,
+        borderColor: selected ? 'primary.main' : colors.line,
+        borderWidth: selected ? 2 : 1,
         borderRadius: '10px',
         px: 1.5,
         py: 1,
       }}
     >
+      <NodeResizer
+        minWidth={ENV_MIN_WIDTH}
+        minHeight={ENV_MIN_HEIGHT}
+        isVisible={selected}
+        lineStyle={{ borderColor: colors.line }}
+        handleStyle={{ width: 8, height: 8, background: colors.label, borderRadius: 1 }}
+      />
       <Typography sx={{ fontSize: 11, fontWeight: 600, color: colors.label }}>
         {data.nested ? `${data.label} · nested` : data.label}
       </Typography>
