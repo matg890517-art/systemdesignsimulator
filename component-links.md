@@ -1,6 +1,6 @@
 # Component verify links and status
 
-Official page for every catalog component, with its status. Every link was read on Oct 20, 2026. A link shows where to look; it does not mean the limits were read. AWS Batch figures were read on Oct 23, 2026. Merged from `component_link.md` (links, limits on page) and `catalog-updated.pdf` (statuses, notes, fixed links).
+Official page for every catalog component, with its status. Every link was read on Oct 20, 2026. A link shows where to look; it does not mean the limits were read. AWS Batch, Lambda, and Fargate figures were read on Oct 23, 2026. Merged from `component_link.md` (links, limits on page) and `catalog-updated.pdf` (statuses, notes, fixed links).
 
 ## Status labels
 
@@ -13,11 +13,11 @@ Official page for every catalog component, with its status. Every link was read 
 
 | Provider | Services | Verified | Partial | Listed (not checked) | No limits on page |
 |---|---|---|---|---|---|
-| AWS | 50 | 10 | 1 | 39 | 0 |
+| AWS | 50 | 11 | 1 | 38 | 0 |
 | Azure | 44 | 4 | 2 | 36 | 2 |
 | Google Cloud | 35 | 5 | 2 | 28 | 0 |
 | Kubernetes | 8 | 0 | 1 | 0 | 7 |
-| **Total** | **137** | **19** | **6** | **103** | **9** |
+| **Total** | **137** | **20** | **6** | **102** | **9** |
 
 ## Differences between the two inputs
 
@@ -31,8 +31,8 @@ Official page for every catalog component, with its status. Every link was read 
 | Category | Service | Official page | Limits on page | Status | Note |
 |---|---|---|---|---|---|
 | Compute | EC2 | https://docs.aws.amazon.com/general/latest/gr/ec2-service.html | yes | Listed (not checked) |  |
-| Compute | Lambda | https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html | yes | Verified |  |
-| Compute | Fargate | https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html | yes | Listed (not checked) | Indirect: ECS throttlingpage (Fargate launchrates). |
+| Compute | Lambda | https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html | yes | Verified | Quotas page read 2026-10-23. Concurrency default 1,000 is now recorded. Stays in the canonical 18. |
+| Compute | Fargate | https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html | yes | Verified | Token-bucket launch rates. Read 2026-10-23. Outside the canonical 18. |
 | Compute | Batch | https://docs.aws.amazon.com/batch/latest/userguide/service_limits.html | yes | Verified | Unchanged quotas, each Region-specific. Read 2026-10-23. Outside the canonical 18. |
 | Compute | App Runner | https://docs.aws.amazon.com/general/latest/gr/apprunner.html | yes | Listed (not checked) |  |
 | Compute | Elastic Beanstalk | https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html | yes | Listed (not checked) |  |

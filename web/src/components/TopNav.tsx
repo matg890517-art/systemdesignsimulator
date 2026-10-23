@@ -32,9 +32,9 @@ export function TopNav({ page }: { page: AppPage }) {
       sx={{
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
-        px: 2,
-        height: 52,
+        gap: 1.5,
+        px: 1.5,
+        height: 44,
         bgcolor: 'background.paper',
         borderBottom: 1,
         borderColor: 'divider',
@@ -51,7 +51,7 @@ export function TopNav({ page }: { page: AppPage }) {
         />
         <Typography sx={{ fontWeight: 600, fontSize: 16 }}>SDS</Typography>
       </Stack>
-      <Box sx={{ width: '1px', height: 24, bgcolor: 'divider', flexShrink: 0 }} />
+      <Box sx={{ width: '1px', height: 20, bgcolor: 'divider', flexShrink: 0 }} />
       <Stack direction="row" spacing={0.5}>
         {pages.map((item) => {
           const active = item.id === page

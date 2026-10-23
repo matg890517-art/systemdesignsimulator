@@ -258,19 +258,19 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 
 | Provider | Services | Verified | Partial | Listed (not checked) | No limits on page |
 | --- | --- | --- | --- | --- | --- |
-| AWS | 50 | 10 | 1 | 39 | 0 |
+| AWS | 50 | 11 | 1 | 38 | 0 |
 | Azure | 44 | 4 | 2 | 36 | 2 |
 | Google Cloud | 35 | 5 | 2 | 28 | 0 |
 | Kubernetes | 8 | 0 | 1 | 0 | 7 |
-| Total | 137 | 19 | 6 | 103 | 9 |
+| Total | 137 | 20 | 6 | 102 | 9 |
 
 **AWS (50 services)**
 
 | Category | Service (links to its official page) | Limits on page | Status | Note |
 | --- | --- | --- | --- | --- |
 | Compute | [EC2](https://docs.aws.amazon.com/general/latest/gr/ec2-service.html) | yes | Listed (not checked) |  |
-|  | [Lambda](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) | yes | Verified |  |
-|  | [Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html) | yes | Listed (not checked) | Indirect: ECS throttling page (Fargate launch rates). |
+|  | [Lambda](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) | yes | Verified | Quotas page read 2026-10-23. Concurrency default 1,000 is now recorded. Stays in the canonical 18. |
+|  | [Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html) | yes | Verified | Token-bucket launch rates. Read 2026-10-23. Outside the canonical 18. |
 |  | [Batch](https://docs.aws.amazon.com/batch/latest/userguide/service_limits.html) | yes | Verified | Unchanged quotas, each Region-specific. Read 2026-10-23. Outside the canonical 18. |
 |  | [App Runner](https://docs.aws.amazon.com/general/latest/gr/apprunner.html) | yes | Listed (not checked) |  |
 |  | [Elastic Beanstalk](https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html) | yes | Listed (not checked) |  |
@@ -493,7 +493,7 @@ function usableAsCeiling(v: CatalogValue): boolean {
 
 **Canonical 18** is the first provider compare (Decision 3, amended Oct 23). It is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub. The Components by provider counts are no longer equal to that 18: AWS Batch was read on Oct 23, 2026 and is Verified in the status table, and it stays outside the 18.
 
-The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda and CloudFront are Verified from the Oct 18, 2026 AWS spot check (M6 states the Lambda timeouts; this plan does not state a CloudFront number). **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18. **AWS Batch** is a later reading (Oct 23, 2026), Verified in the status table, and outside the 18.
+The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda’s 900 s and 5,400 s timeouts were first recorded in the Oct 18, 2026 spot check (M6); the Oct 23, 2026 quotas page confirms them and adds the rest of that page, including a default concurrency of 1,000. CloudFront is still the Oct 18 spot check with no number in this plan. **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18. **AWS Batch** and **AWS Fargate** are later readings (Oct 23, 2026), Verified in the status table, and outside the 18. Lambda stays inside the 18.
 
 Unknown in Still open means the page read did not state a value, not that no limit exists. The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships. Do not invent a quota. These figures are Vendor figure (documented), not Measured. Phase 1 and Phase 5 stay open until a real load test of the reference stack exists.
 
@@ -518,6 +518,8 @@ Unknown in Still open means the page read did not state a value, not that no lim
 | GCP Memorystore | 65,000 clients; asynchronous, about 30 s unavailable on repair; acknowledged writes can be lost | Memory sizes |
 | GCP Cloud SQL | Synchronous HA, about 60 s failover; PostgreSQL connection sum up to 262,142; storage up to 64 TB | Standby reads; consistency |
 | AWS Batch | Unchanged, Region-specific: 50 job queues; 50 compute environments across ECS and EKS; 5 per EKS cluster; 3 per job queue; 20 job dependencies; job definition 24 KiB; SubmitJob payload 30 KiB; array size 10,000; 1,000,000 jobs in SUBMITTED; SubmitJob 50 TPS per account; 50,000 consumable resources (page writes 50k); 50 service environments; 1 per job queue; 1 job queue per quota-management service environment; 20 quota shares; SubmitServiceJob request 30 KiB; payload 10 KiB; SubmitServiceJob 5 TPS per account; 10 retry attempts | EC2, ECS, and EKS quotas may also apply; those numbers are not on this page. Not applied as worker throughput or server count. |
+| AWS Lambda | Quotas page read 2026-10-23. Ordinary timeout 900 s; Managed Instances async and event-source mapping 5,400 s except Amazon MQ and Amazon DocumentDB; concurrent executions default 1,000 per Region (adjustable; “tens of thousands” is not a number; new accounts are reduced, with no figure); zip storage 300 GB not increasable; memory 128–10,240 MB (1,769 MB ≈ 1 vCPU); env 4 KB; policy 20 KB; 5 layers; 1,000 execution environments per 10 s; sync payload 6 MB request and response, streamed response 200 MB, async payload 1 MB; streamed bandwidth uncapped for the first 6 MB then 2 MBps; network 625 Mbps (non-VPC increase up to 3,000 Mbps at 10,240 MB); zip 50 MB API and console, 250 MB unzipped; image settings 16 KB; image 10 GB; 10 test events; /tmp 512–10,240 MB; file descriptors 1,024 (Managed Instances 4,096); processes/threads 1,024. Sync: 10 rps per environment. GetFunction 100 rps, GetPolicy 15 rps, other control-plane APIs 15 rps combined, none increasable. Durable, MicroVM, and Web Function tables are recorded in full in the catalog, including Web Function account defaults of 100,000 rps and 2,000 Arm64 vCPUs. | Container-image storage points at ECR and states no number. Managed Instances process and thread limits point at Bottlerocket and state no number. “Tens of thousands” and “thousands” are not stored as numbers. The page’s API Gateway 10,000 rps example is not a Lambda quota. Not applied as throughput or server count. |
+| AWS Fargate | Per account per Region, adjustable: On-Demand burst 100 and sustained 20 launches/s; Spot burst 100 and sustained 20 launches/s; EKS-pods-only accounts burst 20 and sustained 20 on the platform versions named elsewhere; RunTask API 20 calls/s burst and sustained; each RunTask call can launch up to 10 tasks | The 10-tasks-per-call maximum does not say whether it can be changed. Image pull, health checks, and load balancer registration change observed launch rate; the page states no separate number. Not applied as completed-request throughput. Outside the canonical 18. |
 
 **Limit type from Verified-limits prose (M1 + Decision 11)**
 
@@ -1066,3 +1068,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 23, 2026 | Environment stacking is per group: a box sits behind the services it contains, not behind every card. Uncontained nodes (Clients) can pass under the box. |
 | Oct 23, 2026 | Palette drop of Environment is a single handler (no duplicate boxes). Environments stay a background layer under every service card; selecting a box no longer pulls it over the cards. |
 | Oct 23, 2026 | AWS Batch service quotas recorded from the official page (read 2026-10-23): 19 unchanged Region-specific figures. Status moves from Listed (not checked) to Verified. Counts: 19 Verified, 103 Listed (not checked). Batch stays outside the canonical 18 used for the first provider compare. Figures are Vendor figure, not Measured, and are not applied as worker throughput or server count. |
+| Oct 23, 2026 | Lambda quotas page and Fargate throttling page recorded from supplied copies (read 2026-10-23). Lambda stays in the canonical 18; concurrency default is now 1,000. Fargate moves from Listed (not checked) to Verified and stays outside the 18. Counts: 20 Verified, 102 Listed (not checked). Neither reading is applied as throughput or server count. |

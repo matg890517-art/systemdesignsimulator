@@ -251,6 +251,7 @@ export function CalibrationPage() {
                     <FieldEditor
                       field={field}
                       sourceId="calibration"
+                      hideLabel
                       onChange={(next) => patchField(field.id, next)}
                     />
                   </Box>

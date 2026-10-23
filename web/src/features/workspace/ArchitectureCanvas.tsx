@@ -242,7 +242,7 @@ function CanvasInner({
         const moved = live.find((item) => item.id === node.id)
         if (!moved) return current
         const abs = absolutePosition(live, moved)
-        return reparentOnDragStop(live, node.id, { x: abs.x + 75, y: abs.y + 44 })
+        return reparentOnDragStop(live, node.id, { x: abs.x + 84, y: abs.y + 40 })
       })
     },
     [setNodes],
@@ -274,6 +274,25 @@ function CanvasInner({
         '& .react-flow__node-zone': { zIndex: '0 !important' },
         '& .react-flow__node-service': { zIndex: '1 !important' },
         '& .react-flow__pane': connectClick ? { cursor: 'crosshair' } : undefined,
+        '& .react-flow__controls': {
+          boxShadow: 'none',
+          border: '1px solid #D5DBE3',
+          borderRadius: 8,
+          overflow: 'hidden',
+        },
+        '& .react-flow__controls-button': {
+          width: 28,
+          height: 28,
+          borderBottom: '1px solid #D5DBE3',
+          background: '#FFFFFF',
+        },
+        '& .react-flow__minimap': {
+          background: '#EEF1F5',
+          border: '1px solid #D5DBE3',
+          borderRadius: 8,
+          overflow: 'hidden',
+          boxShadow: 'none',
+        },
       }}
       onDragOver={onDragOver}
     >
@@ -316,15 +335,13 @@ function CanvasInner({
           }}
         />
       </ReactFlow>
-      <Box sx={{ position: 'absolute', left: 16, top: 12, pointerEvents: 'none' }}>
-        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          {connectClick
-            ? connectFromId
-              ? 'Click a target component'
-              : 'Click a source component'
-            : 'Drop an Environment from AWS, Azure, GCP or Kubernetes. Drop a service on the box to contain it; drag it out to disconnect.'}
-        </Typography>
-      </Box>
+      {connectClick ? (
+        <Box sx={{ position: 'absolute', left: 16, top: 12, pointerEvents: 'none' }}>
+          <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+            {connectFromId ? 'Click target' : 'Click source'}
+          </Typography>
+        </Box>
+      ) : null}
     </Box>
   )
 }

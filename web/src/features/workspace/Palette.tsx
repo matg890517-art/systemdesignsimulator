@@ -162,6 +162,15 @@ export function Palette({
           >
             {tile.name}
           </Typography>
+          <Typography
+            sx={{
+              fontSize: 11,
+              color: 'text.secondary',
+              flexShrink: 0,
+            }}
+          >
+            {limitsWord(tile)}
+          </Typography>
         </Stack>
       )
     }
@@ -172,7 +181,7 @@ export function Palette({
         onDragStart={onDragStart}
         title={`${tile.name} · ${limitsWord(tile)}`}
         sx={{
-          minHeight: 52,
+          height: 68,
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: '6px',

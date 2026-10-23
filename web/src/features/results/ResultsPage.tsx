@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Box, Button, Chip, Stack, Typography } from '@mui/material'
+import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
 import { aksRunPlan, useLibrary } from '../calibration/library.ts'
 import { aksScenario, buildResultsReport, idleKpis } from '../workspace/simulate.ts'
@@ -10,28 +11,6 @@ import { LineChart } from './LineChart.tsx'
 import { RankingTable } from './RankingTable.tsx'
 import { absentRecordedTest, parseRecordedTest } from './recorded-test.ts'
 import { scoreReferenceFidelity } from './score-reference.ts'
-
-function Kpi({
-  label,
-  value,
-  hint,
-}: {
-  label: string
-  value: string
-  hint: string
-}) {
-  return (
-    <Box sx={{ minWidth: 0, px: 2, py: 1 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 18, whiteSpace: 'nowrap' }}>
-        {value}
-      </Typography>
-      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{hint}</Typography>
-    </Box>
-  )
-}
 
 export function ResultsPage() {
   const library = useLibrary()
@@ -134,11 +113,11 @@ export function ResultsPage() {
           alignItems: 'center',
         }}
       >
-        <Kpi label="LOAD" value={kpis.load} hint={kpis.loadHint} />
-        <Kpi label="LATENCY" value={kpis.latency} hint={kpis.latencyHint} />
-        <Kpi label="ERRORS" value={kpis.errors} hint="of requests · Estimated" />
-        <Kpi label="BOTTLENECKS" value={kpis.bottlenecks} hint={kpis.bottleneckHint} />
-        <Kpi label="COST" value={kpis.cost} hint={kpis.costHint} />
+        <KpiStat label="LOAD" value={kpis.load} hint={kpis.loadHint} />
+        <KpiStat label="LATENCY" value={kpis.latency} hint={kpis.latencyHint} />
+        <KpiStat label="ERRORS" value={kpis.errors} hint="of requests · Estimated" />
+        <KpiStat label="BOTTLENECKS" value={kpis.bottlenecks} hint={kpis.bottleneckHint} />
+        <KpiStat label="COST" value={kpis.cost} hint={kpis.costHint} />
         {ran && report ? (
           <Typography sx={{ px: 2, fontSize: 11, color: 'text.secondary', whiteSpace: 'nowrap' }}>
             Last run from @sds/engine · {report.baseline.servers} vs {report.suggestedSlots} slots

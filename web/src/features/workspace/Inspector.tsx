@@ -78,8 +78,7 @@ function ConfigPanel({
   if (!nodeId || !draft) {
     return (
       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-        Select a service to edit capacity, or an environment box to rename, recolor, and resize.
-        Empty service fields stay unknown and do not cap the engine.
+        Select a service or environment box. Empty fields stay unknown and do not cap the engine.
       </Typography>
     )
   }
@@ -208,6 +207,32 @@ function ConfigPanel({
   )
 }
 
+function TabLabel({ label, count }: { label: string; count?: number }) {
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+      <Box component="span">{label}</Box>
+      {count ? (
+        <Box
+          component="span"
+          sx={{
+            minWidth: 16,
+            height: 16,
+            px: 0.5,
+            borderRadius: 8,
+            bgcolor: 'action.hover',
+            fontSize: 10,
+            fontWeight: 600,
+            lineHeight: '16px',
+            textAlign: 'center',
+          }}
+        >
+          {count}
+        </Box>
+      ) : null}
+    </Stack>
+  )
+}
+
 const CLOUD_PROVIDERS: ProviderId[] = ['aws', 'azure', 'gcp', 'kubernetes']
 
 function EnvironmentPanel({
@@ -305,8 +330,7 @@ function EdgePanel({
   if (!edge) {
     return (
       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-        Select an edge to edit request classes, payload bytes, routing, call kind, and
-        latency. Cross-provider links stay Estimated until measured.
+        Click a connection to set classes, routing, and latency.
       </Typography>
     )
   }
@@ -433,6 +457,7 @@ function EdgePanel({
       </Typography>
       {REQUEST_CLASSES.map((id) => {
         const row = data.classes[id] ?? { ...defaultEdgeData().classes[id]! }
+        if (!row.active) return null
         return (
           <Box key={id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{CLASS_NAME[id]}</Typography>
@@ -513,23 +538,33 @@ export function Inspector({
   return (
     <Box
       sx={{
-        width: 280,
+        width: 292,
         flexShrink: 0,
         bgcolor: 'background.paper',
         borderRadius: 3,
-        p: 1.5,
+        pt: 1,
+        px: 1.5,
+        pb: 1.5,
         display: 'flex',
         flexDirection: 'column',
-        gap: 1.5,
-        overflow: 'auto',
+        gap: 1.25,
+        minHeight: 0,
+        overflow: 'hidden',
       }}
     >
-      <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+      <Tabs
+        value={tab}
+        onChange={(_, value) => setTab(value)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ flexShrink: 0, minHeight: 36 }}
+      >
         <Tab label="Config" />
         <Tab label="Edge" />
-        <Tab label={`Bottlenecks ${bottlenecks.length}`} />
-        <Tab label={`Blast ${affectedIds.length}`} />
+        <Tab label={<TabLabel label="Bottlenecks" count={bottlenecks.length} />} />
+        <Tab label={<TabLabel label="Blast" count={affectedIds.length} />} />
       </Tabs>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 1.25 }}>
       {tab === 0 &&
         (selected?.kind === 'zone' ? (
           <EnvironmentPanel
@@ -562,7 +597,7 @@ export function Inspector({
             <Box
               key={item.id}
               sx={{
-                p: 1.5,
+                p: 1,
                 borderRadius: 2,
                 bgcolor: item.fromEngine ? 'error.light' : 'warning.light',
                 border: '1px solid',
@@ -635,6 +670,7 @@ export function Inspector({
           ))}
         </Stack>
       )}
+      </Box>
     </Box>
   )
 }

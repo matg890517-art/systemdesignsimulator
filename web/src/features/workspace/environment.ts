@@ -2,7 +2,7 @@ import type { Node } from '@xyflow/react'
 import type { ProviderId, ServiceNodeData, WorkspaceNode, ZoneNodeData } from './types.ts'
 
 export const ENV_GRID = {
-  cardW: 150,
+  cardW: 168,
   cardH: 108,
   gap: 16,
   padX: 16,

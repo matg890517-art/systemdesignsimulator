@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import CableIcon from '@mui/icons-material/Cable'
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material'
 import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
+import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
 import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
 import { ClassFilterChips } from './ClassFilterChips.tsx'
+import { FileMenu } from './FileMenu.tsx'
+import { HeatLegend } from './HeatLegend.tsx'
 import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { IconModeProvider } from './icon-mode.tsx'
@@ -50,7 +56,6 @@ import {
   upsertProject,
   type TopologySnapshot,
 } from './persistence.ts'
-import { HEAT_STOPS } from './heat.ts'
 import { hopLabelWithRate, hopTypeLabel } from './edge-data.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
@@ -103,26 +108,16 @@ const seedBottlenecks: Bottleneck[] = [
   },
 ]
 
-function Kpi({
-  label,
-  value,
-  hint,
-}: {
-  label: string
-  value: string
-  hint: string
-}) {
-  return (
-    <Box sx={{ minWidth: 170, px: 2, py: 1, flexShrink: 0 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 20 }}>
-        {value}
-      </Typography>
-      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{hint}</Typography>
-    </Box>
-  )
+function savedChipSx(hint: string) {
+  if (
+    hint.startsWith('Saved') ||
+    hint.startsWith('Exported') ||
+    hint.startsWith('Copied') ||
+    hint.startsWith('Inventory')
+  ) {
+    return { bgcolor: 'success.light', color: 'success.dark' }
+  }
+  return { bgcolor: 'action.hover', color: 'text.secondary' }
 }
 
 export function WorkspacePage() {
@@ -170,8 +165,6 @@ export function WorkspacePage() {
   const draft = useWorkloadDraft()
   const runGen = useRef(0)
   const paintFrame = useRef(0)
-  const minFpsDuringRun = useRef<number | undefined>(undefined)
-  const maxPaintMs = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
 
   const onSelectNode = useCallback((next?: CanvasSelection) => {
@@ -225,12 +218,6 @@ export function WorkspacePage() {
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
   }, [])
-
-  useEffect(() => {
-    if (!running || fps <= 0) return
-    minFpsDuringRun.current =
-      minFpsDuringRun.current === undefined ? fps : Math.min(minFpsDuringRun.current, fps)
-  }, [running, fps])
 
   const liveCost = costFromProfiles(library.profiles)
   const kpisToShow = ran
@@ -507,8 +494,6 @@ export function WorkspacePage() {
   async function onRun() {
     const id = runGen.current + 1
     runGen.current = id
-    minFpsDuringRun.current = undefined
-    maxPaintMs.current = 0
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
@@ -527,11 +512,8 @@ export function WorkspacePage() {
           cancelAnimationFrame(paintFrame.current)
           paintFrame.current = requestAnimationFrame(() => {
             if (!live || runGen.current !== id) return
-            const started = performance.now()
             paintLiveStats(progress.nodeStats)
-            const paintMs = performance.now() - started
-            maxPaintMs.current = Math.max(maxPaintMs.current, paintMs)
-            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s · paint ${paintMs.toFixed(1)} ms`)
+            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
           })
         },
       )
@@ -545,10 +527,7 @@ export function WorkspacePage() {
       setRan(true)
       setKpis(result.run.kpis)
       setBottlenecks(result.run.bottlenecks)
-      const fpsHint =
-        minFpsDuringRun.current !== undefined ? ` · min ${minFpsDuringRun.current} FPS` : ''
-      const paintHint = maxPaintMs.current > 0 ? ` · paint max ${maxPaintMs.current.toFixed(1)} ms` : ''
-      setRunHint(`${result.run.hint}${fpsHint}${paintHint}`)
+      setRunHint(result.run.hint)
       setLastRun(result.run)
       paintRun(result.run, classFilter)
     } catch (error) {
@@ -608,75 +587,96 @@ export function WorkspacePage() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  const statusTone = discreteBlocked || runError ? 'error.main' : 'text.secondary'
+  const statusText = discreteBlocked
+    ? `Discrete-event would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use fluid, or lower rate / duration.`
+    : runError
+      ? runError
+      : [
+          running ? 'Running on a Web Worker' : ran ? 'Last run from @sds/engine' : modeMeta.hint,
+          library.fault !== 'none' ? `fault ${library.fault}` : undefined,
+          runHint,
+          running && fps > 0 ? `${fps} FPS` : undefined,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+  const nothingSelected =
+    selectedIds.length === 0 && selectedEdgeIds.length === 0 && !selectedEdgeId
+
   return (
     <IconModeProvider>
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopNav page="workspace" />
       <Stack
         direction="row"
-        sx={{ alignItems: 'center', px: 2, py: 1, gap: 1.5 }}
+        sx={{ alignItems: 'center', px: 1.5, py: 0.75, gap: 1, minHeight: 44 }}
       >
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          Projects / {projectName} / Workspace
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {projectName}
         </Typography>
-        <Chip
-          label={savedHint}
-          size="small"
-          sx={{ bgcolor: 'success.light', color: 'success.dark', height: 20 }}
-        />
+        <Chip label={savedHint} sx={savedChipSx(savedHint)} />
+        <Stack direction="row" spacing={0.25} sx={{ ml: 0.5 }}>
+          <Tooltip title={connectFromId ? 'Click a target component' : 'Connect'}>
+            <IconButton
+              color={connectClick ? 'primary' : 'default'}
+              onClick={onToggleConnect}
+              aria-label={connectFromId ? 'Click target' : 'Connect'}
+              aria-pressed={connectClick}
+            >
+              <CableIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <span>
+              <IconButton
+                color="error"
+                onClick={onDeleteSelection}
+                disabled={nothingSelected}
+                aria-label="Delete"
+              >
+                <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Group">
+            <span>
+              <IconButton
+                onClick={onGroup}
+                disabled={selectedIds.length < 2}
+                aria-label="Group"
+              >
+                <AccountTreeIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
         <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          {fps >= 20 ? `${fps} FPS` : fps > 0 ? `${fps} FPS · tab` : 'FPS —'} · {modeMeta.label} ·{' '}
-          {draft.durationSec} s · seed {draft.seed}
-        </Typography>
-        <Button variant="outlined" onClick={onSave}>
-          Save
-        </Button>
-        <Button variant="outlined" onClick={onCopyLink}>
-          Copy link
-        </Button>
-        <Button variant="outlined" onClick={onInventory}>
-          Inventory
-        </Button>
-        <Button
-          variant={connectClick ? 'contained' : 'outlined'}
-          onClick={onToggleConnect}
-        >
-          {connectFromId ? 'Click target' : 'Connect'}
-        </Button>
-        <Button
-          variant="outlined"
-          color="error"
-          onClick={onDeleteSelection}
-          disabled={selectedIds.length === 0 && selectedEdgeIds.length === 0 && !selectedEdgeId}
-        >
-          Delete
-        </Button>
-        <Button variant="outlined" onClick={onGroup} disabled={selectedIds.length < 2}>
-          Group
-        </Button>
-        <Button variant="outlined" onClick={onExport}>
-          Export
-        </Button>
-        <Button variant="outlined" component="label">
-          Import
-          <input
-            hidden
-            type="file"
-            accept="application/json,.json,.sds.json"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) onImportFile(file)
-            }}
-          />
-        </Button>
+        <FileMenu
+          onSave={onSave}
+          onCopyLink={onCopyLink}
+          onExport={onExport}
+          onImportFile={onImportFile}
+          onInventory={onInventory}
+        />
         <RunModeToggle compact disabled={running} />
         <Button
           variant="contained"
           onClick={() => void onRun()}
           disabled={running || discreteBlocked}
-          title={discreteBlocked ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.' : modeMeta.hint}
+          title={
+            discreteBlocked
+              ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.'
+              : modeMeta.hint
+          }
         >
           {running ? 'Running…' : 'Run'}
         </Button>
@@ -686,10 +686,10 @@ export function WorkspacePage() {
         sx={{
           alignItems: 'center',
           bgcolor: 'background.paper',
-          px: 2,
+          px: 1.5,
           borderBottom: 1,
           borderColor: 'divider',
-          gap: 2,
+          gap: 1.5,
         }}
       >
         <Tabs value={tab} onChange={(_, value) => setTab(value)}>
@@ -700,80 +700,63 @@ export function WorkspacePage() {
         {tab === 0 ? (
           <>
             <ClassFilterChips value={classFilter} onChange={setClassFilter} />
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', py: 0.5 }}>
-              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Util heat</Typography>
-              {HEAT_STOPS.map((stop) => (
-                <Chip
-                  key={stop.label}
-                  label={stop.label}
-                  size="small"
-                  sx={{
-                    height: 22,
-                    fontSize: 11,
-                    bgcolor: 'background.paper',
-                    color: 'text.secondary',
-                    border: '1px solid',
-                    borderColor: stop.color,
-                  }}
-                />
-              ))}
-            </Stack>
+            <HeatLegend />
           </>
         ) : null}
       </Stack>
-      <Stack
-        direction="row"
+      <Box
         sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
           px: 1,
           bgcolor: 'background.paper',
           borderBottom: 1,
           borderColor: 'divider',
-          flexWrap: 'wrap',
         }}
       >
-        <Kpi label="LOAD" value={kpisToShow.load} hint={kpisToShow.loadHint} />
-        <Kpi label="LATENCY" value={kpisToShow.latency} hint={kpisToShow.latencyHint} />
-        <Kpi label="ERRORS" value={kpisToShow.errors} hint="of requests" />
-        <Kpi
+        <KpiStat label="LOAD" value={kpisToShow.load} hint={kpisToShow.loadHint} />
+        <KpiStat label="LATENCY" value={kpisToShow.latency} hint={kpisToShow.latencyHint} />
+        <KpiStat label="ERRORS" value={kpisToShow.errors} hint="of requests" />
+        <KpiStat
           label="BOTTLENECKS"
           value={kpisToShow.bottlenecks}
           hint={kpisToShow.bottleneckHint}
         />
-        <Kpi label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
+        <KpiStat label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
+      </Box>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          px: 1.5,
+          py: 0.5,
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider',
+          minHeight: 28,
+        }}
+      >
         <Typography
           sx={{
-            alignSelf: 'center',
             fontSize: 11,
-            color: discreteBlocked ? 'error.main' : 'text.secondary',
-            maxWidth: 320,
-            px: 1,
+            color: statusTone,
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
-          {discreteBlocked
-            ? `Discrete-event would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use fluid, or lower rate / duration.`
-            : modeMeta.hint}
+          {statusText}
         </Typography>
-        {running || ran ? (
-          <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'text.secondary' }}>
-            {running ? 'Running on a Web Worker' : 'Last run from @sds/engine'}
-            {library.fault !== 'none' ? ` · fault ${library.fault}` : ''}
-            {runHint ? ` · ${runHint}` : ''}
-          </Typography>
-        ) : null}
-        {runError ? (
-          <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'error.main' }}>
-            {runError}
-          </Typography>
-        ) : null}
         {challengeScore ? (
           <Chip
             label={`${AKS_HEADROOM_CHALLENGE.title}: ${challengeScore.status} · ${challengeScore.detail}`}
-            size="small"
             sx={{
-              alignSelf: 'center',
               height: 'auto',
-              py: 0.5,
-              maxWidth: 520,
+              py: 0.25,
+              maxWidth: 420,
               '& .MuiChip-label': { whiteSpace: 'normal' },
               bgcolor:
                 challengeScore.status === 'pass'

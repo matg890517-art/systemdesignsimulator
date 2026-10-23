@@ -27,7 +27,68 @@ export const sdsTheme = createTheme({
       },
     },
     MuiButton: {
-      defaultProps: { disableElevation: true },
+      defaultProps: { disableElevation: true, size: 'small' },
+      styleOverrides: {
+        root: {
+          minHeight: 32,
+        },
+        sizeSmall: {
+          minHeight: 32,
+          paddingLeft: 12,
+          paddingRight: 12,
+          fontSize: 13,
+        },
+      },
+    },
+    MuiIconButton: {
+      defaultProps: { size: 'small' },
+      styleOverrides: {
+        root: {
+          width: 32,
+          height: 32,
+        },
+        sizeSmall: {
+          width: 32,
+          height: 32,
+        },
+      },
+    },
+    MuiChip: {
+      defaultProps: { size: 'small' },
+      styleOverrides: {
+        root: {
+          height: 22,
+          fontSize: 11,
+        },
+        label: {
+          paddingLeft: 8,
+          paddingRight: 8,
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: { size: 'small' },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          minHeight: 36,
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 36,
+          paddingLeft: 12,
+          paddingRight: 12,
+          fontSize: 13,
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiTooltip: {
+      defaultProps: { arrow: true, enterDelay: 400 },
     },
   },
 })

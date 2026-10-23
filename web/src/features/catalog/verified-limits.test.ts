@@ -114,18 +114,34 @@ describe('batched Verified figures from plan prose', () => {
     expect(aks.every((value) => !usableAsCeiling(value))).toBe(true)
   })
 
-  it('records Lambda timeouts from M6 (Oct 18) and leaves concurrency unknown', () => {
+  it('records the Oct 23 Lambda page, including the default concurrency the Oct 18 note left open', () => {
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).toContain('aws-lambda')
     const lambda = catalogValuesFor('aws-lambda')
-    expect(lambda.every((value) => value.retrievedOn === '2026-10-18')).toBe(true)
-    expect(lambda.find((value) => value.conditions.executionModel === 'ordinary')?.value).toBe(900)
-    expect(lambda.find((value) => value.conditions.executionModel === 'managed-instances')?.value).toBe(
-      5_400,
-    )
-    const concurrency = lambda.find((value) => value.conditions.metric === 'concurrency')
-    expect(concurrency?.limitType).toBe('adjustable_quota')
-    expect(concurrency?.status).toBe('unknown')
-    expect(concurrency?.value).toBeUndefined()
-    expect(usableAsCeiling(concurrency!)).toBe(false)
+    expect(lambda.every((value) => value.retrievedOn === '2026-10-23')).toBe(true)
+    expect(lambda.every((value) => value.sourceUrl.endsWith('/gettingstarted-limits.html'))).toBe(true)
+    expect(lambda.every((value) => value.caps === undefined)).toBe(true)
+    expect(lambda.find((value) => value.conditions.executionModel === 'ordinary' && value.conditions.metric === 'timeout')?.value).toBe(900)
+    expect(lambda.find((value) => value.conditions.executionModel === 'managed-instances' && value.conditions.metric === 'timeout')?.value).toBe(5_400)
+    const concurrency = lambda.find((value) => value.conditions.metric === 'concurrent-executions')
+    expect(concurrency).toMatchObject({ value: 1_000, limitType: 'adjustable_quota', status: 'documented' })
+    expect(usableAsCeiling(concurrency!)).toBe(true)
+    expect(lambda.find((value) => value.conditions.metric === 'container-image-storage')?.value).toBeUndefined()
+    expect(lambda.find((value) => value.conditions.metric === 'other-services')?.value).toBeUndefined()
+    expect(lambda.some((value) => value.value === 10_000 && value.conditions.metric === 'other-services')).toBe(false)
+  })
+
+  it('records the Oct 23 Fargate throttling page outside the canonical 18', () => {
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('aws-fargate')
+    const fargate = catalogValuesFor('aws-fargate')
+    expect(fargate).toHaveLength(8)
+    expect(fargate.every((value) => value.retrievedOn === '2026-10-23')).toBe(true)
+    expect(fargate.every((value) => value.sourceUrl.endsWith('/throttling.html'))).toBe(true)
+    expect(fargate.every((value) => value.caps === undefined)).toBe(true)
+    expect(fargate.find((value) => value.conditions.metric === 'launch-burst' && value.conditions.launch === 'on-demand')).toMatchObject({ value: 100, limitType: 'adjustable_quota' })
+    expect(fargate.find((value) => value.conditions.metric === 'launch-sustained' && value.conditions.launch === 'on-demand')?.value).toBe(20)
+    expect(fargate.find((value) => value.conditions.metric === 'launch-burst' && value.conditions.launch === 'eks-pods-only')?.value).toBe(20)
+    expect(fargate.find((value) => value.conditions.metric === 'RunTask-api')).toMatchObject({ value: 20, unit: 'calls/s' })
+    expect(fargate.find((value) => value.conditions.metric === 'tasks-per-RunTask')?.limitType).toBe('quota_adjustability_unknown')
   })
 
   it('marks CloudFront unknown because the plan states no number', () => {

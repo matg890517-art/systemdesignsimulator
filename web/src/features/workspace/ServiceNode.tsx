@@ -40,10 +40,13 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
     filter,
   )
   const health = nodeHealth(data)
+  const queueLoss = [data.queueDepth, data.loss].filter(Boolean).join(' · ')
+  const blast = data.blastOrigin ? 'Crash origin' : data.inBlast ? 'Blast radius' : undefined
+  const secondLine = [queueLoss || undefined, blast].filter(Boolean).join(' · ') || data.meta
   return (
     <Box
       sx={{
-        width: 150,
+        width: 168,
         bgcolor: heatFill(data.util),
         border: '1px solid',
         borderColor: stroke[health],
@@ -62,7 +65,11 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
       <Stack spacing={0.5}>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <KindIcon glyph={glyph} size={16} title={data.title} />
-          <Typography sx={{ fontWeight: 600, fontSize: 12, minWidth: 0 }}>
+          <Typography
+            noWrap
+            title={data.title}
+            sx={{ fontWeight: 600, fontSize: 12, minWidth: 0, flex: 1 }}
+          >
             {data.title}
           </Typography>
         </Stack>
@@ -76,26 +83,13 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
           >
             {formatPct(data.util)}
           </Typography>
-          <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+          <Typography noWrap sx={{ fontSize: 11, color: 'text.secondary', minWidth: 0, flex: 1 }}>
             {data.p99}
           </Typography>
         </Stack>
-        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          {data.queueDepth ?? data.loss
-            ? `${data.queueDepth ?? ''} ${data.loss ?? ''}`.trim()
-            : data.blastOrigin
-              ? `Crash origin · ${data.meta}`
-              : data.inBlast
-                ? `Blast radius · ${data.meta}`
-                : data.meta}
-        </Typography>
-        {data.queueDepth || data.loss ? (
-          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
-            {data.blastOrigin
-              ? `Crash origin · ${data.meta}`
-              : data.inBlast
-                ? `Blast radius · ${data.meta}`
-                : data.meta}
+        {secondLine ? (
+          <Typography noWrap sx={{ fontSize: 11, color: 'text.secondary' }}>
+            {secondLine}
           </Typography>
         ) : null}
       </Stack>
