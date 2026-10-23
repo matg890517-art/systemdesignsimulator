@@ -38,6 +38,14 @@ export type WorkloadDraft = {
   spikeDurationSec: number
   spikeFactor: number
   classes: Record<WorkspaceClassId, number>
+  /** Per Clients card rates. Missing keys fall back to `classes`. */
+  generators?: Record<string, Partial<Record<WorkspaceClassId, number>>>
+}
+
+export type CanvasGenerator = {
+  id: string
+  title: string
+  classes: WorkspaceClassId[]
 }
 
 export const defaultWorkloadDraft = (): WorkloadDraft => ({
@@ -148,12 +156,6 @@ const CLASS_BYTES: Record<WorkspaceClassId, { requestBytes: number; responseByte
   bulk: { requestBytes: 8_000_000, responseBytes: 200 },
 }
 
-function isServiceNode(
-  node: Node<ServiceNodeData | ZoneNodeData>,
-): node is Node<ServiceNodeData> {
-  return node.type !== 'zone'
-}
-
 export function loadShapeFromDraft(draft: WorkloadDraft): LoadShape {
   if (draft.shapeKind === 'step') {
     return { kind: 'step', atSec: draft.stepAtSec, factor: draft.stepFactor }
@@ -195,6 +197,114 @@ export function classesForGenerator(
     }
   }
   return REQUEST_CLASSES.filter((id) => active.has(id))
+}
+
+function isServiceNode(
+  node: Node<ServiceNodeData | ZoneNodeData>,
+): node is Node<ServiceNodeData> {
+  return node.type !== 'zone'
+}
+
+export function canvasGenerators(
+  nodes: Node<ServiceNodeData | ZoneNodeData>[],
+  edges: { id: string; source: string; data?: unknown }[] = [],
+): CanvasGenerator[] {
+  return nodes.filter(isServiceNode).flatMap((node) => {
+    const kind = kindForNode(node)
+    if (kind !== 'traffic_generator') return []
+    return [
+      {
+        id: node.id,
+        title: node.data.title,
+        classes: classesForGenerator(node.id, kind, edges),
+      },
+    ]
+  })
+}
+
+export function generatorClassRate(
+  draft: WorkloadDraft,
+  generatorId: string,
+  classId: WorkspaceClassId,
+): number {
+  return draft.generators?.[generatorId]?.[classId] ?? draft.classes[classId] ?? 0
+}
+
+export function withGeneratorClassRate(
+  draft: WorkloadDraft,
+  generatorId: string,
+  classId: WorkspaceClassId,
+  rps: number,
+): WorkloadDraft {
+  return {
+    ...draft,
+    generators: {
+      ...draft.generators,
+      [generatorId]: {
+        ...draft.generators?.[generatorId],
+        [classId]: rps,
+      },
+    },
+  }
+}
+
+export function emptyClassTotals(): Record<WorkspaceClassId, number> {
+  return { read: 0, write: 0, async: 0, bulk: 0 }
+}
+
+export function classTotalsFromOffered(
+  offered: Workload['offered'],
+): Record<WorkspaceClassId, number> {
+  const totals = emptyClassTotals()
+  for (const rates of Object.values(offered)) {
+    for (const classId of REQUEST_CLASSES) {
+      totals[classId] += rates[classId] ?? 0
+    }
+  }
+  return totals
+}
+
+export function offeredClassTotals(
+  nodes: Node<ServiceNodeData | ZoneNodeData>[],
+  edges: { id: string; source: string; data?: unknown }[],
+  draft: WorkloadDraft,
+): Record<WorkspaceClassId, number> {
+  const totals = emptyClassTotals()
+  for (const generator of canvasGenerators(nodes, edges)) {
+    for (const classId of generator.classes) {
+      totals[classId] += generatorClassRate(draft, generator.id, classId)
+    }
+  }
+  return totals
+}
+
+export function loadHintFromClassTotals(totals: Record<WorkspaceClassId, number>): {
+  load: number
+  hint: string
+} {
+  const load = REQUEST_CLASSES.reduce((sum, id) => sum + totals[id], 0)
+  return {
+    load,
+    hint: `R ${totals.read.toLocaleString('en-US')} · W ${totals.write.toLocaleString('en-US')} · A ${totals.async.toLocaleString('en-US')} · B ${totals.bulk}/s`,
+  }
+}
+
+function activeClassesForCanvas(
+  nodes: Node<ServiceNodeData | ZoneNodeData>[],
+  edges: { id: string; source: string; data?: unknown }[],
+  draft: WorkloadDraft,
+): WorkspaceClassId[] {
+  const generators = canvasGenerators(nodes, edges)
+  if (generators.length === 0) {
+    return REQUEST_CLASSES.filter((id) => draft.classes[id] > 0)
+  }
+  const live = new Set<WorkspaceClassId>()
+  for (const generator of generators) {
+    for (const classId of generator.classes) {
+      if (generatorClassRate(draft, generator.id, classId) > 0) live.add(classId)
+    }
+  }
+  return REQUEST_CLASSES.filter((id) => live.has(id))
 }
 
 export type ClassFilter = 'all' | WorkspaceClassId
@@ -315,7 +425,7 @@ export function compileCanvas(
   profiles: CalibrationProfile[],
   fault: FaultMode,
 ): { topology: Topology; workload: Workload } {
-  const active = REQUEST_CLASSES.filter((id) => draft.classes[id] > 0)
+  const active = activeClassesForCanvas(nodes, rfEdges, draft)
   const serviceNodes = nodes.filter(isServiceNode)
   const nodeIds = new Set(serviceNodes.map((node) => node.id))
   const components: Component[] = serviceNodes.map((node) => {
@@ -384,7 +494,7 @@ export function compileCanvas(
     const ids = classesForGenerator(component.id, component.kind, rfEdges)
     const rates: Record<string, number> = {}
     for (const classId of ids) {
-      const rps = draft.classes[classId]
+      const rps = generatorClassRate(draft, component.id, classId)
       if (rps > 0) rates[classId] = rps
     }
     offered[component.id] = rates

@@ -1,5 +1,10 @@
 import { useSyncExternalStore } from 'react'
-import { defaultWorkloadDraft, type WorkloadDraft } from './compile.ts'
+import {
+  defaultWorkloadDraft,
+  withGeneratorClassRate,
+  type WorkloadDraft,
+  type WorkspaceClassId,
+} from './compile.ts'
 
 let draft: WorkloadDraft = defaultWorkloadDraft()
 const listeners = new Set<() => void>()
@@ -19,6 +24,14 @@ export function setWorkloadDraft(next: WorkloadDraft) {
 
 export function patchWorkloadDraft(patch: Partial<WorkloadDraft>) {
   emit({ ...draft, ...patch })
+}
+
+export function patchGeneratorClassRate(
+  generatorId: string,
+  classId: WorkspaceClassId,
+  rps: number,
+) {
+  emit(withGeneratorClassRate(draft, generatorId, classId, rps))
 }
 
 export function subscribeWorkload(listener: () => void) {

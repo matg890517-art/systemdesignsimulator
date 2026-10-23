@@ -12,12 +12,17 @@ import {
   type FluidState,
   type SimEvent,
   type Topology,
+  type Workload,
 } from '@sds/engine'
 import { explainFromModel } from './explain.ts'
 import { profileCitation } from '../calibration/citation.ts'
 import {
+  classTotalsFromOffered,
   compileCanvas,
+  defaultWorkloadDraft,
   DISCRETE_EVENT_GUARD,
+  loadHintFromClassTotals,
+  offeredClassTotals,
   type ClassFilter,
   type WorkloadDraft,
 } from './compile.ts'
@@ -32,12 +37,19 @@ import type {
 } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 
-export function kpisFromDraft(draft: WorkloadDraft, profiles: CalibrationProfile[] = []): KpiState {
-  const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
+export function kpisFromDraft(
+  draft: WorkloadDraft,
+  profiles: CalibrationProfile[] = [],
+  nodes?: Node<ServiceNodeData | ZoneNodeData>[],
+  edges?: RfEdge[],
+): KpiState {
+  const totals =
+    nodes && edges ? offeredClassTotals(nodes, edges, draft) : { ...draft.classes }
+  const { load, hint } = loadHintFromClassTotals(totals)
   const cost = costFromProfiles(profiles)
   return {
     load: formatRps(load),
-    loadHint: `R ${draft.classes.read.toLocaleString('en-US')} · W ${draft.classes.write.toLocaleString('en-US')} · A ${draft.classes.async.toLocaleString('en-US')} · B ${draft.classes.bulk}/s`,
+    loadHint: hint,
     latency: 'unknown',
     latencyHint: 'P50 / P90 / P99 unknown until discrete samples tails. Fluid has rates, not tails.',
     errors: 'unknown',
@@ -48,19 +60,7 @@ export function kpisFromDraft(draft: WorkloadDraft, profiles: CalibrationProfile
   }
 }
 
-export const idleKpis: KpiState = kpisFromDraft({
-  durationSec: 60,
-  dtSec: 0.1,
-  seed: 4821,
-  mode: 'fluid',
-  shapeKind: 'constant',
-  stepAtSec: 20,
-  stepFactor: 2,
-  spikeAtSec: 20,
-  spikeDurationSec: 5,
-  spikeFactor: 5,
-  classes: { read: 50_000, write: 1_200, async: 2_600, bulk: 2 },
-})
+export const idleKpis: KpiState = kpisFromDraft(defaultWorkloadDraft())
 
 export type RunProgress = {
   t: number
@@ -163,7 +163,7 @@ function statFor(
 function kpisFromStats(
   stats: Record<string, NodeRunStat>,
   topology: Topology,
-  draft: WorkloadDraft,
+  offered: Workload['offered'],
   mode: 'fluid' | 'discrete',
   extra: { errors: number; latency: string; latencyHint: string },
   profiles: CalibrationProfile[],
@@ -198,8 +198,7 @@ function kpisFromStats(
       wait: explained.wait,
     })
   }
-  const load = Object.values(draft.classes).reduce((sum, rps) => sum + rps, 0)
-  const hint = `R ${draft.classes.read.toLocaleString('en-US')} · W ${draft.classes.write.toLocaleString('en-US')} · A ${draft.classes.async.toLocaleString('en-US')} · B ${draft.classes.bulk}/s`
+  const { load, hint } = loadHintFromClassTotals(classTotalsFromOffered(offered))
   return {
     bottlenecks,
     kpis: {
@@ -429,7 +428,7 @@ export function runWorkspace(
     )
     const sent = result.counts.created
     const errors = sent === 0 ? 0 : (result.counts.rejected + result.counts.dropped) / sent
-    const { kpis, bottlenecks } = kpisFromStats(stats, topology, draft, 'discrete', {
+    const { kpis, bottlenecks } = kpisFromStats(stats, topology, workload.offered, 'discrete', {
       errors,
       latency: `${result.meanWaitMs.toFixed(0)} ms`,
       latencyHint: 'Mean wait from discrete-event. P99 needs more samples.',
@@ -480,7 +479,7 @@ export function runWorkspace(
     offered += row.offered
     rejected += row.rejected
   }
-  const { kpis, bottlenecks } = kpisFromStats(stats, topology, draft, 'fluid', {
+  const { kpis, bottlenecks } = kpisFromStats(stats, topology, workload.offered, 'fluid', {
     errors: offered > 0 ? rejected / offered : 0,
     latency: 'unknown',
     latencyHint: 'P50 / P90 / P99 unknown — fluid mode has rates, not tails',

@@ -130,6 +130,61 @@ describe('batched Verified figures from plan prose', () => {
     expect(lambda.some((value) => value.value === 10_000 && value.conditions.metric === 'other-services')).toBe(false)
   })
 
+  it('records Oct 23 9-block greys from supplied pages and does not cap them', () => {
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('aws-dynamodb')
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('azure-blob-storage')
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('gcp-cloud-run')
+    expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('gcp-cloud-storage')
+    const s3 = catalogValuesFor('aws-s3')
+    const put = s3.find((value) => value.conditions.metric === 'put-copy-post-delete')
+    expect(put).toMatchObject({ value: 3_500, limitType: 'performance_guidance', retrievedOn: '2026-10-23' })
+    expect(usableAsCeiling(put!)).toBe(false)
+    expect(s3.every((value) => value.caps === undefined)).toBe(true)
+
+    const dynamo = catalogValuesFor('aws-dynamodb')
+    const tableRead = dynamo.find(
+      (value) => value.conditions.metric === 'table-read' && value.conditions.mode === 'on-demand',
+    )
+    expect(tableRead).toMatchObject({ value: 40_000, limitType: 'adjustable_quota' })
+    expect(dynamo.find((value) => value.conditions.metric === 'table-size')?.value).toBeUndefined()
+    expect(dynamo.every((value) => value.caps === undefined)).toBe(true)
+
+    expect(catalogValuesFor('azure-front-door').find((value) => value.conditions.metric === 'composite-route')?.value).toBe(
+      5_000,
+    )
+    expect(catalogValuesFor('azure-application-gateway').find((value) => value.conditions.metric === 'autoscale-max' && value.conditions.bound === 'max')?.value).toBe(125)
+    expect(catalogValuesFor('azure-container-apps').find((value) => value.conditions.metric === 'express-replicas')?.value).toBe(30)
+    const blob = catalogValuesFor('azure-blob-storage')
+    expect(blob.find((value) => value.conditions.metric === 'blocks-per-blob')?.value).toBe(50_000)
+    expect(blob.find((value) => value.conditions.metric === 'request-rate' && value.conditions.stated === 'block-blob')).toMatchObject({
+      value: 3_000,
+      limitType: 'performance_guidance',
+    })
+    expect(blob.find((value) => value.conditions.metric === 'blob-size' && value.conditions.stated === 'page-blob')?.value).toBe(8)
+    expect(blob.find((value) => value.conditions.metric === 'container-size')?.value).toBeUndefined()
+    expect(blob.every((value) => value.caps === undefined)).toBe(true)
+    expect(usableAsCeiling(blob.find((value) => value.conditions.metric === 'request-rate' && value.conditions.stated === 'block-blob')!)).toBe(false)
+    const pg = catalogValuesFor('azure-database-for-postgresql')
+    expect(pg.find((value) => value.conditions.metric === 'reserved-connections')?.value).toBe(15)
+    expect(pg.find((value) => value.conditions.metric === 'max-connections' && value.conditions.stated === 'B1ms')?.value).toBe(50)
+    expect(pg.find((value) => value.conditions.metric === 'max-user-connections' && value.conditions.stated === 'B1ms')?.value).toBe(35)
+    expect(pg.find((value) => value.conditions.metric === 'stopped-autostart')?.value).toBe(7)
+    expect(pg.every((value) => value.caps === undefined)).toBe(true)
+
+    const run = catalogValuesFor('gcp-cloud-run')
+    expect(run.find((value) => value.conditions.metric === 'concurrent-requests' && value.conditions.variant === 'service')?.value).toBe(1_000)
+    expect(run.find((value) => value.conditions.metric === 'image-size')?.value).toBeUndefined()
+
+    const gcs = catalogValuesFor('gcp-cloud-storage')
+    expect(gcs.find((value) => value.conditions.metric === 'object-size')?.value).toBe(5)
+    expect(gcs.find((value) => value.conditions.metric === 'bucket-writes')?.limitType).toBe('documented_behavior')
+    expect(gcs.find((value) => value.conditions.metric === 'bucket-writes-initial')?.limitType).toBe('performance_guidance')
+
+    const cdn = catalogValuesFor('gcp-cloud-cdn')
+    expect(cdn.find((value) => value.conditions.metric === 'max-response' && value.conditions.stated === 'byte-range')?.value).toBe(100)
+    expect(cdn.every((value) => value.caps === undefined)).toBe(true)
+  })
+
   it('records the Oct 23 Fargate throttling page outside the canonical 18', () => {
     expect(CANONICAL_VERIFIED_CATALOG_IDS).not.toContain('aws-fargate')
     const fargate = catalogValuesFor('aws-fargate')

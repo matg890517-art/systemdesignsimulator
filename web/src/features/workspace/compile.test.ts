@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { expectedArrivals, runFluid } from '@sds/engine'
 import { getProfiles } from '../calibration/library.ts'
 import {
+  canvasGenerators,
   compileCanvas,
   defaultWorkloadDraft,
   DISCRETE_EVENT_GUARD,
   edgeCarriesClass,
   kindForNode,
   nodeCarriesClass,
+  withGeneratorClassRate,
 } from './compile.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
@@ -55,6 +57,31 @@ describe('compileCanvas', () => {
       title: 'Uploaders',
     })
     expect(expectedArrivals(workload)).toBeGreaterThan(DISCRETE_EVENT_GUARD)
+  })
+
+  it('lists one workload generator per Clients card', () => {
+    const youtube = canvasGenerators(initialNodes, initialEdges)
+    expect(youtube.map((item) => item.title)).toEqual(['Viewers', 'Uploaders'])
+    expect(youtube[0]?.classes).toEqual(['read', 'write'])
+    expect(youtube[1]?.classes).toEqual(['bulk'])
+    const graph = referenceStackGraph('generic')
+    const generic = canvasGenerators(graph.nodes, graph.edges)
+    expect(generic).toHaveLength(1)
+    expect(generic[0]?.title).toBe('Clients')
+    expect(generic[0]?.classes).toEqual(['read', 'write', 'async', 'bulk'])
+  })
+
+  it('keeps independent rates when two Clients cards exist', () => {
+    const draft = withGeneratorClassRate(
+      withGeneratorClassRate(defaultWorkloadDraft(), 'viewers', 'read', 10),
+      'uploaders',
+      'bulk',
+      4,
+    )
+    const { workload } = compileCanvas(initialNodes, initialEdges, draft, getProfiles(), 'none')
+    expect(workload.offered.viewers.read).toBe(10)
+    expect(workload.offered.viewers.write).toBe(1_200)
+    expect(workload.offered.uploaders.bulk).toBe(4)
   })
 
   it('treats generic clients as a generator', () => {

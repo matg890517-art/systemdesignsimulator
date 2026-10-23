@@ -8,12 +8,24 @@ import {
   Typography,
 } from '@mui/material'
 import { expectedArrivals } from '@sds/engine'
-import { compileCanvas, DISCRETE_EVENT_GUARD, REQUEST_CLASSES, type WorkloadDraft } from './compile.ts'
-import { getWorkloadDraft, patchWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
-import { initialEdges, initialNodes } from './graph.ts'
+import type { Edge as RfEdge, Node } from '@xyflow/react'
+import {
+  canvasGenerators,
+  compileCanvas,
+  DISCRETE_EVENT_GUARD,
+  generatorClassRate,
+  REQUEST_CLASSES,
+  type WorkloadDraft,
+} from './compile.ts'
+import {
+  patchGeneratorClassRate,
+  patchWorkloadDraft,
+  useWorkloadDraft,
+} from './workload-store.ts'
 import { getProfiles } from '../calibration/library.ts'
 import { RunModeToggle } from './RunModeToggle.tsx'
 import { RUN_MODES } from './run-mode.ts'
+import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 const SHAPES = [
   { id: 'constant', label: 'Constant', body: 'Offered rate stays at the baseline for the whole run.' },
@@ -29,9 +41,16 @@ const CLASS_LABEL: Record<(typeof REQUEST_CLASSES)[number], string> = {
   bulk: 'Bulk',
 }
 
-export function WorkloadEditor() {
+export function WorkloadEditor({
+  nodes,
+  edges,
+}: {
+  nodes: Node<ServiceNodeData | ZoneNodeData>[]
+  edges: RfEdge[]
+}) {
   const draft = useWorkloadDraft()
-  const compiled = compileCanvas(initialNodes, initialEdges, draft, getProfiles(), 'none')
+  const generators = canvasGenerators(nodes, edges)
+  const compiled = compileCanvas(nodes, edges, draft, getProfiles(), 'none')
   const arrivals = expectedArrivals(compiled.workload)
   const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
 
@@ -39,30 +58,40 @@ export function WorkloadEditor() {
     <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
       <Typography variant="h2">Workload</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-        Each Clients card emits the classes on its outgoing edges. In YouTube, Viewers send R/W and
-        Uploaders send Bulk. Run compiles the canvas; unknown capacity does not cap the engine.
+        One rate block per Clients card on the canvas. Classes follow that card&apos;s outgoing
+        edges. YouTube: Viewers R/W, Uploaders Bulk. Unknown capacity does not cap the engine.
       </Typography>
 
-      <Typography sx={{ mt: 3, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
-        Request classes
-      </Typography>
-      <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
-        {REQUEST_CLASSES.map((id) => (
-          <TextField
-            key={id}
-            size="small"
-            type="number"
-            label={`${CLASS_LABEL[id]} rps`}
-            value={draft.classes[id]}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) return
-              patchWorkloadDraft({ classes: { ...getWorkloadDraft().classes, [id]: next } })
-            }}
-            sx={{ width: 150 }}
-          />
-        ))}
-      </Stack>
+      {generators.length === 0 ? (
+        <Typography sx={{ mt: 3, fontSize: 13, color: 'text.secondary' }}>
+          Drop a Clients card. Each extra Clients card adds another rate block here.
+        </Typography>
+      ) : (
+        generators.map((generator) => (
+          <Box key={generator.id} sx={{ mt: 3 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
+              {generator.title}
+            </Typography>
+            <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
+              {generator.classes.map((id) => (
+                <TextField
+                  key={id}
+                  size="small"
+                  type="number"
+                  label={`${CLASS_LABEL[id]} rps`}
+                  value={generatorClassRate(draft, generator.id, id)}
+                  onChange={(event) => {
+                    const next = Number(event.target.value)
+                    if (!Number.isFinite(next) || next < 0) return
+                    patchGeneratorClassRate(generator.id, id, next)
+                  }}
+                  sx={{ width: 150 }}
+                />
+              ))}
+            </Stack>
+          </Box>
+        ))
+      )}
 
       <Stack direction="row" spacing={1.5} sx={{ mt: 2, flexWrap: 'wrap' }}>
         <TextField

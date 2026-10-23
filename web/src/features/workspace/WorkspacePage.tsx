@@ -222,7 +222,7 @@ export function WorkspacePage() {
   const liveCost = costFromProfiles(library.profiles)
   const kpisToShow = ran
     ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
-    : kpisFromDraft(draft, library.profiles)
+    : kpisFromDraft(draft, library.profiles, nodes, edges)
   const modeMeta = RUN_MODES.find((item) => item.id === draft.mode) ?? RUN_MODES[0]!
   const arrivals = useMemo(() => {
     if (draft.mode !== 'discrete') return 0
@@ -849,7 +849,7 @@ export function WorkspacePage() {
             />
           </>
         )}
-        {tab === 1 && <WorkloadEditor />}
+        {tab === 1 && <WorkloadEditor nodes={nodes} edges={edges} />}
         {tab === 2 && <FaultsPanel />}
       </Box>
     </Box>

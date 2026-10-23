@@ -67,7 +67,7 @@ The requirements for this section are F15 to F19 in the Requirements table.
 - **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word) and is the default. One provider folder is open at a time; Generic starts open; categories collapse under it. Search opens every matching folder. Load at the bottom replaces the canvas with Generic, AWS, Azure or GCP (same 9-block wiring, catalog bindings only) or the YouTube example.
 - **Run mode.** Fluid-flow and Discrete-event sit next to Run (short labels Fluid / Discrete). Workload repeats the same control. Same topology either way. Fluid has rates, not tails: KPI P50/P90/P99 stay unknown. Discrete KPI latency is mean wait from the event run.
 - **Node cards.** After a run each card shows utilization, completed rate (`n /s`), queue depth and loss. The completed-rate slot is not P99. A traffic generator emits; it is not scored as 100% loss because it never `finish-service`. Rename a service in Config **Title**; the catalog kind does not change (YouTube Viewers and Uploaders are Clients with role titles).
-- **Edge classes.** Click the line, not the node. The Edge tab turns Read / Write / Async / Bulk on or off and sets routing (single, weighted, broadcast), weight, call kind, fan-out and latency. Clients rates come from the Workload tab. The generic reference wires R/W to CDN and A/B to Queue. An empty class map is zero flow, not every class. Class chips above the canvas only hide paths.
+- **Edge classes.** Click the line, not the node. The Edge tab turns Read / Write / Async / Bulk on or off and sets routing (single, weighted, broadcast), weight, call kind, fan-out and latency. Clients rates come from the Workload tab: one rate block per Clients card, for the classes on that card's outgoing edges. The generic reference wires R/W to CDN and A/B to Queue. An empty class map is zero flow, not every class. Class chips above the canvas only hide paths.
 - **Discrete-event guard.** Discrete Run is refused when expected arrivals exceed 20_000, so the tab does not freeze. Use fluid, or lower rate / duration. This is tab safety, not a closed N6 and not a 60 FPS claim.
 
 ## Requirements
@@ -79,8 +79,8 @@ The tool must let a user build a topology, run it under load, and trust the answ
 | F1 | Node-link canvas: drag, connect from source (right/bottom) to target (left/top) or click Connect then two nodes, pan, zoom, grid snap. Clients only emit; one hop per pair. Delete selected components and edges with Delete/Backspace, the toolbar, or Config; attached edges drop with the node | Canvas | P0 | Blueprint |
 | F2 | Component palette: provider services listed directly under AWS, Azure, GCP and Kubernetes, plus a Generic group (clients, load balancer, service, cache, database, queue, worker pool, CDN, object store). File explorer: one provider folder open at a time, collapsible categories, sticky search, ☰ list default, ▦ button view. Icons follow Real-base DS/Icons (Service original glyph vs Normal kind shape) on tiles and on canvas cards; each service shows whether its limits are checked. Load picks Generic / AWS / Azure / GCP (same 9-block) or the YouTube example | Canvas | P0 | Blueprint, SyDe |
 | F3 | Per-component configuration: instance title, concurrency, pool size, service time per request class, capacity. Title is the card label; catalog kind stays. Every behavior-changing parameter is configurable and explained in the panel | Model | P0 | Blueprint, SyDe |
-| F4 | Typed edges: request classes, rates, payload sizes, call semantics (see System model). Classes are switched on the selected edge (on/off). Clients rates come from Workload. An empty class map is zero flow, not every class | Model | P0 | Proposed |
-| F5 | Workload definition: constant, Poisson, step and spike profiles, per request class | Run | P0 | Blueprint |
+| F4 | Typed edges: request classes, rates, payload sizes, call semantics (see System model). Classes are switched on the selected edge (on/off). Clients rates come from Workload, one block per Clients card. An empty class map is zero flow, not every class | Model | P0 | Proposed |
+| F5 | Workload definition: constant, Poisson, step and spike profiles; per Clients card on the canvas, per request class on that card's outgoing edges | Run | P0 | Blueprint |
 | F6 | Two run modes (fluid-flow and discrete-event) on the same topology. The mode switch sits next to Run; Workload repeats it | Run | P0 | SysLab Architect spec |
 | F7 | Live metrics on every node: utilization, completed rate, queue depth, loss, utilization heatmap, labeled edges, and one summary bar (rps, latency, errors, bottlenecks). Fluid P50/P90/P99 stay unknown (rates, not tails). Discrete KPI latency is mean wait; P99 needs samples. A generator is not 100% loss | Results | P0 | Both specs, SysSimulator |
 | F8 | Fault injection: node crash, latency spike, link cut, packet drop | Run | P1 | Blueprint |
@@ -258,11 +258,11 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 
 | Provider | Services | Verified | Partial | Listed (not checked) | No limits on page |
 | --- | --- | --- | --- | --- | --- |
-| AWS | 50 | 11 | 1 | 38 | 0 |
-| Azure | 44 | 4 | 2 | 36 | 2 |
-| Google Cloud | 35 | 5 | 2 | 28 | 0 |
+| AWS | 50 | 12 | 1 | 37 | 0 |
+| Azure | 44 | 6 | 4 | 32 | 2 |
+| Google Cloud | 35 | 7 | 2 | 26 | 0 |
 | Kubernetes | 8 | 0 | 1 | 0 | 7 |
-| Total | 137 | 20 | 6 | 102 | 9 |
+| Total | 137 | 25 | 8 | 95 | 9 |
 
 **AWS (50 services)**
 
@@ -277,14 +277,14 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 |  | [Lightsail](https://docs.aws.amazon.com/general/latest/gr/lightsail.html) | yes | Listed (not checked) |  |
 | Containers | [ECS](https://docs.aws.amazon.com/general/latest/gr/ecs-service.html) | yes | Verified |  |
 |  | [EKS](https://docs.aws.amazon.com/eks/latest/best-practices/known_limits_and_service_quotas.html) | yes | Listed (not checked) |  |
-| Storage | [S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html) | partial | Partial | Performance guidance, not quotas. |
+| Storage | [S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html) | partial | Partial | Performance guidance, not quotas. Read 2026-10-23: 3,500 PUT and 5,500 GET per prefix. Not a ceiling. |
 |  | [EBS](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-resource-quotas.html) | yes | Listed (not checked) |  |
 |  | [EFS](https://docs.aws.amazon.com/efs/latest/ug/limits.html) | yes | Listed (not checked) |  |
 |  | [FSx](https://docs.aws.amazon.com/fsx/latest/WindowsGuide/limits.html) | yes | Listed (not checked) | Indirect: FSx for Windows only. |
 |  | [Storage Gateway](https://docs.aws.amazon.com/storagegateway/latest/vgw/resource-gateway-limits.html) | yes | Listed (not checked) |  |
 | Database | [Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Limits.html) | yes | Verified |  |
 |  | [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html) | yes | Verified |  |
-|  | [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html) | yes | Listed (not checked) |  |
+|  | [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html) | yes | Verified | Quotas page read 2026-10-23. Default 40,000 RCU/WCU per table. Outside the canonical 18. |
 |  | [DocumentDB](https://docs.aws.amazon.com/documentdb/latest/devguide/limits.html) | yes | Listed (not checked) |  |
 |  | [Neptune](https://docs.aws.amazon.com/neptune/latest/userguide/limits.html) | yes | Listed (not checked) |  |
 |  | [Keyspaces](https://docs.aws.amazon.com/keyspaces/latest/devguide/quotas.html) | yes | Listed (not checked) |  |
@@ -330,8 +330,8 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 |  | [Batch](https://learn.microsoft.com/en-us/azure/batch/batch-quota-limit) | yes | Listed (not checked) |  |
 |  | [Container Instances](https://learn.microsoft.com/en-us/azure/container-instances/container-instances-resource-and-quota-limits) | yes | Listed (not checked) |  |
 | Containers | [AKS](https://learn.microsoft.com/en-us/azure/aks/quotas-skus-regions) | yes | Verified |  |
-|  | [Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/quotas) | partial | Listed (not checked) |  |
-| Storage | [Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets) | yes | Listed (not checked) |  |
+|  | [Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/quotas) | partial | Partial | Most defaults not on the page. Recorded Express 2,000 cores, 30 replicas, 200 environments. Read 2026-10-23. |
+| Storage | [Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets) | yes | Verified | Scalability-targets page read 2026-10-23. Block 50,000 × 4,000 MiB; target 3,000 rps per block blob. Account ingress/egress not on this page. Outside the canonical 18. |
 |  | [Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-scale-targets) | yes | Listed (not checked) |  |
 |  | [Disk Storage](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-scalability-targets) | yes | Listed (not checked) |  |
 |  | [NetApp Files](https://learn.microsoft.com/en-us/azure/azure-netapp-files/azure-netapp-files-resource-limits) | yes | Listed (not checked) |  |
@@ -340,14 +340,14 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 | Database | [Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits) | yes | Listed (not checked) |  |
 |  | [Azure SQL](https://learn.microsoft.com/en-us/azure/azure-sql/database/resource-limits-vcore-single-databases?view=azuresql) | yes | Verified | vCore single-database limits only. |
 |  | [SQL Managed Instance](https://learn.microsoft.com/en-us/azure/azure-sql/managed-instance/resource-limits?view=azuresql) | yes | Listed (not checked) |  |
-|  | [Database for PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-limits) | yes | Listed (not checked) |  |
+|  | [Database for PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-limits) | yes | Verified | Flexible-server limits read 2026-10-23. Default max_connections by SKU; 15 reserved. Outside the canonical 18. |
 |  | [Database for MySQL](https://learn.microsoft.com/en-us/azure/mysql/flexible-server/concepts-limitations) | partial | Listed (not checked) |  |
 |  | [Managed Instance for Apache Cassandra](https://learn.microsoft.com/en-us/azure/managed-instance-apache-cassandra/faq) | partial | Listed (not checked) |  |
 | Cache | [Cache for Redis](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits) | yes | Verified | Generic Azure subscription limits page. Basic, Standard, Premium retire Sep 30, 2028. |
 |  | [Managed Redis](https://learn.microsoft.com/en-us/azure/redis/plan-tiers-and-capacity) | partial | Listed (not checked) |  |
-| Network and CDN | [Front Door](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-routing-limits) | partial | Partial |  |
+| Network and CDN | [Front Door](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-routing-limits) | partial | Partial | Composite route 5,000. Other resource limits are on another page. Read 2026-10-23. |
 |  | [Content Delivery Network](https://learn.microsoft.com/en-us/azure/cdn/cdn-overview) | no | No limits on page | Overview page, no limits. |
-|  | [Application Gateway](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-autoscaling-zone-redundant) | yes | Listed (not checked) |  |
+|  | [Application Gateway](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-autoscaling-zone-redundant) | yes | Partial | Autoscaling article, not a quota table. Instance 0–125, Basic ~200 cps. Read 2026-10-23. |
 |  | [Load Balancer](https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-tcp-idle-timeout) | partial | Partial | Indirect: idle-timeout how-to. |
 |  | [Traffic Manager](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-faqs) | partial | Listed (not checked) | Indirect: FAQ page. |
 |  | [DNS](https://learn.microsoft.com/en-us/azure/dns/dns-zones-records) | yes | Listed (not checked) |  |
@@ -373,12 +373,12 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 | Category | Service (links to its official page) | Limits on page | Status | Note |
 | --- | --- | --- | --- | --- |
 | Compute | [Compute Engine](https://docs.cloud.google.com/compute/quotas-limits) | partial | Listed (not checked) |  |
-|  | [Cloud Run](https://docs.cloud.google.com/run/quotas) | yes | Listed (not checked) |  |
+|  | [Cloud Run](https://docs.cloud.google.com/run/quotas) | yes | Verified | Quotas page read 2026-10-23. 1,000 concurrent requests per service instance. Outside the canonical 18. |
 |  | [Cloud Run functions](https://docs.cloud.google.com/functions/quotas) | yes | Listed (not checked) |  |
 |  | [App Engine](https://docs.cloud.google.com/appengine/docs/standard/quotas) | yes | Listed (not checked) |  |
 |  | [Batch](https://docs.cloud.google.com/batch/quotas) | yes | Listed (not checked) |  |
 | Containers | [GKE](https://docs.cloud.google.com/kubernetes-engine/quotas) | yes | Verified |  |
-| Storage | [Cloud Storage](https://docs.cloud.google.com/storage/quotas) | yes | Listed (not checked) |  |
+| Storage | [Cloud Storage](https://docs.cloud.google.com/storage/quotas) | yes | Verified | Quotas page read 2026-10-23. Object 5 TiB; bucket writes/reads unlimited after scale. Outside the canonical 18. |
 |  | [Persistent Disk](https://docs.cloud.google.com/compute/docs/disks/performance) | yes | Listed (not checked) |  |
 |  | [Filestore](https://docs.cloud.google.com/filestore/docs/limits) | yes | Listed (not checked) |  |
 |  | [Hyperdisk](https://docs.cloud.google.com/compute/docs/disks/hyperdisk-perf-limits) | yes | Listed (not checked) |  |
@@ -388,7 +388,7 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 |  | [Bigtable](https://docs.cloud.google.com/bigtable/quotas) | yes | Listed (not checked) |  |
 |  | [Firestore](https://docs.cloud.google.com/firestore/quotas) | yes | Listed (not checked) |  |
 | Cache | [Memorystore](https://docs.cloud.google.com/memorystore/docs/redis/quotas) | yes | Verified |  |
-| Network and CDN | [Cloud CDN](https://docs.cloud.google.com/cdn/docs/caching) | partial | Partial |  |
+| Network and CDN | [Cloud CDN](https://docs.cloud.google.com/cdn/docs/caching) | partial | Partial | Caching page, not a quota table. Max cached body 100 GiB with byte ranges, else 10 MiB. Read 2026-10-23. |
 |  | [Media CDN](https://docs.cloud.google.com/media-cdn/quotas) | yes | Listed (not checked) |  |
 |  | [Cloud Load Balancing](https://docs.cloud.google.com/load-balancing/docs/quotas) | yes | Verified |  |
 |  | [Cloud DNS](https://docs.cloud.google.com/dns/quotas) | yes | Listed (not checked) |  |
@@ -493,7 +493,7 @@ function usableAsCeiling(v: CatalogValue): boolean {
 
 **Canonical 18** is the first provider compare (Decision 3, amended Oct 23). It is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub. The Components by provider counts are no longer equal to that 18: AWS Batch was read on Oct 23, 2026 and is Verified in the status table, and it stays outside the 18.
 
-The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda’s 900 s and 5,400 s timeouts were first recorded in the Oct 18, 2026 spot check (M6); the Oct 23, 2026 quotas page confirms them and adds the rest of that page, including a default concurrency of 1,000. CloudFront is still the Oct 18 spot check with no number in this plan. **Azure Load Balancer is Partial** (Oct 20 changelog; Azure Partial = Front Door + Load Balancer): idle timeout is recorded here as a configurable setting; it is not one of the 18. **AWS Batch** and **AWS Fargate** are later readings (Oct 23, 2026), Verified in the status table, and outside the 18. Lambda stays inside the 18.
+The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda’s 900 s and 5,400 s timeouts were first recorded in the Oct 18, 2026 spot check (M6); the Oct 23, 2026 quotas page confirms them and adds the rest of that page, including a default concurrency of 1,000. CloudFront is still the Oct 18 spot check with no number in this plan. **Azure Load Balancer is Partial** (Oct 20 changelog): idle timeout is recorded here as a configurable setting; it is not one of the 18. Azure Partial after the Oct 23 readings is Front Door, Load Balancer, Application Gateway, and Container Apps. **AWS Batch**, **AWS Fargate**, **DynamoDB**, **Azure Blob Storage**, **Azure Database for PostgreSQL**, **Cloud Run**, and **Cloud Storage** are later readings (Oct 23, 2026), Verified in the status table, and outside the 18. Lambda stays inside the 18. S3 and Cloud CDN stay Partial (guidance / caching pages).
 
 Unknown in Still open means the page read did not state a value, not that no limit exists. The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships. Do not invent a quota. These figures are Vendor figure (documented), not Measured. Phase 1 and Phase 5 stay open until a real load test of the reference stack exists.
 
@@ -520,6 +520,16 @@ Unknown in Still open means the page read did not state a value, not that no lim
 | AWS Batch | Unchanged, Region-specific: 50 job queues; 50 compute environments across ECS and EKS; 5 per EKS cluster; 3 per job queue; 20 job dependencies; job definition 24 KiB; SubmitJob payload 30 KiB; array size 10,000; 1,000,000 jobs in SUBMITTED; SubmitJob 50 TPS per account; 50,000 consumable resources (page writes 50k); 50 service environments; 1 per job queue; 1 job queue per quota-management service environment; 20 quota shares; SubmitServiceJob request 30 KiB; payload 10 KiB; SubmitServiceJob 5 TPS per account; 10 retry attempts | EC2, ECS, and EKS quotas may also apply; those numbers are not on this page. Not applied as worker throughput or server count. |
 | AWS Lambda | Quotas page read 2026-10-23. Ordinary timeout 900 s; Managed Instances async and event-source mapping 5,400 s except Amazon MQ and Amazon DocumentDB; concurrent executions default 1,000 per Region (adjustable; “tens of thousands” is not a number; new accounts are reduced, with no figure); zip storage 300 GB not increasable; memory 128–10,240 MB (1,769 MB ≈ 1 vCPU); env 4 KB; policy 20 KB; 5 layers; 1,000 execution environments per 10 s; sync payload 6 MB request and response, streamed response 200 MB, async payload 1 MB; streamed bandwidth uncapped for the first 6 MB then 2 MBps; network 625 Mbps (non-VPC increase up to 3,000 Mbps at 10,240 MB); zip 50 MB API and console, 250 MB unzipped; image settings 16 KB; image 10 GB; 10 test events; /tmp 512–10,240 MB; file descriptors 1,024 (Managed Instances 4,096); processes/threads 1,024. Sync: 10 rps per environment. GetFunction 100 rps, GetPolicy 15 rps, other control-plane APIs 15 rps combined, none increasable. Durable, MicroVM, and Web Function tables are recorded in full in the catalog, including Web Function account defaults of 100,000 rps and 2,000 Arm64 vCPUs. | Container-image storage points at ECR and states no number. Managed Instances process and thread limits point at Bottlerocket and state no number. “Tens of thousands” and “thousands” are not stored as numbers. The page’s API Gateway 10,000 rps example is not a Lambda quota. Not applied as throughput or server count. |
 | AWS Fargate | Per account per Region, adjustable: On-Demand burst 100 and sustained 20 launches/s; Spot burst 100 and sustained 20 launches/s; EKS-pods-only accounts burst 20 and sustained 20 on the platform versions named elsewhere; RunTask API 20 calls/s burst and sustained; each RunTask call can launch up to 10 tasks | The 10-tasks-per-call maximum does not say whether it can be changed. Image pull, health checks, and load balancer registration change observed launch rate; the page states no separate number. Not applied as completed-request throughput. Outside the canonical 18. |
+| AWS S3 | Guidance, not quotas: at least 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD per prefix; no prefix count limit; 10-prefix example 55,000 reads/s; small-object latency roughly 100–200 ms; single-instance transfer up to 100 Gb/s | Scaling is gradual; 503 may appear. SSE-KMS rates are on the KMS page. Not a hard ceiling. Stays Partial. |
+| AWS DynamoDB | Per Region. Default 40,000 read/write units per table (on-demand RRU/WRU or provisioned RCU/WCU), adjustable; account provisioned 80,000; min 1 RCU and 1 WCU; 4 decreases at start of UTC day, up to 27/day; reserved capacity 1,000,000 units; no practical table-size limit; 2,500 tables/Region (account team up to 10,000); 400 MRSC global tables; replica backfill 10 TB/day; 5 LSI; 20 GSI default; vector and streams tables recorded | Contributor Insights points at CloudWatch. RCU/WCU not wired as completed rps. Outside the canonical 18. |
+| Azure Front Door | Composite route metric 5,000 per profile | Other origin/endpoint limits are on the subscription-limits page, not this file. Classic retires 31 March 2027. Stays Partial. |
+| Azure Application Gateway | Autoscaling min 0–100; instance count 0–125 (default max 10); manual 1–125; each instance ~10 Capacity Units; scale-in drain 5 min; provision ~3–5 min; Basic ~200 connections/s (estimated, RSA 2048 TLS) | Autoscaling article, not a quota table. Stays Partial. |
+| Azure Container Apps | Express/Sandbox 2,000 cores; Express 30 replicas; 200 Express environments per region | Default environment/core/GPU numbers depend on the subscription and are not on the page. Regional capacity is not a quota. Stays Partial. |
+| GCP Cloud Run | 1,000 services/jobs/worker pools per project+region (adjustable); 100 instances default; 1,000 concurrent requests per service instance; 80 per Cloud Run instance; request timeout 60 min; HTTP/1 body 32 MiB; memory 32 GiB; 8 vCPU; GPU default 0 (new L4 projects granted 3); Admin API 3,000 reads and 180 writes per 60 s | No direct limit on image size or service-wide concurrency. Regional CPU/memory totals have no number on the page. Not wired as node throughput. Outside the canonical 18. |
+| GCP Cloud Storage | Object 5 TiB; bucket writes and reads unlimited after scale (initial ~1,000 writes/s and ~5,000 reads/s); bucket create/delete ~1 per 2 s; Google and Internet egress default 200 Gbps per region (CDN exempt on Google egress) | Bandwidth may be lower by billing history. Rapid Cache and XML multipart rows are in the catalog. Outside the canonical 18. |
+| GCP Cloud CDN | Default TTLs 3,600 s client and default, max 86,400 s; serve-while-stale 86,400 s; expiration cap 2,592,000 s; eviction by 30 days unused; cached body 100 GiB with byte ranges, else 10 MiB | Caching page, not a quota table. Stays Partial. |
+| Azure Blob Storage | 50,000 blocks per block or append blob. Block in a block blob 4,000 MiB; block blob ≈ 190.7 TiB. Append block 4 MiB; append blob ≈ 195 GiB. Page blob 8 TiB (not with hierarchical namespace). 5 stored access policies per container. Target 3,000 rps per block blob; 500 rps and 60 MiB/s per page blob. Put Blob single write 5,000 MiB on 2019-12-12+. High-throughput Put Block > 256 KiB. | Account capacity and account ingress/egress are not on this page. Request rates are high-end targets, not ceilings. 503/500 on a hot partition. Not wired as node throughput. Outside the canonical 18. |
+| Azure Database for PostgreSQL | Flexible server. 15 connections reserved (can change). Default max_connections by SKU, e.g. B1ms 50 (35 user), B2s 429, up to 5,000 on larger D/E SKUs. Set at provision; later compute change does not update the default. Hardware maximum cannot be changed; max_connections is a restart setting and the page advises against raising it. PgBouncer start at vCores × 2–5. Storage 2× scale-up only; read-only at 95% or <5 GiB free. Stopped server autostarts after 7 days. | Compute/storage GB and prices are on other articles. Burstable has no built-in PgBouncer. Not wired as server count. Outside the canonical 18. |
 
 **Limit type from Verified-limits prose (M1 + Decision 11)**
 
@@ -1071,3 +1081,7 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 23, 2026 | Lambda quotas page and Fargate throttling page recorded from supplied copies (read 2026-10-23). Lambda stays in the canonical 18; concurrency default is now 1,000. Fargate moves from Listed (not checked) to Verified and stays outside the 18. Counts: 20 Verified, 102 Listed (not checked). Neither reading is applied as throughput or server count. |
 | Oct 23, 2026 | YouTube Viewers and Uploaders bind to generic-clients. Titles stay role names; catalog kind is Clients. Generator classes come from outgoing edges (Viewers R/W, Uploaders Bulk), not extra catalog rows. |
 | Oct 23, 2026 | Config Title renames a service card. Catalog kind is unchanged. Environment boxes still use Name. |
+| Oct 23, 2026 | Workload lists one rate block per Clients card on the live canvas. Two Clients (YouTube Viewers and Uploaders) show two blocks; classes follow outgoing edges. Shared class mix is only the fallback for cards without their own rates. |
+| Oct 23, 2026 | 9-block greys recorded from supplied official pages. DynamoDB, Cloud Run, and Cloud Storage become Verified (outside the canonical 18). S3, Front Door, and Cloud CDN stay Partial with recorded guidance. Application Gateway and Container Apps move Listed → Partial (autoscaling / missing defaults). Blob Storage and Azure Database for PostgreSQL not recorded: supplied files were Container Apps copies. Counts: 23 Verified, 8 Partial, 97 Listed (not checked). Vendor catalog figures are the right input while a lab load test is hard; they still do not stamp Measured or close Phase 1/5. None of these rows are wired as throughput or server count. |
+| Oct 23, 2026 | Azure Database for PostgreSQL flexible-server limits recorded from the supplied page (read 2026-10-23). Status Listed → Verified. Default max_connections by SKU; 15 reserved. Counts: 24 Verified, 8 Partial, 96 Listed (not checked). Outside the canonical 18. Not wired as server count. Blob Storage still not recorded: Azure Blob Storage.md is the Cloud CDN caching page, not https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets. |
+| Oct 23, 2026 | Azure Blob Storage scalability-targets page recorded from the supplied copy (read 2026-10-23). Status Listed → Verified. 50,000 blocks; target 3,000 rps per block blob. Account ingress/egress not on this page. Counts: 25 Verified, 8 Partial, 95 Listed (not checked). Outside the canonical 18. Request rates are guidance, not a ceiling. Not wired as node throughput. |
