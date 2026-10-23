@@ -70,15 +70,12 @@ function environmentTile(provider: PaletteProvider): PaletteTile {
 const genericGroups: PaletteGroup[] = [
   {
     category: 'GENERIC',
-    count: genericBlocks.length + 1,
-    tiles: [
-      ...genericBlocks.map((block) => ({
-        name: block.name,
-        catalogId: block.id,
-        provider: 'generic' as const,
-      })),
-      environmentTile('generic'),
-    ],
+    count: genericBlocks.length,
+    tiles: genericBlocks.map((block) => ({
+      name: block.name,
+      catalogId: block.id,
+      provider: 'generic' as const,
+    })),
   },
 ]
 

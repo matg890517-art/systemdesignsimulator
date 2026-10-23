@@ -264,6 +264,8 @@ function CanvasInner({
           opacity: 1,
         },
         '& .react-flow__handle-connecting': { background: '#2744C7' },
+        '& .react-flow__node-zone': { zIndex: '0 !important' },
+        '& .react-flow__node-service': { zIndex: 1 },
         '& .react-flow__pane': connectClick ? { cursor: 'crosshair' } : undefined,
       }}
       onDragOver={(event) => {

@@ -86,8 +86,10 @@ describe('catalog data', () => {
       'Worker pool',
       'CDN',
       'Object store',
-      'Environment',
     ])
+    expect(paletteGroupsFor('generic')[0]?.tiles.some((tile) => tile.kind === 'environment')).toBe(
+      false,
+    )
     expect(paletteGroupsFor('aws').at(-1)?.tiles[0]).toMatchObject({
       name: 'Environment',
       kind: 'environment',
