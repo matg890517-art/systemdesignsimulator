@@ -17,8 +17,10 @@ import {
 import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
 import { mappedProviders, type MappedProvider } from '../catalog/provider-maps.ts'
 import type { PaletteGroup, PaletteProvider, PaletteTile } from '../catalog/types.ts'
+import { CatalogIcon } from './CatalogIcon.tsx'
 import { KindIcon } from './KindIcon.tsx'
 import { iconGlyphFor } from './kind-icon.ts'
+import { providerMarkSrc } from './icons/registry.ts'
 import { useIconMode } from './icon-mode.tsx'
 import {
   accordionProviders,
@@ -111,12 +113,6 @@ export function Palette({
       catalogId: tile.catalogId,
       kind: tile.kind ?? 'service',
     })
-    const glyph = iconGlyphFor({
-      mode,
-      name: tile.name,
-      catalogId: tile.catalogId,
-      category,
-    })
     const onDragStart = (event: DragEvent) => {
       event.dataTransfer.setData('application/sds-service', payload)
       event.dataTransfer.effectAllowed = 'move'
@@ -140,7 +136,14 @@ export function Palette({
             '&:hover': { bgcolor: 'primary.light' },
           }}
         >
-          <KindIcon glyph={glyph} size={16} title={tile.name} />
+          <CatalogIcon
+            mode={mode}
+            name={tile.name}
+            catalogId={tile.catalogId}
+            category={category}
+            size={16}
+            title={tile.name}
+          />
           <Box
             sx={{
               width: 6,
@@ -199,7 +202,14 @@ export function Palette({
           '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.light' },
         }}
       >
-        <KindIcon glyph={glyph} size={20} title={tile.name} />
+        <CatalogIcon
+          mode={mode}
+          name={tile.name}
+          catalogId={tile.catalogId}
+          category={category}
+          size={20}
+          title={tile.name}
+        />
         <Typography
           sx={{
             fontSize: 11,
@@ -285,10 +295,15 @@ export function Palette({
             <ToggleButton value="service">Service</ToggleButton>
             <ToggleButton value="normal">Normal</ToggleButton>
           </ToggleButtonGroup>
-          <Stack direction="row" spacing={0.5} sx={{ ml: 'auto', alignItems: 'center' }} title="Limits on official page">
-            <Dot color="success.main" />
-            <Dot color="warning.main" />
-            <Dot color="divider" />
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{ ml: 'auto', alignItems: 'center' }}
+            title="Limits on official page"
+          >
+            <LegendSwatch color="success.main" label="listed" />
+            <LegendSwatch color="warning.main" label="partial" />
+            <LegendSwatch color="divider" label="none" />
           </Stack>
         </Stack>
       </Stack>
@@ -329,6 +344,7 @@ export function Palette({
                 ) : (
                   <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 )}
+                <ProviderMark provider={item.id} />
                 <Typography sx={{ fontSize: 12, fontWeight: 600, flex: 1, textAlign: 'left' }}>
                   {item.label}
                 </Typography>
@@ -369,6 +385,14 @@ export function Palette({
                             ) : (
                               <ChevronRightIcon sx={{ fontSize: 16 }} />
                             )}
+                            <KindIcon
+                              glyph={iconGlyphFor({
+                                mode: 'normal',
+                                name: categoryLabel(group.category),
+                                category: group.category,
+                              })}
+                              size={14}
+                            />
                             <Typography sx={{ fontSize: 11, fontWeight: 600, flex: 1, textAlign: 'left' }}>
                               {categoryLabel(group.category)}
                             </Typography>
@@ -449,7 +473,34 @@ function Dot({ color }: { color: string }) {
         height: 6,
         borderRadius: '50%',
         bgcolor: color,
+        flexShrink: 0,
       }}
     />
   )
+}
+
+function LegendSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <Stack direction="row" spacing={0.35} sx={{ alignItems: 'center' }}>
+      <Dot color={color} />
+      <Typography sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1 }}>{label}</Typography>
+    </Stack>
+  )
+}
+
+function ProviderMark({ provider }: { provider: PaletteProvider }) {
+  const src = providerMarkSrc(provider)
+  if (src) {
+    return (
+      <Box
+        component="img"
+        src={src}
+        alt=""
+        width={16}
+        height={16}
+        sx={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }}
+      />
+    )
+  }
+  return <KindIcon glyph="service" size={16} />
 }

@@ -5,8 +5,7 @@ import { formatPct, nodeHealth } from './simulate.ts'
 import { useClassFilter } from './class-filter.ts'
 import { nodeCarriesClass } from './compile.ts'
 import { useIconMode } from './icon-mode.tsx'
-import { KindIcon } from './KindIcon.tsx'
-import { iconGlyphFor } from './kind-icon.ts'
+import { CatalogIcon } from './CatalogIcon.tsx'
 import { ENV_MIN_HEIGHT, ENV_MIN_WIDTH } from './environment.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import { zoneColors } from '../../theme/sdsTheme.ts'
@@ -29,11 +28,6 @@ const SOURCE_SIDES = [Position.Right, Position.Bottom] as const
 export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) {
   const { filter, edges } = useClassFilter()
   const { mode } = useIconMode()
-  const glyph = iconGlyphFor({
-    mode,
-    name: data.title,
-    catalogId: data.catalogId,
-  })
   const onPath = nodeCarriesClass(
     { id, type: 'service', position: { x: 0, y: 0 }, data },
     edges,
@@ -64,7 +58,13 @@ export function ServiceNodeView({ id, data }: NodeProps<Node<ServiceNodeData>>) 
       ))}
       <Stack spacing={0.5}>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <KindIcon glyph={glyph} size={16} title={data.title} />
+          <CatalogIcon
+            mode={mode}
+            name={data.title}
+            catalogId={data.catalogId}
+            size={16}
+            title={data.title}
+          />
           <Typography
             noWrap
             title={data.title}

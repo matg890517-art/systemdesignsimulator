@@ -52,21 +52,18 @@ const CATEGORY_GLYPH: Record<string, IconGlyph> = {
   ENVIRONMENT: 'zone',
 }
 
-export function iconGlyphFor(input: {
-  mode: IconMode
-  name: string
-  catalogId?: string
-  category?: string
-}): IconGlyph {
-  const generic = genericBlocks.find((block) => block.id === input.catalogId)
-  const entry = input.catalogId ? catalogEntryById(input.catalogId) : undefined
-  const category = input.category ?? entry?.category ?? generic?.category
-  const kindGlyph = generic ? (KIND_GLYPH[generic.kind] ?? 'service') : undefined
-  if (input.mode === 'normal') {
-    return kindGlyph ?? CATEGORY_GLYPH[category ?? ''] ?? 'service'
+function categoryGlyph(category?: string): IconGlyph | undefined {
+  if (!category) return undefined
+  if (CATEGORY_GLYPH[category]) return CATEGORY_GLYPH[category]
+  const folded = category.toLowerCase()
+  for (const [key, glyph] of Object.entries(CATEGORY_GLYPH)) {
+    if (key.toLowerCase() === folded) return glyph
   }
-  const label = `${input.catalogId ?? ''} ${input.name}`.toLowerCase()
-  if (/\benvironment\b/.test(label) || input.category === 'ENVIRONMENT') return 'zone'
+  return undefined
+}
+
+function serviceFallbackGlyph(label: string, category?: string): IconGlyph | undefined {
+  if (/\benvironment\b/.test(label) || category === 'ENVIRONMENT') return 'zone'
   if (/\blambda\b|cloud functions|cloud run|app runner|functions?/.test(label)) return 'function'
   if (/\b(eks|ecs|gke|aks|kubernetes|k8s|fargate)\b/.test(label)) return 'k8s'
   if (/\b(ec2|compute engine|virtual machine|\bvm\b|lightsail|batch)\b/.test(label)) return 'compute'
@@ -80,5 +77,27 @@ export function iconGlyphFor(input: {
   if (/\b(cloudfront|front door|cloud cdn|cdn|cloudflare)\b/.test(label)) return 'cdn'
   if (/\b(load balancer|application lb|nlb|alb|application gateway)\b/.test(label)) return 'lb'
   if (/\b(client|viewer|uploader)\b/.test(label)) return 'clients'
-  return kindGlyph ?? CATEGORY_GLYPH[category ?? ''] ?? 'service'
+  return undefined
+}
+
+export function iconGlyphFor(input: {
+  mode: IconMode
+  name: string
+  catalogId?: string
+  category?: string
+}): IconGlyph {
+  const generic = genericBlocks.find((block) => block.id === input.catalogId)
+  const entry = input.catalogId ? catalogEntryById(input.catalogId) : undefined
+  const category = input.category ?? entry?.category ?? generic?.category
+  const kindGlyph = generic ? (KIND_GLYPH[generic.kind] ?? 'service') : undefined
+  if (input.mode === 'normal') {
+    return kindGlyph ?? categoryGlyph(category) ?? 'service'
+  }
+  const label = `${input.catalogId ?? ''} ${input.name}`.toLowerCase()
+  return (
+    serviceFallbackGlyph(label, category) ??
+    kindGlyph ??
+    categoryGlyph(category) ??
+    'service'
+  )
 }
