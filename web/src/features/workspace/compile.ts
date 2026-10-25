@@ -48,10 +48,15 @@ export type CanvasGenerator = {
   classes: WorkspaceClassId[]
 }
 
-export const defaultWorkloadDraft = (): WorkloadDraft => ({
+/** One run clock for every Clients card (Viewers, Uploaders, or Clients). */
+export const WORKLOAD_RUN_CLOCK = {
   durationSec: 60,
   dtSec: 0.1,
   seed: 4821,
+} as const
+
+export const defaultWorkloadDraft = (): WorkloadDraft => ({
+  ...WORKLOAD_RUN_CLOCK,
   mode: 'fluid',
   shapeKind: 'constant',
   stepAtSec: 20,

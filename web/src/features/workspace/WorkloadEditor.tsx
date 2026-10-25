@@ -41,59 +41,10 @@ const CLASS_LABEL: Record<(typeof REQUEST_CLASSES)[number], string> = {
   bulk: 'Bulk',
 }
 
-export function WorkloadEditor({
-  nodes,
-  edges,
-}: {
-  nodes: Node<ServiceNodeData | ZoneNodeData>[]
-  edges: RfEdge[]
-}) {
-  const draft = useWorkloadDraft()
-  const generators = canvasGenerators(nodes, edges)
-  const compiled = compileCanvas(nodes, edges, draft, getProfiles(), 'none')
-  const arrivals = expectedArrivals(compiled.workload)
-  const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
-
+function RunClockFields({ draft }: { draft: WorkloadDraft }) {
   return (
-    <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
-      <Typography variant="h2">Workload</Typography>
-      <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-        One rate block per Clients card on the canvas. Classes follow that card&apos;s outgoing
-        edges. YouTube: Viewers R/W, Uploaders Bulk. Unknown capacity does not cap the engine.
-      </Typography>
-
-      {generators.length === 0 ? (
-        <Typography sx={{ mt: 3, fontSize: 13, color: 'text.secondary' }}>
-          Drop a Clients card. Each extra Clients card adds another rate block here.
-        </Typography>
-      ) : (
-        generators.map((generator) => (
-          <Box key={generator.id} sx={{ mt: 3 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
-              {generator.title}
-            </Typography>
-            <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
-              {generator.classes.map((id) => (
-                <TextField
-                  key={id}
-                  size="small"
-                  type="number"
-                  label={`${CLASS_LABEL[id]} rps`}
-                  value={generatorClassRate(draft, generator.id, id)}
-                  onChange={(event) => {
-                    const next = Number(event.target.value)
-                    if (!Number.isFinite(next) || next < 0) return
-                    patchGeneratorClassRate(generator.id, id, next)
-                  }}
-                  sx={{ width: 150 }}
-                />
-              ))}
-            </Stack>
-          </Box>
-        ))
-      )}
-
-      <Stack direction="row" spacing={1.5} sx={{ mt: 2, flexWrap: 'wrap' }}>
+    <>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
         <TextField
           size="small"
           type="number"
@@ -131,6 +82,72 @@ export function WorkloadEditor({
           sx={{ width: 120 }}
         />
       </Stack>
+      <Typography sx={{ mt: 0.75, fontSize: 11, color: 'text.secondary' }}>
+        Same on Viewers, Uploaders and Clients. Duration is simulated seconds, dt is the Fluid
+        step, seed replays Discrete.
+      </Typography>
+    </>
+  )
+}
+
+export function WorkloadEditor({
+  nodes,
+  edges,
+}: {
+  nodes: Node<ServiceNodeData | ZoneNodeData>[]
+  edges: RfEdge[]
+}) {
+  const draft = useWorkloadDraft()
+  const generators = canvasGenerators(nodes, edges)
+  const compiled = compileCanvas(nodes, edges, draft, getProfiles(), 'none')
+  const arrivals = expectedArrivals(compiled.workload)
+  const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
+
+  return (
+    <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
+      <Typography variant="h2">Workload</Typography>
+      <Typography sx={{ mt: 1, color: 'text.secondary' }}>
+        One rate block per Clients card on the canvas. Classes follow that card&apos;s outgoing
+        edges. YouTube: Viewers R/W, Uploaders Bulk. Unknown capacity does not cap the engine.
+      </Typography>
+
+      {generators.length === 0 ? (
+        <Box sx={{ mt: 3 }}>
+          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+            Drop a Clients card. Each extra Clients card adds another rate block here.
+          </Typography>
+          <Typography sx={{ mt: 2, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
+            Run clock
+          </Typography>
+          <RunClockFields draft={draft} />
+        </Box>
+      ) : (
+        generators.map((generator) => (
+          <Box key={generator.id} sx={{ mt: 3 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
+              {generator.title}
+            </Typography>
+            <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
+              {generator.classes.map((id) => (
+                <TextField
+                  key={id}
+                  size="small"
+                  type="number"
+                  label={`${CLASS_LABEL[id]} rps`}
+                  value={generatorClassRate(draft, generator.id, id)}
+                  onChange={(event) => {
+                    const next = Number(event.target.value)
+                    if (!Number.isFinite(next) || next < 0) return
+                    patchGeneratorClassRate(generator.id, id, next)
+                  }}
+                  sx={{ width: 150 }}
+                />
+              ))}
+            </Stack>
+            <RunClockFields draft={draft} />
+          </Box>
+        ))
+      )}
       <Stack spacing={0.75} sx={{ mt: 2 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
           Run mode

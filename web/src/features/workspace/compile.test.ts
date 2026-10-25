@@ -10,6 +10,7 @@ import {
   kindForNode,
   nodeCarriesClass,
   withGeneratorClassRate,
+  WORKLOAD_RUN_CLOCK,
 } from './compile.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
@@ -69,6 +70,16 @@ describe('compileCanvas', () => {
     expect(generic).toHaveLength(1)
     expect(generic[0]?.title).toBe('Clients')
     expect(generic[0]?.classes).toEqual(['read', 'write', 'async', 'bulk'])
+  })
+
+  it('uses the same duration, dt and seed for YouTube and Clients', () => {
+    const youtube = defaultWorkloadDraft()
+    const clients = referenceWorkloadDraft()
+    expect(youtube).toMatchObject(WORKLOAD_RUN_CLOCK)
+    expect(clients).toMatchObject(WORKLOAD_RUN_CLOCK)
+    expect(clients.durationSec).toBe(youtube.durationSec)
+    expect(clients.dtSec).toBe(youtube.dtSec)
+    expect(clients.seed).toBe(youtube.seed)
   })
 
   it('keeps independent rates when two Clients cards exist', () => {

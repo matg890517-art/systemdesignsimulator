@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import { Button, Menu, MenuItem } from '@mui/material'
+import { Button, Menu, MenuItem, Typography } from '@mui/material'
+import { hotkeyLabel } from './hotkeys.ts'
 
 export function FileMenu({
   onSave,
@@ -44,8 +45,12 @@ export function FileMenu({
             onSave()
             close()
           }}
+          sx={{ gap: 3, justifyContent: 'space-between' }}
         >
           Save
+          <Typography component="kbd" sx={{ fontSize: 11, color: 'text.secondary' }}>
+            {hotkeyLabel('save')}
+          </Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {

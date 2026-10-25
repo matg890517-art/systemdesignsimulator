@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import CableIcon from '@mui/icons-material/Cable'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import RedoIcon from '@mui/icons-material/Redo'
+import UndoIcon from '@mui/icons-material/Undo'
 import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material'
+import { useHotkeys } from '@tanstack/react-hotkeys'
 import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
 import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
@@ -14,6 +17,18 @@ import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { IconModeProvider } from './icon-mode.tsx'
 import { deleteSelection, patchServiceTitle } from './canvas-edit.ts'
+import {
+  canRedo,
+  canUndo,
+  emptyHistory,
+  recordHistory,
+  redoHistory,
+  structuralKey,
+  undoHistory,
+  type CanvasHistory,
+  type CanvasSnapshot,
+} from './history.ts'
+import { WORKSPACE_HOTKEYS, withHotkey } from './hotkeys.ts'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
 import { costFromProfiles, expectedArrivals } from '@sds/engine'
@@ -166,6 +181,12 @@ export function WorkspacePage() {
   const runGen = useRef(0)
   const paintFrame = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
+  const [history, setHistory] = useState<CanvasHistory>(emptyHistory)
+  const lastStructural = useRef<{ key: string; snapshot: CanvasSnapshot }>({
+    key: structuralKey(boot.current.nodes, boot.current.edges),
+    snapshot: { nodes: boot.current.nodes, edges: boot.current.edges },
+  })
+  const applyingHistory = useRef(false)
 
   const onSelectNode = useCallback((next?: CanvasSelection) => {
     setSelected((current) => {
@@ -565,27 +586,97 @@ export function WorkspacePage() {
     return () => window.clearTimeout(handle)
   }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
 
+  // Undo history records structural edits (drop, connect, delete, group, load) from any
+  // source, including the canvas's own setNodes/setEdges. Moves and renames are not recorded.
   useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') return
-      const target = event.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
-        return
-      }
-      const hasEdge = selectedEdgeIds.length > 0 || Boolean(selectedEdgeId)
-      if (selectedIds.length === 0 && !hasEdge) return
-      event.preventDefault()
-      onDeleteSelection()
+    const key = structuralKey(nodes, edges)
+    if (key === lastStructural.current.key) return
+    const previous = lastStructural.current.snapshot
+    lastStructural.current = { key, snapshot: { nodes, edges } }
+    if (applyingHistory.current) {
+      applyingHistory.current = false
+      return
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+    setHistory((current) => recordHistory(current, previous))
+  }, [nodes, edges])
+
+  function clearSelection() {
+    setSelected(undefined)
+    setSelectedIds([])
+    setSelectedEdgeId(undefined)
+    setSelectedEdgeIds([])
+    setConnectFromId(undefined)
+  }
+
+  function applyHistorySnapshot(snapshot: CanvasSnapshot, hint: string) {
+    applyingHistory.current = true
+    setNodes(snapshot.nodes)
+    setEdges(snapshot.edges)
+    clearSelection()
+    setScene('custom')
+    setSavedHint(hint)
+    setRunError(undefined)
+  }
+
+  function onUndo() {
+    const result = undoHistory(history, { nodes, edges })
+    if (!result) return
+    setHistory(result.history)
+    applyHistorySnapshot(result.snapshot, 'Undo')
+  }
+
+  function onRedo() {
+    const result = redoHistory(history, { nodes, edges })
+    if (!result) return
+    setHistory(result.history)
+    applyHistorySnapshot(result.snapshot, 'Redo')
+  }
+
+  function onEscape() {
+    if (connectClick) {
+      setConnectClick(false)
+      setConnectFromId(undefined)
+      setRunError(undefined)
+      return
+    }
+    setNodes((current) =>
+      current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+    )
+    setEdges((current) =>
+      current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+    )
+    clearSelection()
+  }
+
+  const hasSelection =
+    selectedIds.length > 0 || selectedEdgeIds.length > 0 || Boolean(selectedEdgeId)
+
+  useHotkeys([
+    {
+      hotkey: WORKSPACE_HOTKEYS.run,
+      callback: () => void onRun(),
+      options: { enabled: !running && !discreteBlocked },
+    },
+    { hotkey: WORKSPACE_HOTKEYS.save, callback: onSave },
+    // Keep native text undo inside fields; canvas undo only when focus is not in an input.
+    {
+      hotkey: WORKSPACE_HOTKEYS.undo,
+      callback: onUndo,
+      options: { enabled: canUndo(history), ignoreInputs: true },
+    },
+    {
+      hotkey: WORKSPACE_HOTKEYS.redo,
+      callback: onRedo,
+      options: { enabled: canRedo(history), ignoreInputs: true },
+    },
+    { hotkey: WORKSPACE_HOTKEYS.delete, callback: onDeleteSelection, options: { enabled: hasSelection } },
+    { hotkey: WORKSPACE_HOTKEYS.backspace, callback: onDeleteSelection, options: { enabled: hasSelection } },
+    {
+      hotkey: WORKSPACE_HOTKEYS.escape,
+      callback: onEscape,
+      options: { enabled: connectClick || hasSelection },
+    },
+  ])
 
   const statusTone = discreteBlocked || runError ? 'error.main' : 'text.secondary'
   const statusText = discreteBlocked
@@ -625,7 +716,15 @@ export function WorkspacePage() {
         </Typography>
         <Chip label={savedHint} sx={savedChipSx(savedHint)} />
         <Stack direction="row" spacing={0.25} sx={{ ml: 0.5 }}>
-          <Tooltip title={connectFromId ? 'Click a target component' : 'Connect'}>
+          <Tooltip
+            title={
+              connectFromId
+                ? withHotkey('Click a target component. Cancel', 'escape')
+                : connectClick
+                  ? withHotkey('Connect: click source. Cancel', 'escape')
+                  : 'Connect'
+            }
+          >
             <IconButton
               color={connectClick ? 'primary' : 'default'}
               onClick={onToggleConnect}
@@ -635,7 +734,7 @@ export function WorkspacePage() {
               <CableIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
+          <Tooltip title={withHotkey('Delete', 'delete')}>
             <span>
               <IconButton
                 color="error"
@@ -644,6 +743,20 @@ export function WorkspacePage() {
                 aria-label="Delete"
               >
                 <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={withHotkey('Undo', 'undo')}>
+            <span>
+              <IconButton onClick={onUndo} disabled={!canUndo(history)} aria-label="Undo">
+                <UndoIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={withHotkey('Redo', 'redo')}>
+            <span>
+              <IconButton onClick={onRedo} disabled={!canRedo(history)} aria-label="Redo">
+                <RedoIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </span>
           </Tooltip>
@@ -675,7 +788,7 @@ export function WorkspacePage() {
           title={
             discreteBlocked
               ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.'
-              : modeMeta.hint
+              : withHotkey(modeMeta.hint, 'run')
           }
         >
           {running ? 'Running…' : 'Run'}

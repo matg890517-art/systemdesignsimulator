@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CalibrationField, CalibrationProfile, Confidence, Value } from '@sds/engine'
 import { referenceBindings, type MappedProvider, type ReferenceRole } from '../catalog/provider-maps.ts'
-import { defaultWorkloadDraft, type WorkloadDraft } from './compile.ts'
+import { defaultWorkloadDraft, WORKLOAD_RUN_CLOCK, type WorkloadDraft } from './compile.ts'
 import { activeClassMap, classSummaryLabel, type WorkspaceClassId } from './edge-data.ts'
 import type { ServiceNodeData } from './types.ts'
 
@@ -178,6 +178,7 @@ export const referenceStackProfiles: CalibrationProfile[] = [
 export function referenceWorkloadDraft(): WorkloadDraft {
   return {
     ...defaultWorkloadDraft(),
+    ...WORKLOAD_RUN_CLOCK,
     classes: { read: 200, write: 40, async: 30, bulk: 20 },
   }
 }
