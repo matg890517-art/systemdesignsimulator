@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import {
   Box,
   Button,
+  ButtonBase,
   FormControlLabel,
   MenuItem,
   Stack,
@@ -34,11 +36,13 @@ import {
   environmentLabel,
 } from './environment.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import type { FieldFocusRequest } from './bottleneck-focus.ts'
 import {
   inspectorFocusLabel,
   inspectorPane,
   type InspectorRunTab,
 } from './inspector-pane.ts'
+import type { NoticeSeverity } from './notices.ts'
 import { formatPct } from './simulate.ts'
 import type { Bottleneck, CanvasSelection, ProviderId } from './types.ts'
 
@@ -59,28 +63,63 @@ function ConfigPanel({
   nodeId,
   title,
   catalogId,
+  fieldFocus,
   onTitleChange,
   onDelete,
   onRelease,
+  onNotice,
 }: {
   nodeId?: string
   title?: string
   catalogId?: string
+  fieldFocus?: FieldFocusRequest
   onTitleChange?: (title: string) => void
   onDelete?: () => void
   onRelease?: () => void
+  onNotice?: (message: string, severity: NoticeSeverity) => void
 }) {
   const library = useLibrary()
   const catalog = nodeId ? catalogForNode(nodeId, catalogId) : undefined
   const [draft, setDraft] = useState<CalibrationProfile | undefined>()
+  // Uncommitted edits live here between keystrokes and the blur/Enter that applies them.
+  const pending = useRef<{ nodeId?: string; draft?: CalibrationProfile; dirty: boolean }>({ dirty: false })
+  const fieldInputs = useRef<Partial<Record<string, HTMLInputElement | null>>>({})
 
   useEffect(() => {
     if (!nodeId) {
+      pending.current = { dirty: false }
       setDraft(undefined)
       return
     }
-    setDraft(configProfileForNode(profileForNode(nodeId), nodeId, title ?? nodeId, catalogId))
+    // Keep typing-in-progress when the library changes under the same node.
+    if (pending.current.dirty && pending.current.nodeId === nodeId) return
+    const next = configProfileForNode(profileForNode(nodeId), nodeId, title ?? nodeId, catalogId)
+    pending.current = { nodeId, draft: next, dirty: false }
+    setDraft(next)
   }, [nodeId, title, catalogId, library])
+
+  useEffect(() => {
+    if (!fieldFocus || fieldFocus.nodeId !== nodeId) return
+    const input = fieldInputs.current[fieldFocus.role]
+    if (!input) return
+    input.focus()
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [fieldFocus, nodeId, draft?.id])
+
+  function stage(next: CalibrationProfile) {
+    pending.current = { nodeId, draft: next, dirty: true }
+    setDraft(next)
+  }
+
+  /** Auto-apply: evidence from the source URL, P95 ≥ median, then the library. */
+  function commit(next: CalibrationProfile | undefined = pending.current.draft) {
+    if (!next || !pending.current.dirty) return
+    const applied = applyProfileFields(next, next.fields, next.source)
+    pending.current = { nodeId, draft: applied.profile, dirty: false }
+    upsertProfile(applied.profile)
+    setDraft(applied.profile)
+    if (applied.error) onNotice?.(applied.error, 'warning')
+  }
 
   if (!nodeId || !draft) {
     return (
@@ -135,7 +174,13 @@ function ConfigPanel({
         label="Source URL"
         value={draft.source ?? ''}
         placeholder="none → Estimated"
-        onChange={(event) => setDraft({ ...draft, source: event.target.value || undefined })}
+        onChange={(event) => stage({ ...draft, source: event.target.value || undefined })}
+        onBlur={() => commit()}
+        helperText={
+          draft.source
+            ? 'Set fields become Vendor figure (source not checked).'
+            : 'A link marks set fields as Vendor figure. None keeps Estimated.'
+        }
       />
       <Stack direction="row" spacing={1}>
         <TextField
@@ -143,13 +188,15 @@ function ConfigPanel({
           label="Date"
           value={draft.retrievedOn ?? ''}
           placeholder="YYYY-MM-DD"
-          onChange={(event) => setDraft({ ...draft, retrievedOn: event.target.value || undefined })}
+          onChange={(event) => stage({ ...draft, retrievedOn: event.target.value || undefined })}
+          onBlur={() => commit()}
         />
         <TextField
           size="small"
           label="Region"
           value={draft.region ?? ''}
-          onChange={(event) => setDraft({ ...draft, region: event.target.value || undefined })}
+          onChange={(event) => stage({ ...draft, region: event.target.value || undefined })}
+          onBlur={() => commit()}
         />
       </Stack>
       <Stack direction="row" spacing={1}>
@@ -157,13 +204,15 @@ function ConfigPanel({
           size="small"
           label="Tier"
           value={draft.tier ?? ''}
-          onChange={(event) => setDraft({ ...draft, tier: event.target.value || undefined })}
+          onChange={(event) => stage({ ...draft, tier: event.target.value || undefined })}
+          onBlur={() => commit()}
         />
         <TextField
           size="small"
           label="Version"
           value={draft.version ?? ''}
-          onChange={(event) => setDraft({ ...draft, version: event.target.value || undefined })}
+          onChange={(event) => stage({ ...draft, version: event.target.value || undefined })}
+          onBlur={() => commit()}
         />
       </Stack>
       {draft.fields.length === 0 ? (
@@ -176,32 +225,33 @@ function ConfigPanel({
             key={field.id}
             field={field}
             sourceId="config"
-            onChange={(next) =>
-              setDraft({
+            inputRef={(element) => {
+              fieldInputs.current[field.role] = element
+            }}
+            onChange={(next, commitNow) => {
+              const staged = {
                 ...draft,
                 fields: draft.fields.map((item) => (item.id === field.id ? next : item)),
-              })
-            }
+              }
+              stage(staged)
+              if (commitNow) commit(staged)
+            }}
+            onCommit={() => commit()}
           />
         ))
       )}
-      <Button
-        variant="contained"
-        size="small"
-        onClick={() => {
-          const next = applyProfileFields(draft, draft.fields, draft.source)
-          upsertProfile(next.profile)
-          setDraft(next.profile)
-        }}
-      >
-        Apply to library
-      </Button>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Edits apply to the calibration library when you leave a field or press Enter. The next
+        Run uses them.
+      </Typography>
       <Button
         size="small"
         onClick={() => {
           const blank = blankProfileForNode(nodeId, title ?? nodeId, catalogId)
+          pending.current = { nodeId, draft: blank, dirty: false }
           setDraft(blank)
           upsertProfile(blank)
+          onNotice?.(`${title ?? nodeId} reset. Every field is unknown again.`, 'info')
         }}
       >
         Reset to default
@@ -527,6 +577,10 @@ export function Inspector({
   affectedIds = [],
   blastOriginId,
   breakerOpenEdges = [],
+  nodeIds = [],
+  fieldFocus,
+  onFocusBottleneck,
+  onNotice,
 }: {
   bottlenecks: Bottleneck[]
   selected?: CanvasSelection
@@ -544,6 +598,11 @@ export function Inspector({
   affectedIds?: string[]
   blastOriginId?: string
   breakerOpenEdges?: string[]
+  /** Service ids on the canvas. A bottleneck row for one of them opens in Config. */
+  nodeIds?: string[]
+  fieldFocus?: FieldFocusRequest
+  onFocusBottleneck?: (id: string) => void
+  onNotice?: (message: string, severity: NoticeSeverity) => void
 }) {
   const [runTab, setRunTab] = useState<InspectorRunTab>('focus')
   const hasSelectedEdge = Boolean(selectedEdge)
@@ -551,6 +610,10 @@ export function Inspector({
   useEffect(() => {
     setRunTab('focus')
   }, [selected?.id, selectedEdge?.id])
+  // A bottleneck row jumps to Config even when its node was already selected.
+  useEffect(() => {
+    if (fieldFocus) setRunTab('focus')
+  }, [fieldFocus])
   return (
     <Box
       sx={{
@@ -594,11 +657,13 @@ export function Inspector({
             nodeId={selected?.id}
             title={selected?.title}
             catalogId={selected?.catalogId}
+            fieldFocus={fieldFocus}
             onTitleChange={
               selected ? (next) => onServiceTitleChange?.(selected.id, next) : undefined
             }
             onDelete={selected ? onDeleteNode : undefined}
             onRelease={selected?.parentId ? onReleaseFromZone : undefined}
+            onNotice={onNotice}
           />
         ))}
       {pane === 'edge' && (
@@ -611,46 +676,89 @@ export function Inspector({
               Selected: {selected.title}
             </Typography>
           ) : null}
-          {bottlenecks.map((item) => (
-            <Box
-              key={item.id}
-              sx={{
-                p: 1,
-                borderRadius: 2,
-                bgcolor: item.fromEngine ? 'error.light' : 'warning.light',
-                border: '1px solid',
-                borderColor: item.fromEngine ? 'error.main' : 'warning.main',
-              }}
-            >
-              <Typography
+          {bottlenecks.length === 0 ? (
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+              No component at or above 85% in the last run. Run again after a change to re-rank.
+            </Typography>
+          ) : null}
+          {bottlenecks.map((item) => {
+            const openable = Boolean(onFocusBottleneck) && nodeIds.includes(item.id)
+            const body = (
+              <>
+                <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      flex: 1,
+                      minWidth: 0,
+                      color: item.fromEngine ? 'error.main' : 'warning.dark',
+                    }}
+                  >
+                    {item.title} {formatPct(item.util)}
+                  </Typography>
+                  {openable ? (
+                    <ArrowForwardIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  ) : null}
+                </Stack>
+                <Typography sx={{ fontSize: 12, mt: 0.5 }}>{item.summary}</Typography>
+                <Typography sx={{ fontSize: 12, mt: 0.75, color: 'primary.main', fontWeight: 600 }}>
+                  {item.fromEngine ? 'From engine · ' : 'Estimated · '}
+                  {item.suggestion}
+                </Typography>
+                {item.cause ? (
+                  <Typography sx={{ fontSize: 11, mt: 0.5 }}>{item.cause}</Typography>
+                ) : null}
+                {item.wait ? (
+                  <Typography sx={{ fontSize: 11, mt: 0.5, fontFamily: '"IBM Plex Mono", monospace' }}>
+                    {item.wait}
+                  </Typography>
+                ) : null}
+                {item.citation ? (
+                  <Typography sx={{ fontSize: 11, mt: 0.5, color: 'text.secondary' }}>
+                    {item.citation}
+                  </Typography>
+                ) : null}
+                {openable ? (
+                  <Typography sx={{ fontSize: 11, mt: 0.75, color: 'text.secondary' }}>
+                    Open in Config to change capacity.
+                  </Typography>
+                ) : null}
+              </>
+            )
+            const cardSx = {
+              p: 1,
+              borderRadius: 2,
+              textAlign: 'left' as const,
+              display: 'block',
+              width: '100%',
+              bgcolor: item.fromEngine ? 'error.light' : 'warning.light',
+              border: '1px solid',
+              borderColor: item.fromEngine ? 'error.main' : 'warning.main',
+            }
+            if (!openable) {
+              return (
+                <Box key={item.id} sx={cardSx}>
+                  {body}
+                </Box>
+              )
+            }
+            return (
+              <ButtonBase
+                key={item.id}
+                onClick={() => onFocusBottleneck?.(item.id)}
+                aria-label={`Open ${item.title} in Config`}
                 sx={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: item.fromEngine ? 'error.main' : 'warning.dark',
+                  ...cardSx,
+                  fontFamily: 'inherit',
+                  '&:hover': { borderColor: 'primary.main' },
+                  '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main' },
                 }}
               >
-                {item.title} {formatPct(item.util)}
-              </Typography>
-              <Typography sx={{ fontSize: 12, mt: 0.5 }}>{item.summary}</Typography>
-              <Typography sx={{ fontSize: 12, mt: 0.75, color: 'primary.main', fontWeight: 600 }}>
-                {item.fromEngine ? 'From engine · ' : 'Estimated · '}
-                {item.suggestion}
-              </Typography>
-              {item.cause ? (
-                <Typography sx={{ fontSize: 11, mt: 0.5 }}>{item.cause}</Typography>
-              ) : null}
-              {item.wait ? (
-                <Typography sx={{ fontSize: 11, mt: 0.5, fontFamily: '"IBM Plex Mono", monospace' }}>
-                  {item.wait}
-                </Typography>
-              ) : null}
-              {item.citation ? (
-                <Typography sx={{ fontSize: 11, mt: 0.5, color: 'text.secondary' }}>
-                  {item.citation}
-                </Typography>
-              ) : null}
-            </Box>
-          ))}
+                {body}
+              </ButtonBase>
+            )
+          })}
         </>
       )}
       {pane === 'blast' && (

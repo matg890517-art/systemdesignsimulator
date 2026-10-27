@@ -5,10 +5,37 @@ type JobInput = Omit<EngineJobRequest, 'id'>
 
 let worker: Worker | undefined
 let nextId = 1
+const pending = new Map<number, (error: Error) => void>()
+
+/** Thrown to a caller whose run was stopped from the toolbar. Not an engine failure. */
+export class RunStoppedError extends Error {
+  constructor() {
+    super('Run stopped')
+    this.name = 'RunStoppedError'
+  }
+}
+
+export function isRunStopped(error: unknown): error is RunStoppedError {
+  return error instanceof Error && error.name === 'RunStoppedError'
+}
 
 function getWorker(): Worker {
   worker ??= new Worker(new URL('./engine-worker.ts', import.meta.url), { type: 'module' })
   return worker
+}
+
+/**
+ * The engine runs synchronously inside the worker, so the only way to stop a job mid-run is
+ * to terminate the worker. The next run spins up a fresh one. Returns false when idle.
+ */
+export function stopWorkspaceRun(): boolean {
+  if (!worker || pending.size === 0) return false
+  worker.terminate()
+  worker = undefined
+  const rejects = [...pending.values()]
+  pending.clear()
+  for (const reject of rejects) reject(new RunStoppedError())
+  return true
 }
 
 export function runWorkspaceAsync(
@@ -26,6 +53,11 @@ export function runWorkspaceAsync(
   const target = getWorker()
 
   return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      pending.delete(id)
+      target.removeEventListener('message', onMessage)
+      target.removeEventListener('error', onError)
+    }
     const onMessage = (event: MessageEvent<EngineJobMessage>) => {
       const message = event.data
       if (message.id !== id) return
@@ -33,8 +65,7 @@ export function runWorkspaceAsync(
         onProgress?.({ t: message.t, fraction: message.fraction, nodeStats: message.nodeStats })
         return
       }
-      target.removeEventListener('message', onMessage)
-      target.removeEventListener('error', onError)
+      cleanup()
       if (message.type === 'error') {
         reject(new Error(message.message))
         return
@@ -42,10 +73,13 @@ export function runWorkspaceAsync(
       resolve(message.result)
     }
     const onError = (event: ErrorEvent) => {
-      target.removeEventListener('message', onMessage)
-      target.removeEventListener('error', onError)
+      cleanup()
       reject(event.error instanceof Error ? event.error : new Error(event.message))
     }
+    pending.set(id, (error) => {
+      cleanup()
+      reject(error)
+    })
     target.addEventListener('message', onMessage)
     target.addEventListener('error', onError)
     const request: EngineJobRequest = { id, ...input }

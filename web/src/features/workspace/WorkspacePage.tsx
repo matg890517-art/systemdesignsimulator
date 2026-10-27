@@ -3,13 +3,28 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import CableIcon from '@mui/icons-material/Cable'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import RedoIcon from '@mui/icons-material/Redo'
+import StopRoundedIcon from '@mui/icons-material/StopRounded'
 import UndoIcon from '@mui/icons-material/Undo'
-import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  Snackbar,
+  Stack,
+  Tab,
+  Tabs,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 import { useHotkeys } from '@tanstack/react-hotkeys'
 import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
 import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
-import { ArchitectureCanvas } from './ArchitectureCanvas.tsx'
+import { ArchitectureCanvas, type CanvasFocusRequest } from './ArchitectureCanvas.tsx'
+import { focusRoleForBottleneck, nextFieldFocus, type FieldFocusRequest } from './bottleneck-focus.ts'
+import { nextNotice, noticeDurationMs, noticeSeverityForHint, type Notice, type NoticeSeverity } from './notices.ts'
 import { ClassFilterChips } from './ClassFilterChips.tsx'
 import { FileMenu } from './FileMenu.tsx'
 import { HeatLegend } from './HeatLegend.tsx'
@@ -42,7 +57,7 @@ import {
 } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
 import { idleKpis, kpisFromDraft, pickEdgeOffered, pickNodeStat } from './simulate.ts'
-import { runWorkspaceAsync } from './engine-client.ts'
+import { isRunStopped, runWorkspaceAsync, stopWorkspaceRun } from './engine-client.ts'
 import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import {
   compileCanvas,
@@ -182,11 +197,15 @@ export function WorkspacePage() {
   const paintFrame = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
   const [history, setHistory] = useState<CanvasHistory>(emptyHistory)
+  const [notice, setNotice] = useState<Notice>()
+  const [fieldFocus, setFieldFocus] = useState<FieldFocusRequest>()
+  const [canvasFocus, setCanvasFocus] = useState<CanvasFocusRequest>()
   const lastStructural = useRef<{ key: string; snapshot: CanvasSnapshot }>({
     key: structuralKey(boot.current.nodes, boot.current.edges),
     snapshot: { nodes: boot.current.nodes, edges: boot.current.edges },
   })
   const applyingHistory = useRef(false)
+  const quotaWarned = useRef(false)
 
   const onSelectNode = useCallback((next?: CanvasSelection) => {
     setSelected((current) => {
@@ -221,6 +240,22 @@ export function WorkspacePage() {
   useEffect(() => {
     setCanvasReady(true)
   }, [])
+
+  const notify = useCallback((message: string, severity: NoticeSeverity) => {
+    setNotice((current) => nextNotice(current, message, severity))
+  }, [])
+
+  // Errors and confirmations surface as toasts. The status line keeps the inline copy.
+  function fail(message: string) {
+    setRunError(message)
+    notify(message, 'error')
+  }
+
+  function confirmSaved(hint: string) {
+    setSavedHint(hint)
+    const severity = noticeSeverityForHint(hint)
+    if (severity) notify(hint, severity)
+  }
 
   useEffect(() => {
     let frames = 0
@@ -288,6 +323,7 @@ export function WorkspacePage() {
               meta: `${run.mode} · ${filter === 'all' ? 'not on path' : `off ${filter} path`}`,
               inBlast,
               blastOrigin,
+              live: false,
             },
           }
         }
@@ -300,6 +336,7 @@ export function WorkspacePage() {
             meta: filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`,
             inBlast,
             blastOrigin,
+            live: false,
             queueDepth: `q ${stat.backlog.toFixed(1)}`,
             loss: stat.loss > 0 ? `loss ${(stat.loss * 100).toFixed(0)}%` : 'loss 0%',
           },
@@ -338,6 +375,7 @@ export function WorkspacePage() {
             util: stat.util,
             p99: stat.p99,
             meta: `${stat.meta} · live`,
+            live: true,
             queueDepth: `q ${stat.backlog.toFixed(1)}`,
             loss: `loss ${(stat.loss * 100).toFixed(0)}%`,
           },
@@ -413,18 +451,27 @@ export function WorkspacePage() {
     setSelectedIds([])
     setSelectedEdgeId(undefined)
     setRunError(undefined)
-    setSavedHint(hint)
+    confirmSaved(hint)
     setRunHint(hint)
   }
 
   function onSave() {
     const store = browserStore()
     if (!store) {
-      setRunError('localStorage is not available in this tab.')
+      fail('localStorage is not available in this tab.')
       return
     }
-    upsertProject(store, currentSnapshot())
-    setSavedHint('Saved to Projects')
+    try {
+      upsertProject(store, currentSnapshot())
+    } catch (error) {
+      fail(
+        error instanceof Error && error.name === 'QuotaExceededError'
+          ? 'Browser storage is full. Export JSON to keep this project.'
+          : `Save failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return
+    }
+    confirmSaved('Saved to Projects')
   }
 
   function onExport() {
@@ -436,18 +483,18 @@ export function WorkspacePage() {
     link.download = snapshotFilename(snapshot)
     link.click()
     URL.revokeObjectURL(url)
-    setSavedHint('Exported JSON')
+    confirmSaved('Exported JSON')
   }
 
   function onCopyLink() {
     const url = shareUrlFor(currentSnapshot(), window.location.href)
     if (!url) {
-      setRunError('Snapshot too large for a URL. Export JSON instead.')
+      fail('Snapshot too large for a URL. Export JSON instead.')
       return
     }
     void navigator.clipboard.writeText(url).then(
-      () => setSavedHint('Copied share link'),
-      () => setRunError('Clipboard is not available. Copy from the address bar after Export.'),
+      () => confirmSaved('Copied share link'),
+      () => fail('Clipboard is not available. Copy from the address bar after Export.'),
     )
   }
 
@@ -460,13 +507,13 @@ export function WorkspacePage() {
     link.download = 'sds-inventory.json'
     link.click()
     URL.revokeObjectURL(url)
-    setSavedHint('Inventory JSON · not executable IaC')
+    confirmSaved('Inventory JSON · not executable IaC')
   }
 
   function onGroup() {
     const result = wrapInSubsystem(nodes, selectedIds)
     if ('error' in result) {
-      setRunError(result.error)
+      fail(result.error)
       return
     }
     setNodes(result.nodes)
@@ -505,11 +552,37 @@ export function WorkspacePage() {
     void file.text().then((text) => {
       const snapshot = parseSnapshot(text)
       if (!snapshot) {
-        setRunError('Not an SDS snapshot. Need version 1 JSON with nodes, edges, draft, and profiles.')
+        fail('Not an SDS snapshot. Need version 1 JSON with nodes, edges, draft, and profiles.')
         return
       }
       applySnapshot(snapshot, `Imported ${snapshot.name}`)
     })
+  }
+
+  function clearLive() {
+    setNodes((current) =>
+      current.map((node) =>
+        node.type !== 'zone' && (node.data as ServiceNodeData).live
+          ? { ...node, data: { ...(node.data as ServiceNodeData), live: false } }
+          : node,
+      ),
+    )
+  }
+
+  function onStop() {
+    // Bump the generation first so a result that was already in flight is ignored.
+    runGen.current += 1
+    cancelAnimationFrame(paintFrame.current)
+    const stopped = stopWorkspaceRun()
+    setRunning(false)
+    if (lastRun) {
+      paintRun(lastRun, classFilter)
+      setRunHint(`${lastRun.hint} · stopped a newer run`)
+    } else {
+      clearLive()
+      setRunHint('stopped')
+    }
+    notify(stopped ? 'Run stopped. The canvas shows the last finished run.' : 'Nothing was running.', 'info')
   }
 
   async function onRun() {
@@ -542,7 +615,8 @@ export function WorkspacePage() {
       cancelAnimationFrame(paintFrame.current)
       if (runGen.current !== id) return
       if (!result.ok) {
-        setRunError(result.reason)
+        clearLive()
+        fail(result.reason)
         return
       }
       setRan(true)
@@ -552,8 +626,9 @@ export function WorkspacePage() {
       setLastRun(result.run)
       paintRun(result.run, classFilter)
     } catch (error) {
-      if (runGen.current !== id) return
-      setRunError(error instanceof Error ? error.message : String(error))
+      if (runGen.current !== id || isRunStopped(error)) return
+      clearLive()
+      fail(error instanceof Error ? error.message : String(error))
     } finally {
       if (runGen.current === id) setRunning(false)
     }
@@ -581,7 +656,15 @@ export function WorkspacePage() {
     const store = browserStore()
     if (!store) return
     const handle = window.setTimeout(() => {
-      saveCurrent(store, currentSnapshot())
+      try {
+        saveCurrent(store, currentSnapshot())
+        quotaWarned.current = false
+      } catch {
+        // Auto-save is best effort; warn once per overflow instead of every 250 ms.
+        if (quotaWarned.current) return
+        quotaWarned.current = true
+        notify('Browser storage is full. Auto-save paused; Export JSON to keep this draft.', 'warning')
+      }
     }, 250)
     return () => window.clearTimeout(handle)
   }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
@@ -651,6 +734,35 @@ export function WorkspacePage() {
   const hasSelection =
     selectedIds.length > 0 || selectedEdgeIds.length > 0 || Boolean(selectedEdgeId)
 
+  /** Bottleneck row → select the node on the canvas → Config → the field the fix points at. */
+  function onFocusBottleneck(id: string) {
+    const node = nodes.find((item) => item.id === id && item.type !== 'zone')
+    if (!node) return
+    const data = node.data as ServiceNodeData
+    setNodes((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, selected: true } : item.selected ? { ...item, selected: false } : item,
+      ),
+    )
+    setEdges((current) =>
+      current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+    )
+    setSelectedEdgeId(undefined)
+    setSelectedEdgeIds([])
+    setSelectedIds([id])
+    setSelected({
+      id,
+      title: data.title,
+      catalogId: data.catalogId,
+      kind: 'service',
+      provider: data.provider,
+      parentId: node.parentId,
+    })
+    const role = focusRoleForBottleneck(lastRun?.nodeStats[id])
+    setFieldFocus((current) => nextFieldFocus(current, id, role))
+    setCanvasFocus((current) => ({ nodeId: id, nonce: (current?.nonce ?? 0) + 1 }))
+  }
+
   useHotkeys([
     {
       hotkey: WORKSPACE_HOTKEYS.run,
@@ -693,6 +805,10 @@ export function WorkspacePage() {
           .join(' · ')
   const nothingSelected =
     selectedIds.length === 0 && selectedEdgeIds.length === 0 && !selectedEdgeId
+  const serviceIds = useMemo(
+    () => nodes.filter((node) => node.type !== 'zone').map((node) => node.id),
+    [nodes],
+  )
 
   return (
     <IconModeProvider>
@@ -781,18 +897,30 @@ export function WorkspacePage() {
           onInventory={onInventory}
         />
         <RunModeToggle compact disabled={running} />
-        <Button
-          variant="contained"
-          onClick={() => void onRun()}
-          disabled={running || discreteBlocked}
-          title={
-            discreteBlocked
-              ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.'
-              : withHotkey(modeMeta.hint, 'run')
-          }
-        >
-          {running ? 'Running…' : 'Run'}
-        </Button>
+        {running ? (
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={onStop}
+            startIcon={<StopRoundedIcon />}
+            title="Stop the run on the worker. The canvas returns to the last finished run."
+          >
+            Stop
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            onClick={() => void onRun()}
+            disabled={discreteBlocked}
+            title={
+              discreteBlocked
+                ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.'
+                : withHotkey(modeMeta.hint, 'run')
+            }
+          >
+            Run
+          </Button>
+        )}
       </Stack>
       <Stack
         direction="row"
@@ -901,7 +1029,9 @@ export function WorkspacePage() {
                 connectClick={connectClick}
                 connectFromId={connectFromId}
                 onConnectFrom={setConnectFromId}
-                onConnectError={setRunError}
+                onConnectError={(message) => (message ? fail(message) : setRunError(undefined))}
+                focusRequest={canvasFocus}
+                onLoadReference={() => onLoadReference('generic')}
               />
             ) : (
               <Box
@@ -959,12 +1089,36 @@ export function WorkspacePage() {
               affectedIds={lastRun?.affectedComponentIds ?? []}
               blastOriginId={lastRun?.blastOriginId}
               breakerOpenEdges={lastRun?.breakerOpenEdges ?? []}
+              nodeIds={serviceIds}
+              fieldFocus={fieldFocus}
+              onFocusBottleneck={onFocusBottleneck}
+              onNotice={notify}
             />
           </>
         )}
         {tab === 1 && <WorkloadEditor nodes={nodes} edges={edges} />}
         {tab === 2 && <FaultsPanel />}
       </Box>
+      <Snackbar
+        key={notice?.id}
+        open={Boolean(notice)}
+        autoHideDuration={notice ? noticeDurationMs(notice.severity) : null}
+        onClose={(_, reason) => {
+          if (reason === 'clickaway') return
+          setNotice(undefined)
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ bottom: { xs: 16 } }}
+      >
+        <Alert
+          severity={notice?.severity ?? 'info'}
+          variant="filled"
+          onClose={() => setNotice(undefined)}
+          sx={{ fontSize: 12, alignItems: 'center', maxWidth: 560, boxShadow: 3 }}
+        >
+          {notice?.message}
+        </Alert>
+      </Snackbar>
     </Box>
     </IconModeProvider>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type Ref } from 'react'
 import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import type { CalibrationField } from '@sds/engine'
 import { applyFieldConfidence, applyFieldNumber } from './field-edit.ts'
@@ -7,11 +7,17 @@ export function FieldEditor({
   field,
   sourceId,
   onChange,
+  onCommit,
+  inputRef,
   hideLabel = false,
 }: {
   field: CalibrationField
   sourceId: string
-  onChange: (next: CalibrationField) => void
+  /** `commitNow` is true for discrete picks (confidence) that should not wait for blur. */
+  onChange: (next: CalibrationField, commitNow: boolean) => void
+  /** Blur or Enter on the number field. Hosts that auto-apply save here. */
+  onCommit?: () => void
+  inputRef?: Ref<HTMLInputElement>
   hideLabel?: boolean
 }) {
   const [focused, setFocused] = useState(false)
@@ -29,9 +35,19 @@ export function FieldEditor({
           type="number"
           value={current ? current.value : ''}
           placeholder="unknown"
-          onChange={(event) => onChange(applyFieldNumber(field, event.target.value, sourceId))}
+          inputRef={inputRef}
+          onChange={(event) => onChange(applyFieldNumber(field, event.target.value, sourceId), false)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false)
+            onCommit?.()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              onCommit?.()
+            }
+          }}
           sx={{ flex: 1, minWidth: 0 }}
           slotProps={{ htmlInput: { 'aria-label': field.label } }}
         />
@@ -42,7 +58,7 @@ export function FieldEditor({
           select
           size="small"
           value={current ? current.confidence : 'unknown'}
-          onChange={(event) => onChange(applyFieldConfidence(field, event.target.value))}
+          onChange={(event) => onChange(applyFieldConfidence(field, event.target.value), true)}
           disabled={measured}
           sx={{ width: 128, flexShrink: 0 }}
           slotProps={{ htmlInput: { 'aria-label': `${field.label} confidence` } }}

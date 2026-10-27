@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   type Dispatch,
@@ -7,6 +8,7 @@ import {
   type MouseEvent,
   type SetStateAction,
 } from 'react'
+import AddIcon from '@mui/icons-material/Add'
 import {
   Background,
   ConnectionMode,
@@ -24,7 +26,7 @@ import {
   type OnNodesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Box, Typography } from '@mui/material'
+import { Box, Button, Stack, Typography } from '@mui/material'
 import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
 import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-filter.ts'
 import { edgeCarriesClass } from './compile.ts'
@@ -96,6 +98,8 @@ function CanvasInner({
   connectFromId,
   onConnectFrom,
   onConnectError,
+  focusRequest,
+  onLoadReference,
 }: {
   nodes: WorkspaceNode[]
   edges: Edge[]
@@ -111,10 +115,27 @@ function CanvasInner({
   connectFromId?: string
   onConnectFrom: (id?: string) => void
   onConnectError: (message?: string) => void
+  focusRequest?: CanvasFocusRequest
+  onLoadReference?: () => void
 }) {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getInternalNode, setCenter, getZoom } = useReactFlow()
   const selectionKey = useRef('')
   const displayEdges = useMemo(() => decorateEdges(nodes, edges), [nodes, edges])
+  const serviceCount = useMemo(() => nodes.filter((node) => node.type === 'service').length, [nodes])
+
+  // Pan to a node that another panel (Bottlenecks) asked for. Zoom stays where the user left it.
+  useEffect(() => {
+    if (!focusRequest) return
+    const internal = getInternalNode(focusRequest.nodeId)
+    if (!internal) return
+    const { positionAbsolute } = internal.internals
+    const width = internal.measured.width ?? 168
+    const height = internal.measured.height ?? 72
+    void setCenter(positionAbsolute.x + width / 2, positionAbsolute.y + height / 2, {
+      zoom: getZoom(),
+      duration: 300,
+    })
+  }, [focusRequest, getInternalNode, getZoom, setCenter])
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: WorkspaceNode[]; edges: Edge[] }) => {
@@ -342,9 +363,57 @@ function CanvasInner({
           </Typography>
         </Box>
       ) : null}
+      {serviceCount === 0 ? (
+        <Stack
+          data-testid="empty-canvas"
+          spacing={1}
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            pointerEvents: 'none',
+            px: 4,
+          }}
+        >
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              border: '1px dashed',
+              borderColor: 'divider',
+              display: 'grid',
+              placeItems: 'center',
+              color: 'text.secondary',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <AddIcon sx={{ fontSize: 20 }} />
+          </Box>
+          <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Empty canvas</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', maxWidth: 360 }}>
+            Drag a service from the palette, connect it, then Run. Unknown capacity stays unknown
+            and does not cap the engine.
+          </Typography>
+          {onLoadReference ? (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={onLoadReference}
+              sx={{ pointerEvents: 'auto', mt: 0.5 }}
+            >
+              Load the generic reference stack
+            </Button>
+          ) : null}
+        </Stack>
+      ) : null}
     </Box>
   )
 }
+
+export type CanvasFocusRequest = { nodeId: string; nonce: number }
 
 export function ArchitectureCanvas(props: {
   nodes: WorkspaceNode[]
@@ -362,6 +431,8 @@ export function ArchitectureCanvas(props: {
   connectFromId?: string
   onConnectFrom: (id?: string) => void
   onConnectError: (message?: string) => void
+  focusRequest?: CanvasFocusRequest
+  onLoadReference?: () => void
 }) {
   const filterValue = useMemo(
     () => ({ filter: props.classFilter, edges: props.edges }),
@@ -385,6 +456,8 @@ export function ArchitectureCanvas(props: {
           connectFromId={props.connectFromId}
           onConnectFrom={props.onConnectFrom}
           onConnectError={props.onConnectError}
+          focusRequest={props.focusRequest}
+          onLoadReference={props.onLoadReference}
         />
       </ClassFilterProvider>
     </ReactFlowProvider>

@@ -15,6 +15,8 @@ export type ServiceNodeData = {
   blastOrigin?: boolean
   queueDepth?: string
   loss?: string
+  /** Numbers come from a run still in progress on the worker. */
+  live?: boolean
 }
 
 export type ZoneNodeData = {
