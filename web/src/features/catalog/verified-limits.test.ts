@@ -199,12 +199,17 @@ describe('batched Verified figures from plan prose', () => {
     expect(fargate.find((value) => value.conditions.metric === 'tasks-per-RunTask')?.limitType).toBe('quota_adjustability_unknown')
   })
 
-  it('marks CloudFront unknown because the plan states no number', () => {
+  it('records the Oct 26 CloudFront quotas page and does not cap the CDN', () => {
     const cf = catalogValuesFor('aws-cloudfront')
-    expect(cf).toHaveLength(1)
-    expect(cf[0]?.status).toBe('unknown')
-    expect(cf[0]?.value).toBeUndefined()
-    expect(usableAsCeiling(cf[0]!)).toBe(false)
+    expect(cf.every((value) => value.retrievedOn === '2026-10-26')).toBe(true)
+    expect(cf.every((value) => value.sourceUrl.endsWith('/cloudfront-limits.html'))).toBe(true)
+    expect(cf.every((value) => value.caps === undefined)).toBe(true)
+    const rps = cf.find((value) => value.conditions.metric === 'requests-per-second')
+    expect(rps).toMatchObject({ value: 250_000, limitType: 'adjustable_quota' })
+    expect(usableAsCeiling(rps!)).toBe(true)
+    expect(cf.find((value) => value.conditions.metric === 'data-transfer')?.value).toBe(150)
+    expect(cf.find((value) => value.conditions.metric === 'files-per-distribution')?.value).toBeUndefined()
+    expect(cf.find((value) => value.conditions.metric === 'distributions')?.value).toBe(500)
   })
 
   it('stores SQS Standard and FIFO as variants on one service', () => {

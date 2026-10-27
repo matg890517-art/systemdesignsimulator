@@ -571,16 +571,41 @@ export const verifiedCatalogValues: Record<string, CatalogValue[]> = {
     '2026-10-23',
   ),
 
-  'aws-cloudfront': rows('aws-cloudfront', [
-    {
-      unit: 'count',
-      scope: 'distribution',
-      limitType: 'quota_adjustability_unknown',
-      conditions: { metric: 'quotas' },
-      status: 'unknown',
-      note: 'Oct 18 spot check verified the service. The plan does not state a CloudFront number.',
-    },
-  ]),
+  // CloudFront quotas page, supplied 2026-10-26. Canonical 18. No caps: rps is per distribution, not node throughput.
+  'aws-cloudfront': rows(
+    'aws-cloudfront',
+    [
+      pageFigure('data-transfer', 150, 'Gbps', 'distribution', 'adjustable_quota', 'Data transfer rate per distribution. Does not apply to flat-rate pricing plans. Increase via Support. Not wired as node throughput.'),
+      pageFigure('requests-per-second', 250_000, 'rps', 'distribution', 'adjustable_quota', 'Requests per second per distribution. Does not apply to flat-rate pricing plans. Increase via Support. Not wired as node throughput.'),
+      pageFigure('tags', 50, 'count', 'distribution', 'adjustable_quota', 'Tags that can be added to a distribution.'),
+      pageFigure('files-per-distribution', undefined, 'count', 'distribution', 'documented_behavior', 'Files that you can serve per distribution: no quota.'),
+      pageFigure('request-or-origin-response-length', 32_768, 'B', 'invocation', 'hard_limit', 'Maximum length of a request or an origin response, including headers and query strings, not including the body.'),
+      pageFigure('url-length', 8_192, 'B', 'invocation', 'hard_limit', 'Maximum length of a URL.'),
+      pageFigure('realtime-log-configs', 150, 'count', 'account', 'quota_adjustability_unknown', 'Maximum real-time access log delivery configurations per AWS account. The page does not say whether this default can be changed.'),
+      pageFigure('web-acl-associations', 100, 'count', 'service', 'adjustable_quota', 'Maximum associations per web ACL.'),
+      pageFigure('cnames', 100, 'count', 'distribution', 'adjustable_quota', 'Alternate domain names (CNAMEs) per distribution.'),
+      pageFigure('cache-behaviors', 75, 'count', 'distribution', 'adjustable_quota', 'Cache behaviors per distribution.'),
+      pageFigure('connection-attempts', 1, 'count', 'service', 'configurable_setting', 'Connection attempts per origin. Range 1–3. Lower bound.', { bound: 'min' }),
+      pageFigure('connection-attempts', 3, 'count', 'service', 'configurable_setting', 'Connection attempts per origin. Range 1–3. Upper bound.', { bound: 'max' }),
+      pageFigure('connection-timeout', 1, 's', 'service', 'configurable_setting', 'Connection timeout per origin. Range 1–10 seconds. Lower bound.', { bound: 'min' }),
+      pageFigure('connection-timeout', 10, 's', 'service', 'configurable_setting', 'Connection timeout per origin. Range 1–10 seconds. Upper bound.', { bound: 'max' }),
+      pageFigure('response-timeout', 1, 's', 'service', 'configurable_setting', 'Response timeout per origin (origin read/request timeout). Range 1–120 seconds. Lower bound.', { bound: 'min' }),
+      pageFigure('response-timeout', 120, 's', 'service', 'adjustable_quota', 'Response timeout per origin maximum 120 seconds. Increase via Support.', { bound: 'max' }),
+      pageFigure('distributions', 500, 'count', 'account', 'adjustable_quota', 'Distributions per AWS account.'),
+      pageFigure('distribution-chain', 2, 'count', 'service', 'hard_limit', 'Distributions within a chain of requests to an origin endpoint. Exceeding this quota results in a 403. The page recommends not stacking distributions.'),
+      pageFigure('cacheable-file', 50, 'GB', 'message', 'hard_limit', 'Maximum cacheable file size per HTTP GET response. POST and PUT responses are not cached.'),
+      pageFigure('http-request-body', 64, 'GB', 'invocation', 'hard_limit', 'Maximum size of an HTTP request body.'),
+      pageFigure('origins', 100, 'count', 'distribution', 'adjustable_quota', 'Origins per distribution.'),
+      pageFigure('origin-groups', 10, 'count', 'distribution', 'adjustable_quota', 'Origin groups per distribution.'),
+      pageFigure('functions', 100, 'count', 'account', 'quota_adjustability_unknown', 'CloudFront Functions per AWS account. The page does not say whether this default can be changed.'),
+      pageFigure('function-size', 10, 'KB', 'function', 'hard_limit', 'Maximum CloudFront Function size. Not adjustable. Extra data goes in a key value store.'),
+      pageFigure('invalidation-paths', 150, 'count', 'account', 'quota_adjustability_unknown', 'Invalidation paths or tags per second.'),
+      pageFigure('wildcard-invalidations', 1, 'count', 'account', 'quota_adjustability_unknown', 'Wildcard invalidations per second.'),
+      pageFigure('websocket-idle-timeout', 10, 'min', 'service', 'documented_behavior', 'WebSocket origin response idle timeout. If CloudFront detects no bytes from the origin to the client for 10 minutes, the connection is closed.'),
+      pageFigure('lambda-at-edge-timeout', 30, 's', 'function', 'hard_limit', 'Lambda@Edge function timeout. Concurrent executions point at Lambda regional quotas (default 1,000) and are not copied as a CloudFront-only number.'),
+    ],
+    '2026-10-26',
+  ),
 
   'azure-aks': rows('azure-aks', [
     {

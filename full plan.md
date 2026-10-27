@@ -276,23 +276,23 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 |  | [Elastic Beanstalk](https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html) | yes | Listed (not checked) |  |
 |  | [Lightsail](https://docs.aws.amazon.com/general/latest/gr/lightsail.html) | yes | Listed (not checked) |  |
 | Containers | [ECS](https://docs.aws.amazon.com/general/latest/gr/ecs-service.html) | yes | Verified |  |
-|  | [EKS](https://docs.aws.amazon.com/eks/latest/best-practices/known_limits_and_service_quotas.html) | yes | Listed (not checked) |  |
-| Storage | [S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html) | partial | Partial | Performance guidance, not quotas. Read 2026-10-23: 3,500 PUT and 5,500 GET per prefix. Not a ceiling. |
-|  | [EBS](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-resource-quotas.html) | yes | Listed (not checked) |  |
-|  | [EFS](https://docs.aws.amazon.com/efs/latest/ug/limits.html) | yes | Listed (not checked) |  |
-|  | [FSx](https://docs.aws.amazon.com/fsx/latest/WindowsGuide/limits.html) | yes | Listed (not checked) | Indirect: FSx for Windows only. |
-|  | [Storage Gateway](https://docs.aws.amazon.com/storagegateway/latest/vgw/resource-gateway-limits.html) | yes | Listed (not checked) |  |
+|  | [EKS](https://docs.aws.amazon.com/eks/latest/best-practices/known_limits_and_service_quotas.html) | yes | Listed (not checked) | Supplied file is other-service quotas that can hit EKS (IAM, VPC, ELB, EC2). Cluster quotas are on a different article. |
+| Storage | [S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html) | partial | Partial | Performance guidance, not quotas. Read 2026-10-23: 3,500 PUT and 5,500 GET per prefix. Not a ceiling. AWS S3 (2).md is the same page, not a quotas article. |
+|  | [EBS](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-resource-quotas.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+|  | [EFS](https://docs.aws.amazon.com/efs/latest/ug/limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+|  | [FSx](https://docs.aws.amazon.com/fsx/latest/WindowsGuide/limits.html) | yes | Listed (not checked) | Indirect: FSx for Windows only. Quota md supplied 2026-10-26. Not recorded. |
+|  | [Storage Gateway](https://docs.aws.amazon.com/storagegateway/latest/vgw/resource-gateway-limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
 | Database | [Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Limits.html) | yes | Verified |  |
 |  | [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html) | yes | Verified |  |
 |  | [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html) | yes | Verified | Quotas page read 2026-10-23. Default 40,000 RCU/WCU per table. Outside the canonical 18. |
-|  | [DocumentDB](https://docs.aws.amazon.com/documentdb/latest/devguide/limits.html) | yes | Listed (not checked) |  |
-|  | [Neptune](https://docs.aws.amazon.com/neptune/latest/userguide/limits.html) | yes | Listed (not checked) |  |
-|  | [Keyspaces](https://docs.aws.amazon.com/keyspaces/latest/devguide/quotas.html) | yes | Listed (not checked) |  |
-|  | [Timestream](https://docs.aws.amazon.com/timestream/latest/developerguide/ts-limits.html) | yes | Listed (not checked) |  |
-|  | [Redshift](https://docs.aws.amazon.com/redshift/latest/mgmt/amazon-redshift-limits.html) | yes | Listed (not checked) |  |
+|  | [DocumentDB](https://docs.aws.amazon.com/documentdb/latest/devguide/limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+|  | [Neptune](https://docs.aws.amazon.com/neptune/latest/userguide/limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26 (file named Nepture). Not recorded. |
+|  | [Keyspaces](https://docs.aws.amazon.com/keyspaces/latest/devguide/quotas.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+|  | [Timestream](https://docs.aws.amazon.com/timestream/latest/developerguide/ts-limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26 (file named Timesteam). Not recorded. |
+|  | [Redshift](https://docs.aws.amazon.com/redshift/latest/mgmt/amazon-redshift-limits.html) | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
 | Cache | [ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/quota-limits.html) | yes | Verified |  |
 |  | [MemoryDB](https://docs.aws.amazon.com/memorydb/latest/devguide/quota-limits.html) | yes | Verified |  |
-| Network and CDN | [CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html) | yes | Verified |  |
+| Network and CDN | [CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html) | yes | Verified | Quotas page read 2026-10-26. Default 250,000 rps and 150 Gbps per distribution (adjustable). Stays in the canonical 18. Not wired as node throughput. |
 |  | [Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html) | yes | Listed (not checked) |  |
 |  | [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html) | yes | Verified |  |
 |  | [Network Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-limits.html) | yes | Listed (not checked) |  |
@@ -310,9 +310,9 @@ The Workspace palette and the Catalog page list these services directly. Softwar
 |  | [Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html) | yes | Listed (not checked) |  |
 |  | [MQ](https://docs.aws.amazon.com/amazon-mq/latest/developer-guide/amazon-mq-limits.html) | yes | Listed (not checked) |  |
 |  | [AppSync](https://docs.aws.amazon.com/general/latest/gr/appsync.html) | yes | Listed (not checked) |  |
-| Analytics | [OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/limits.html) | yes | Listed (not checked) |  |
+| Analytics | [OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/limits.html) | yes | Listed (not checked) | Supplied file defers domain/instance quotas to the AWS General Reference. Warm-node SKU storage is on this page. |
 |  | [Athena](https://docs.aws.amazon.com/athena/latest/ug/service-limits.html) | yes | Listed (not checked) |  |
-|  | [EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-service-limits-what-are.html) | partial | Listed (not checked) |  |
+|  | [EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-service-limits-what-are.html) | partial | Listed (not checked) | Supplied file explains burst vs rate; example AddInstanceFleet 5 calls/s burst, 0.5/s replenish. Resource quota table is not on this page. |
 |  | [Glue](https://docs.aws.amazon.com/general/latest/gr/glue.html) | yes | Listed (not checked) |  |
 | Media | [MediaConvert](https://docs.aws.amazon.com/general/latest/gr/mediaconvert.html) | yes | Listed (not checked) |  |
 |  | [MediaLive](https://docs.aws.amazon.com/general/latest/gr/medialive_region.html) | yes | Listed (not checked) |  |
@@ -493,12 +493,13 @@ function usableAsCeiling(v: CatalogValue): boolean {
 
 **Canonical 18** is the first provider compare (Decision 3, amended Oct 23). It is Lambda, ECS, Aurora, RDS, ElastiCache, MemoryDB, CloudFront, Application Load Balancer, SQS; AKS, Azure SQL, Cache for Redis, Service Bus; GKE, Cloud SQL, Memorystore, Cloud Load Balancing, Pub/Sub. The Components by provider counts are no longer equal to that 18: AWS Batch was read on Oct 23, 2026 and is Verified in the status table, and it stays outside the 18.
 
-The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda’s 900 s and 5,400 s timeouts were first recorded in the Oct 18, 2026 spot check (M6); the Oct 23, 2026 quotas page confirms them and adds the rest of that page, including a default concurrency of 1,000. CloudFront is still the Oct 18 spot check with no number in this plan. **Azure Load Balancer is Partial** (Oct 20 changelog): idle timeout is recorded here as a configurable setting; it is not one of the 18. Azure Partial after the Oct 23 readings is Front Door, Load Balancer, Application Gateway, and Container Apps. **AWS Batch**, **AWS Fargate**, **DynamoDB**, **Azure Blob Storage**, **Azure Database for PostgreSQL**, **Cloud Run**, and **Cloud Storage** are later readings (Oct 23, 2026), Verified in the status table, and outside the 18. Lambda stays inside the 18. S3 and Cloud CDN stay Partial (guidance / caching pages).
+The table below is a **figure reading**, not the status list. SQS is one Verified service with Standard and FIFO rows. Lambda’s 900 s and 5,400 s timeouts were first recorded in the Oct 18, 2026 spot check (M6); the Oct 23, 2026 quotas page confirms them and adds the rest of that page, including a default concurrency of 1,000. CloudFront quotas were recorded on Oct 26, 2026 from the official limits page (default 250,000 rps and 150 Gbps per distribution, adjustable). **Azure Load Balancer is Partial** (Oct 20 changelog): idle timeout is recorded here as a configurable setting; it is not one of the 18. Azure Partial after the Oct 23 readings is Front Door, Load Balancer, Application Gateway, and Container Apps. **AWS Batch**, **AWS Fargate**, **DynamoDB**, **Azure Blob Storage**, **Azure Database for PostgreSQL**, **Cloud Run**, and **Cloud Storage** are later readings (Oct 23, 2026), Verified in the status table, and outside the 18. Lambda stays inside the 18. S3 and Cloud CDN stay Partial (guidance / caching pages).
 
 Unknown in Still open means the page read did not state a value, not that no limit exists. The pages were read through a page-summary tool; sources are in verify\_checklist.xlsx; re-check any figure before it ships. Do not invent a quota. These figures are Vendor figure (documented), not Measured. Phase 1 and Phase 5 stay open until a real load test of the reference stack exists.
 
 | Service | Verified | Still open |
 | --- | --- | --- |
+| AWS CloudFront | Default 150 Gbps and 250,000 rps per distribution (adjustable; not on flat-rate plans); 500 distributions per account; 100 origins; 75 cache behaviors; 100 CNAMEs; request/URL 32,768 / 8,192 bytes; cacheable GET 50 GB; request body 64 GB; distribution chain 2 (else 403); Functions 100 per account, 10 KB; invalidations 150 paths/s and 1 wildcard/s; WebSocket idle 10 min; Lambda@Edge timeout 30 s | Files per distribution: no quota. Concurrent executions point at Lambda. Not wired as node throughput. |
 | AWS ALB | Idle timeout 60 s default, range 1 to 4,000 s; 1,000 targets, 50 listeners, 100 rules (adjustable) | Scaling time; connection rate |
 | AWS ECS | 5,000 tasks per service, 5,000 services per cluster (fixed); 10 tasks per RunTask; Fargate launch 20 per second sustained (adjustable) | Cooldown defaults; warm-up |
 | AWS SQS Standard | At-least-once delivery, best-effort order, nearly unlimited API calls | Numeric quota |
@@ -1086,3 +1087,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 23, 2026 | Azure Database for PostgreSQL flexible-server limits recorded from the supplied page (read 2026-10-23). Status Listed → Verified. Default max_connections by SKU; 15 reserved. Counts: 24 Verified, 8 Partial, 96 Listed (not checked). Outside the canonical 18. Not wired as server count. Blob Storage still not recorded: Azure Blob Storage.md is the Cloud CDN caching page, not https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets. |
 | Oct 23, 2026 | Azure Blob Storage scalability-targets page recorded from the supplied copy (read 2026-10-23). Status Listed → Verified. 50,000 blocks; target 3,000 rps per block blob. Account ingress/egress not on this page. Counts: 25 Verified, 8 Partial, 95 Listed (not checked). Outside the canonical 18. Request rates are guidance, not a ceiling. Not wired as node throughput. |
 | Oct 23, 2026 | Workload duration, dt and seed are one run clock with the same default on Viewers, Uploaders and Clients (60 s, 0.1 s, 4821). Each Clients block shows those fields; editing one updates all. |
+| Oct 26, 2026 | CloudFront quotas page recorded from the supplied copy (read 2026-10-26). Canonical 18; default 250,000 rps and 150 Gbps per distribution. Counts unchanged (already Verified with no number). Not wired as node throughput. AWS S3 (2).md is a duplicate of the S3 performance page; S3 stays Partial. Other new AWS md files are real quota pages but not yet recorded (stay Listed): EKS (other-service quotas, not the EKS cluster table), EBS, EFS, FSx, Storage Gateway, DocumentDB, Neptune (file named Nepture), Keyspaces, Timestream (file named Timesteam), Redshift, Route 53, NLB, API Gateway, Global Accelerator, VPC, Direct Connect, WAF, Shield, EventBridge, Kinesis, MSK, Step Functions, MQ, OpenSearch (defers to General Reference), Athena, EMR (burst/rate explainer), MediaPackage, IVS. Missing md vs the AWS 50: EC2, App Runner, Elastic Beanstalk, Lightsail, SNS, AppSync, Glue, MediaConvert, MediaLive. Azure/GCP 9-block Partials were not replaced: Front Door is still routing-limits, Application Gateway still autoscaling, Cloud CDN still caching. |

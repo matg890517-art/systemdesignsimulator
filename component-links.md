@@ -1,6 +1,6 @@
 # Component verify links and status
 
-Official page for every catalog component, with its status. Every link was read on Oct 20, 2026. A link shows where to look; it does not mean the limits were read. AWS Batch, Lambda, Fargate, S3, DynamoDB, Azure Front Door, Application Gateway, Container Apps, Azure Blob Storage, Azure Database for PostgreSQL, Cloud Run, Cloud Storage, and Cloud CDN figures were read on Oct 23, 2026. Merged from `component_link.md` (links, limits on page) and `catalog-updated.pdf` (statuses, notes, fixed links).
+Official page for every catalog component, with its status. Every link was read on Oct 20, 2026. A link shows where to look; it does not mean the limits were read. AWS Batch, Lambda, Fargate, S3, DynamoDB, Azure Front Door, Application Gateway, Container Apps, Azure Blob Storage, Azure Database for PostgreSQL, Cloud Run, Cloud Storage, and Cloud CDN figures were read on Oct 23, 2026. CloudFront quotas were recorded on Oct 26, 2026. Other AWS quota md files supplied Oct 26 stay Listed until encoded. Merged from `component_link.md` (links, limits on page) and `catalog-updated.pdf` (statuses, notes, fixed links).
 
 ## Status labels
 
@@ -30,7 +30,7 @@ Official page for every catalog component, with its status. Every link was read 
 
 | Category | Service | Official page | Limits on page | Status | Note |
 |---|---|---|---|---|---|
-| Compute | EC2 | https://docs.aws.amazon.com/general/latest/gr/ec2-service.html | yes | Listed (not checked) |  |
+| Compute | EC2 | https://docs.aws.amazon.com/general/latest/gr/ec2-service.html | yes | Listed (not checked) | No md supplied Oct 26. |
 | Compute | Lambda | https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html | yes | Verified | Quotas page read 2026-10-23. Concurrency default 1,000 is now recorded. Stays in the canonical 18. |
 | Compute | Fargate | https://docs.aws.amazon.com/AmazonECS/latest/developerguide/throttling.html | yes | Verified | Token-bucket launch rates. Read 2026-10-23. Outside the canonical 18. |
 | Compute | Batch | https://docs.aws.amazon.com/batch/latest/userguide/service_limits.html | yes | Verified | Unchanged quotas, each Region-specific. Read 2026-10-23. Outside the canonical 18. |
@@ -38,23 +38,23 @@ Official page for every catalog component, with its status. Every link was read 
 | Compute | Elastic Beanstalk | https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html | yes | Listed (not checked) |  |
 | Compute | Lightsail | https://docs.aws.amazon.com/general/latest/gr/lightsail.html | yes | Listed (not checked) |  |
 | Containers | ECS | https://docs.aws.amazon.com/general/latest/gr/ecs-service.html | yes | Verified |  |
-| Containers | EKS | https://docs.aws.amazon.com/eks/latest/best-practices/known_limits_and_service_quotas.html | yes | Listed (not checked) |  |
-| Storage | S3 | https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html | partial | Partial | Performance guidance, not quotas. Read 2026-10-23: 3,500 PUT and 5,500 GET per prefix. Not a ceiling. |
-| Storage | EBS | https://docs.aws.amazon.com/ebs/latest/userguide/ebs-resource-quotas.html | yes | Listed (not checked) |  |
-| Storage | EFS | https://docs.aws.amazon.com/efs/latest/ug/limits.html | yes | Listed (not checked) |  |
-| Storage | FSx | https://docs.aws.amazon.com/fsx/latest/WindowsGuide/limits.html | yes | Listed (not checked) | Indirect: FSx for Windowsonly. |
-| Storage | Storage Gateway | https://docs.aws.amazon.com/storagegateway/latest/vgw/resource-gateway-limits.html | yes | Listed (not checked) |  |
+| Containers | EKS | https://docs.aws.amazon.com/eks/latest/best-practices/known_limits_and_service_quotas.html | yes | Listed (not checked) | Supplied file is other-service quotas that can hit EKS (IAM, VPC, ELB, EC2). Cluster quotas are on a different article. |
+| Storage | S3 | https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html | partial | Partial | Performance guidance, not quotas. Read 2026-10-23: 3,500 PUT and 5,500 GET per prefix. Not a ceiling. AWS S3 (2).md is the same page, not a quotas article. |
+| Storage | EBS | https://docs.aws.amazon.com/ebs/latest/userguide/ebs-resource-quotas.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+| Storage | EFS | https://docs.aws.amazon.com/efs/latest/ug/limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+| Storage | FSx | https://docs.aws.amazon.com/fsx/latest/WindowsGuide/limits.html | yes | Listed (not checked) | Indirect: FSx for Windows only. Quota md supplied 2026-10-26. Not recorded. |
+| Storage | Storage Gateway | https://docs.aws.amazon.com/storagegateway/latest/vgw/resource-gateway-limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
 | Database | Aurora | https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Limits.html | yes | Verified |  |
 | Database | RDS | https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html | yes | Verified |  |
 | Database | DynamoDB | https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html | yes | Verified | Quotas page read 2026-10-23. Default 40,000 RCU/WCU per table. Outside the canonical 18. |
-| Database | DocumentDB | https://docs.aws.amazon.com/documentdb/latest/devguide/limits.html | yes | Listed (not checked) |  |
-| Database | Neptune | https://docs.aws.amazon.com/neptune/latest/userguide/limits.html | yes | Listed (not checked) |  |
-| Database | Keyspaces | https://docs.aws.amazon.com/keyspaces/latest/devguide/quotas.html | yes | Listed (not checked) |  |
-| Database | Timestream | https://docs.aws.amazon.com/timestream/latest/developerguide/ts-limits.html | yes | Listed (not checked) |  |
-| Database | Redshift | https://docs.aws.amazon.com/redshift/latest/mgmt/amazon-redshift-limits.html | yes | Listed (not checked) |  |
+| Database | DocumentDB | https://docs.aws.amazon.com/documentdb/latest/devguide/limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+| Database | Neptune | https://docs.aws.amazon.com/neptune/latest/userguide/limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26 (file named Nepture). Not recorded. |
+| Database | Keyspaces | https://docs.aws.amazon.com/keyspaces/latest/devguide/quotas.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
+| Database | Timestream | https://docs.aws.amazon.com/timestream/latest/developerguide/ts-limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26 (file named Timesteam). Not recorded. |
+| Database | Redshift | https://docs.aws.amazon.com/redshift/latest/mgmt/amazon-redshift-limits.html | yes | Listed (not checked) | Quota md supplied 2026-10-26. Not recorded. |
 | Cache | ElastiCache | https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/quota-limits.html | yes | Verified |  |
 | Cache | MemoryDB | https://docs.aws.amazon.com/memorydb/latest/devguide/quota-limits.html | yes | Verified |  |
-| Network and CDN | CloudFront | https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html | yes | Verified |  |
+| Network and CDN | CloudFront | https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html | yes | Verified | Quotas page read 2026-10-26. Default 250,000 rps and 150 Gbps per distribution (adjustable). Stays in the canonical 18. Not wired as node throughput. |
 | Network and CDN | Route 53 | https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html | yes | Listed (not checked) |  |
 | Network and CDN | Application LoadBalancer | https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html | yes | Verified |  |
 | Network and CDN | Network LoadBalancer | https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-limits.html | yes | Listed (not checked) |  |
@@ -72,9 +72,9 @@ Official page for every catalog component, with its status. Every link was read 
 | Messaging and integration | Step Functions | https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html | yes | Listed (not checked) |  |
 | Messaging and integration | MQ | https://docs.aws.amazon.com/amazon-mq/latest/developer-guide/amazon-mq-limits.html | yes | Listed (not checked) |  |
 | Messaging and integration | AppSync | https://docs.aws.amazon.com/general/latest/gr/appsync.html | yes | Listed (not checked) |  |
-| Analytics | OpenSearchService | https://docs.aws.amazon.com/opensearch-service/latest/developerguide/limits.html | yes | Listed (not checked) |  |
+| Analytics | OpenSearch Service | https://docs.aws.amazon.com/opensearch-service/latest/developerguide/limits.html | yes | Listed (not checked) | Supplied file defers domain/instance quotas to the AWS General Reference. |
 | Analytics | Athena | https://docs.aws.amazon.com/athena/latest/ug/service-limits.html | yes | Listed (not checked) |  |
-| Analytics | EMR | https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-service-limits-what-are.html | partial | Listed (not checked) |  |
+| Analytics | EMR | https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-service-limits-what-are.html | partial | Listed (not checked) | Supplied file explains burst vs rate; example AddInstanceFleet 5 calls/s. Resource quota table is not on this page. |
 | Analytics | Glue | https://docs.aws.amazon.com/general/latest/gr/glue.html | yes | Listed (not checked) |  |
 | Media | MediaConvert | https://docs.aws.amazon.com/general/latest/gr/mediaconvert.html | yes | Listed (not checked) |  |
 | Media | MediaLive | https://docs.aws.amazon.com/general/latest/gr/medialive_region.html | yes | Listed (not checked) |  |
