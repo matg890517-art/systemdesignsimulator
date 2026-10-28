@@ -31,11 +31,13 @@ import type {
   Bottleneck,
   KpiState,
   NodeRunStat,
+  RunTick,
   ServiceNodeData,
   WorkspaceRun,
   ZoneNodeData,
 } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
+import { emitEvery, shouldEmitTick } from './playback.ts'
 
 export function kpisFromDraft(
   draft: WorkloadDraft,
@@ -51,7 +53,7 @@ export function kpisFromDraft(
     load: formatRps(load),
     loadHint: hint,
     latency: 'unknown',
-    latencyHint: 'P50 / P90 / P99 unknown until discrete samples tails. Fluid has rates, not tails.',
+    latencyHint: 'Analytic percentiles not wired yet. Unknown until then. Not Measured.',
     errors: 'unknown',
     bottlenecks: '—',
     bottleneckHint: 'Run to rank from the engine',
@@ -62,10 +64,8 @@ export function kpisFromDraft(
 
 export const idleKpis: KpiState = kpisFromDraft(defaultWorkloadDraft())
 
-export type RunProgress = {
-  t: number
+export type RunProgress = RunTick & {
   fraction: number
-  nodeStats: Record<string, NodeRunStat>
 }
 
 function formatRps(n: number): string {
@@ -327,6 +327,60 @@ function statsFromDiscrete(
   return { stats, classStats, edgeOffered, edgeClassOffered }
 }
 
+function tickFromFluid(
+  topology: Topology,
+  state: FluidState,
+  profiles: CalibrationProfile[],
+): RunTick {
+  const { stats, classStats, edgeOffered, edgeClassOffered } = statsFromFluid(
+    topology,
+    state,
+    'fluid',
+    profiles,
+  )
+  return {
+    t: state.t,
+    nodeStats: stats,
+    classStats,
+    edgeOffered,
+    edgeClassOffered,
+  }
+}
+
+function ticksFromDiscrete(
+  topology: Topology,
+  result: DiscreteRunResult,
+  durationSec: number,
+  profiles: CalibrationProfile[],
+): RunTick[] {
+  const bins = Math.min(48, Math.max(2, Math.round(durationSec / Math.max(0.25, durationSec / 24))))
+  const binSec = durationSec / bins
+  const ticks: RunTick[] = []
+  let previous: RunTick | undefined
+  for (let i = 1; i <= bins; i++) {
+    const end = i * binSec
+    const start = (i - 1) * binSec
+    const slice: DiscreteRunResult = {
+      ...result,
+      events: result.events.filter((event) => event.t > start - 1e-12 && event.t <= end + 1e-12),
+    }
+    const { stats, classStats, edgeOffered, edgeClassOffered } = statsFromDiscrete(
+      topology,
+      slice,
+      binSec,
+      profiles,
+    )
+    const empty = Object.values(stats).every((row) => row.offered === 0 && row.completed === 0)
+    const snap = empty && previous
+      ? previous
+      : { nodeStats: stats, classStats, edgeOffered, edgeClassOffered }
+    const tick: RunTick = { t: end, ...snap }
+    ticks.push(tick)
+    previous = tick
+  }
+  return ticks
+}
+
 function edgeOfferedFromDiscrete(result: DiscreteRunResult, durationSec: number) {
   const counts: Record<string, number> = {}
   const classCounts: Record<string, Record<string, number>> = {}
@@ -426,6 +480,19 @@ export function runWorkspace(
       workload.durationSec,
       profiles,
     )
+    const ticks = ticksFromDiscrete(topology, result, workload.durationSec, profiles)
+    const lastTick: RunTick = {
+      t: workload.durationSec,
+      nodeStats: stats,
+      classStats,
+      edgeOffered,
+      edgeClassOffered,
+    }
+    if (ticks.length === 0 || ticks.at(-1)!.t < workload.durationSec - 1e-9) {
+      ticks.push(lastTick)
+    } else {
+      ticks[ticks.length - 1] = lastTick
+    }
     const sent = result.counts.created
     const errors = sent === 0 ? 0 : (result.counts.rejected + result.counts.dropped) / sent
     const { kpis, bottlenecks } = kpisFromStats(stats, topology, workload.offered, 'discrete', {
@@ -433,7 +500,7 @@ export function runWorkspace(
       latency: `${result.meanWaitMs.toFixed(0)} ms`,
       latencyHint: 'Mean wait from discrete-event. P99 needs more samples.',
     }, profiles)
-    onProgress?.({ t: workload.durationSec, fraction: 1, nodeStats: stats })
+    onProgress?.({ ...lastTick, fraction: 1 })
     const blast = blastFromRun(topology, fault, result)
     return {
       ok: true,
@@ -445,6 +512,8 @@ export function runWorkspace(
         classStats,
         edgeOffered,
         edgeClassOffered,
+        ticks,
+        durationSec: workload.durationSec,
         hint: `discrete · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}${blast.breakerOpenEdges.length ? ` · breaker open ${blast.breakerOpenEdges.join(',')}` : ''}`,
         ...blast,
       },
@@ -452,14 +521,15 @@ export function runWorkspace(
   }
 
   const stepCount = Math.max(1, Math.round(workload.durationSec / workload.dtSec))
-  const emitEvery = Math.max(1, Math.floor(stepCount / 24))
+  const every = emitEvery(stepCount)
+  const ticks: RunTick[] = []
   const result = runFluid(topology, workload, {
     record: false,
     onStep: (state, stepIndex, total) => {
-      if (!onProgress) return
-      if (stepIndex !== total && stepIndex % emitEvery !== 0) return
-      const { stats } = statsFromFluid(topology, state, 'fluid', profiles)
-      onProgress({ t: state.t, fraction: stepIndex / total, nodeStats: stats })
+      if (!shouldEmitTick(stepIndex, total, every)) return
+      const tick = tickFromFluid(topology, state, profiles)
+      ticks.push(tick)
+      onProgress?.({ ...tick, fraction: stepIndex / total })
     },
   })
   const last = result.steps.at(-1)
@@ -470,6 +540,15 @@ export function runWorkspace(
     'fluid',
     profiles,
   )
+  if (ticks.length === 0 || ticks.at(-1)!.t < last.t - 1e-9) {
+    ticks.push({
+      t: last.t,
+      nodeStats: stats,
+      classStats,
+      edgeOffered,
+      edgeClassOffered,
+    })
+  }
   let offered = 0
   let rejected = 0
   for (const component of topology.components) {
@@ -482,7 +561,7 @@ export function runWorkspace(
   const { kpis, bottlenecks } = kpisFromStats(stats, topology, workload.offered, 'fluid', {
     errors: offered > 0 ? rejected / offered : 0,
     latency: 'unknown',
-    latencyHint: 'P50 / P90 / P99 unknown — fluid mode has rates, not tails',
+    latencyHint: 'Analytic percentiles not wired yet. Unknown until then. Not Measured.',
   }, profiles)
   const blast = blastFromRun(topology, fault)
   return {
@@ -495,6 +574,8 @@ export function runWorkspace(
       classStats,
       edgeOffered,
       edgeClassOffered,
+      ticks,
+      durationSec: workload.durationSec,
       hint: `fluid · ${workload.durationSec}s · seed ${workload.seed}${fault !== 'none' ? ` · fault ${fault}` : ''}`,
       ...blast,
     },

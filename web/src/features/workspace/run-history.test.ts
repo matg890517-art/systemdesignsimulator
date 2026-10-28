@@ -30,6 +30,8 @@ function run(overrides: Partial<WorkspaceRun> = {}): WorkspaceRun {
     classStats: {},
     edgeOffered: {},
     edgeClassOffered: {},
+    ticks: [],
+    durationSec: 60,
     hint: 'fluid · 60s · seed 1',
     affectedComponentIds: [],
     breakerOpenEdges: [],

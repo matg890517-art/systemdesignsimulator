@@ -3,7 +3,7 @@ import type { Edge as RfEdge, Node } from '@xyflow/react'
 import type { FaultMode } from '../calibration/types.ts'
 import type { WorkloadDraft } from './compile.ts'
 import { runWorkspace } from './run-workspace.ts'
-import type { NodeRunStat, ServiceNodeData, WorkspaceRun, ZoneNodeData } from './types.ts'
+import type { RunTick, ServiceNodeData, WorkspaceRun, ZoneNodeData } from './types.ts'
 
 export type EngineJobRequest = {
   id: number
@@ -17,7 +17,7 @@ export type EngineJobRequest = {
 export type EngineJobResult = { ok: true; run: WorkspaceRun } | { ok: false; reason: string }
 
 export type EngineJobMessage =
-  | { id: number; type: 'progress'; t: number; fraction: number; nodeStats: Record<string, NodeRunStat> }
+  | ({ id: number; type: 'progress'; fraction: number } & RunTick)
   | { id: number; type: 'done'; result: EngineJobResult }
   | { id: number; type: 'error'; message: string }
 
@@ -33,9 +33,7 @@ export function runEngineJob(request: EngineJobRequest, post: (message: EngineJo
         post({
           id: request.id,
           type: 'progress',
-          t: progress.t,
-          fraction: progress.fraction,
-          nodeStats: progress.nodeStats,
+          ...progress,
         })
       },
     )

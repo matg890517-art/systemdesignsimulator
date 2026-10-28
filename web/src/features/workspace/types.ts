@@ -15,7 +15,7 @@ export type ServiceNodeData = {
   blastOrigin?: boolean
   queueDepth?: string
   loss?: string
-  /** Numbers come from a run still in progress on the worker. */
+  /** Numbers come from a run still in progress on the worker, or from playback. */
   live?: boolean
 }
 
@@ -118,6 +118,15 @@ export type NodeRunStat = {
   serviceMs?: number
 }
 
+/** One sampled engine tick. Playback and edge motion read this; they do not re-run the math. */
+export type RunTick = {
+  t: number
+  nodeStats: Record<string, NodeRunStat>
+  classStats: Record<string, Record<string, NodeRunStat>>
+  edgeOffered: Record<string, number>
+  edgeClassOffered: Record<string, Record<string, number>>
+}
+
 export type WorkspaceRun = {
   mode: 'fluid' | 'discrete'
   kpis: KpiState
@@ -126,6 +135,8 @@ export type WorkspaceRun = {
   classStats: Record<string, Record<string, NodeRunStat>>
   edgeOffered: Record<string, number>
   edgeClassOffered: Record<string, Record<string, number>>
+  ticks: RunTick[]
+  durationSec: number
   hint: string
   affectedComponentIds: string[]
   blastOriginId?: string

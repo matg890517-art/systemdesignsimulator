@@ -15,11 +15,11 @@ const steps = [
   },
   {
     title: '3. Set a workload and Run',
-    body: 'Constant, Poisson, step, or spike. Fluid-flow and discrete-event share the canvas. The engine runs on a Web Worker.',
+    body: 'Phase 1 Analytic uses constant load. Poisson, step, and spike wait for discrete verifier and bursts. The engine runs on a Web Worker.',
   },
   {
     title: '4. Read Results as a model, not a lab',
-    body: 'Bottlenecks come from μ = n / S. Fluid P50 / P90 / P99 stay unknown. J12 A/B stay blocked until a real recorded test of the reference stack exists. No profile is Measured yet.',
+    body: 'Bottlenecks come from Erlang-C wait, not from capacity ≥ load. Analytic p50/p95/p99 are labeled Analytic, never Measured. J12 A/B stay blocked until a real recorded test of the reference stack exists.',
   },
   {
     title: '5. Try the AKS headroom challenge',

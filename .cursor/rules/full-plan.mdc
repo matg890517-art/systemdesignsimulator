@@ -12,7 +12,8 @@ Read and follow `full plan.md` before planning or implementing. IDs F/N/J and ph
 - Engine stays TypeScript, provider-agnostic, independent of React/MUI; catalogs are data.
 - Unknown stays unknown and does not cap. Only `hard_limit` or `adjustable_quota` may ceiling.
 - Typed values are Estimated. A source URL is Vendor figure (“source not checked” until confirmed). Measured only from a real imported load test. Never invent SKU prices, latencies, or quotas.
-- Fluid has rates, not tails: P50/P90/P99 stay unknown in fluid. J12 A/B stay blocked until a recorded reference test exists. Do not claim 92% fidelity or 60 FPS.
+- Phase 1 engine is Analytic steady-state (Jackson, Erlang C, Allen-Cunneen). p50/p95/p99 from that solver are labeled Analytic, never Measured. The fluid rate stepper is the overload branch only (ρ ≥ 1). J12 A/B stay blocked until a recorded reference test exists. Do not claim 92% fidelity or 60 FPS.
+- Product phases stay 0–5. Engine slices E1–E4 do not renumber them: E3 faults = Phase 4; E4 Monte Carlo is Later, not persistence.
 - First provider compare is capacity and limits only (Oct 19). Cost is typed `$/hr` or sourced later, never guessed from Catalog.
 - Keep IaC export and real nested-as-one-node out of v1 (Later in the roadmap). Prefer SDS JSON over Terraform/Mermaid until F25.
 

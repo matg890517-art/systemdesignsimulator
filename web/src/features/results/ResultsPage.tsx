@@ -95,9 +95,11 @@ export function ResultsPage() {
           >
             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>No run yet</Typography>
             <Typography sx={{ mt: 1, fontSize: 13, color: 'text.secondary', maxWidth: 520 }}>
-              Run the canvas on Workspace. Results shows that run: load, latency, errors,
-              bottlenecks, cost, and the ranking. Fluid P50 / P90 / P99 stay unknown. Cost stays
-              unknown until you type $/hr. Catalog has no SKU prices.
+              Run the canvas on Workspace. Phase 1 Results is steady-state queueing: Stable /
+              Saturating / Unstable, ρ, wait, Analytic p50/p95/p99 (never Measured), headroom, and
+              a hockey-stick of latency vs load. The current run is still the fluid rate model until
+              Analytic is wired. J12 A/B stay blocked. Cost stays unknown until you type $/hr.
+              Catalog has no SKU prices.
             </Typography>
           </Box>
         )}

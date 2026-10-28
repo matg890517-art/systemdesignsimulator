@@ -58,7 +58,7 @@ export const WORKLOAD_RUN_CLOCK = {
 export const defaultWorkloadDraft = (): WorkloadDraft => ({
   ...WORKLOAD_RUN_CLOCK,
   mode: 'fluid',
-  shapeKind: 'constant',
+  shapeKind: 'step',
   stepAtSec: 20,
   stepFactor: 2,
   spikeAtSec: 20,

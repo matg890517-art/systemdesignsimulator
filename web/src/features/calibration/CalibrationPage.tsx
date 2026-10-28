@@ -156,6 +156,8 @@ export function CalibrationPage() {
           <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
             Same cards as the Workspace canvas, with the same icons. Estimated / Vendor /
             Measured are explicit. Unknown is allowed and never turned into a silent default.
+            Phase 1 Analytic reads mean service time and optional SCV; a fit from typed p50/p95
+            stays Estimated. Only an imported load test of this service may stamp Measured.
           </Typography>
           <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
             <Box component="thead">

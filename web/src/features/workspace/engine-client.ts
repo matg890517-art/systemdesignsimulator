@@ -62,7 +62,14 @@ export function runWorkspaceAsync(
       const message = event.data
       if (message.id !== id) return
       if (message.type === 'progress') {
-        onProgress?.({ t: message.t, fraction: message.fraction, nodeStats: message.nodeStats })
+        onProgress?.({
+          t: message.t,
+          fraction: message.fraction,
+          nodeStats: message.nodeStats,
+          classStats: message.classStats,
+          edgeOffered: message.edgeOffered,
+          edgeClassOffered: message.edgeClassOffered,
+        })
         return
       }
       cleanup()

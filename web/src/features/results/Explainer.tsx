@@ -84,7 +84,8 @@ export function Explainer({ bottlenecks }: { bottlenecks: Bottleneck[] }) {
         ))}
       <Stack spacing={0.5}>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          P50 / P90 / P99 stay unknown in fluid mode. Discrete mean wait is the live latency until tails are sampled.
+          Phase 1 percentiles are Analytic (Erlang C / path gamma), never Measured. Discrete
+          samples check them (N7). The fluid rate stepper is the overload branch when ρ ≥ 1.
         </Typography>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
           Cost sums typed $/hr on nodes. Catalog has no SKU prices. Unknown if none are typed.

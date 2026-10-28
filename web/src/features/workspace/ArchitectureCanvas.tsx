@@ -31,7 +31,8 @@ import { ServiceNodeView, ZoneNodeView } from './ServiceNode.tsx'
 import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-filter.ts'
 import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
-import { decorateEdges } from './edge-data.ts'
+import { decorateEdges, type WorkspaceEdgeData } from './edge-data.ts'
+import { flowPeriodSec } from './playback.ts'
 import { connectComponents } from './canvas-edit.ts'
 import {
   absolutePosition,
@@ -61,10 +62,13 @@ function ClassAwareEdge(props: EdgeProps) {
       source: props.source,
       data: props.data,
     })
+  const flowRps = (props.data as WorkspaceEdgeData | undefined)?.flowRps ?? 0
+  const flowing = visible && flowRps > 0
   return (
     <SmoothStepEdge
       {...props}
       interactionWidth={32}
+      animated={flowing}
       style={{
         ...props.style,
         stroke: visible
@@ -73,6 +77,7 @@ function ClassAwareEdge(props: EdgeProps) {
             : '#7B8794'
           : '#D5DBE3',
         opacity: visible ? 1 : 0.14,
+        ['--sds-flow' as string]: `${flowPeriodSec(flowRps)}s`,
       }}
       label={visible ? props.label : undefined}
     />
@@ -284,6 +289,13 @@ function CanvasInner({
         bgcolor: 'background.paper',
         borderRadius: 3,
         overflow: 'hidden',
+        '@keyframes sdsDash': {
+          to: { strokeDashoffset: -28 },
+        },
+        '& .react-flow__edge.animated path': {
+          strokeDasharray: '10 8',
+          animation: 'sdsDash var(--sds-flow, 0.7s) linear infinite',
+        },
         '& .react-flow__handle': {
           width: 10,
           height: 10,

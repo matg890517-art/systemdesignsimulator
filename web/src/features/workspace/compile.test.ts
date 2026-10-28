@@ -44,6 +44,7 @@ describe('compileCanvas', () => {
     expect(copy?.network.bandwidthBps).toBeUndefined()
     expect(ecs?.behavior.servers.state).toBe('unknown')
     expect(workload.offered.viewers.read).toBe(50_000)
+    expect(workload.shape).toMatchObject({ kind: 'step', atSec: 20, factor: 2 })
     expect(workload.offered.viewers.write).toBe(1_200)
     expect(workload.offered.viewers.async).toBe(2_600)
     expect(workload.offered.uploaders.bulk).toBe(2)
@@ -446,6 +447,8 @@ describe('generic reference stack', () => {
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(50, 0)
     expect(result.run.edgeOffered['c-cdn']).toBeCloseTo(240, 0)
     expect(result.run.edgeOffered['c-q']).toBeCloseTo(50, 0)
+    expect(result.run.ticks.length).toBeGreaterThan(2)
+    expect(result.run.durationSec).toBe(8)
     expect(result.run.edgeClassOffered['c-cdn']?.read).toBeCloseTo(200, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
     expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
@@ -484,6 +487,25 @@ describe('generic reference stack', () => {
     if (!result.ok) return
     expect(result.run.nodeStats.cdn.offered).toBeCloseTo(200, 0)
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(90, 0)
+  })
+
+  it('keeps hop rates doubling after the default step (playback ticks, not a second engine)', () => {
+    const graph = referenceStackGraph('generic')
+    const result = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...referenceWorkloadDraft(), durationSec: 40, dtSec: 0.5 },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const before = result.run.ticks.find((tick) => tick.t < 20)
+    const after = result.run.ticks.find((tick) => tick.t >= 20.5)
+    expect(before).toBeDefined()
+    expect(after).toBeDefined()
+    expect(after!.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan((before!.edgeOffered['c-cdn'] ?? 0) * 1.5)
+    expect(result.run.nodeStats.cdn.offered).toBeCloseTo(480, 0)
   })
 })
 

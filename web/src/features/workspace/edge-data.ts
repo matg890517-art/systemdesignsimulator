@@ -29,6 +29,8 @@ export type WorkspaceEdgeData = {
   }
   crossProvider?: boolean
   note?: string
+  /** Offered rps from the current playback tick. Drives dash motion. */
+  flowRps?: number
 }
 
 export const defaultClassBytes: Record<WorkspaceClassId, { requestBytes: number; responseBytes: number }> = {
@@ -221,8 +223,15 @@ export function decorateEdges<T extends RfEdge>(
     const extra = edge.data as WorkspaceEdgeData | undefined
     const typed = readEdgeData(edge)
     const data = extra?.classes
-      ? { ...extra, crossProvider: cross }
-      : { routing: typed.routing, fanOut: typed.fanOut, call: typed.call, network: typed.network, crossProvider: cross }
+      ? { ...extra, crossProvider: cross, flowRps: extra.flowRps }
+      : {
+          routing: typed.routing,
+          fanOut: typed.fanOut,
+          call: typed.call,
+          network: typed.network,
+          crossProvider: cross,
+          flowRps: extra?.flowRps,
+        }
     const sameData = extra?.crossProvider === cross && extra?.classes === (data as WorkspaceEdgeData).classes
     const sameStyle = edge.style?.stroke === stroke && edge.style?.strokeDasharray === style.strokeDasharray
     const sameLabel = edge.label === nextLabel

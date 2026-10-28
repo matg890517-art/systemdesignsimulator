@@ -7,6 +7,7 @@ describe('F6 run modes', () => {
     expect(RUN_MODES.map((item) => item.id)).toEqual(['fluid', 'discrete'])
     expect(RUN_MODES.map((item) => item.shortLabel)).toEqual(['Fluid', 'Discrete'])
     expect(defaultWorkloadDraft().mode).toBe('fluid')
+    expect(defaultWorkloadDraft().shapeKind).toBe('step')
     expect(isRunMode('fluid')).toBe(true)
     expect(isRunMode('discrete')).toBe(true)
     expect(isRunMode('hybrid')).toBe(false)

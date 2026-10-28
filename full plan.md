@@ -10,7 +10,7 @@ The simulator is a capacity-planning tool: users model an architecture, apply a 
 
 - **Users:**~~ ~~engineers and architects sizing and validating distributed systems.
 - **Core promise:** results come from calibrated real-world numbers (service times, pool sizes, throughput limits), not from guesses.
-- **Two source specs:** the Enterprise System Design Simulator blueprint (product shell, canvas, node types, fault injection) and SysLab Architect (graph and matrix model, fluid-flow versus discrete-event modes, invariants). This plan merges them.
+- **Two source specs:** the Enterprise System Design Simulator blueprint (product shell, canvas, node types, fault injection) and SysLab Architect (graph and matrix model, fluid-flow versus discrete-event modes, invariants). This plan merges them. **Phase 1 engine (Decision 19, Oct 28):** closed-form steady-state queueing (Jackson traffic, Erlang C, Allen-Cunneen). The fluid rate stepper is the overload branch only. Discrete-event is the verifier, then bursts and faults.
 - **Assumption:** "real-base" is read as "grounded in real benchmark data". Confirm or correct this in the open decisions.
 
 **Out of scope for v1:** exporting Terraform or CloudFormation, multi-region network modeling, and team collaboration features.
@@ -30,7 +30,7 @@ Our target is to beat four existing simulators by combining what each does best 
 
 | ID | Requirement | Learned from | Priority |
 | --- | --- | --- | --- |
-| C1 | Clean canvas: live rps, p99 and utilization on every node, protocol-labeled animated edges, one summary bar (RPS, latency, errors, bottlenecks) | SysSimulator | P0 |
+| C1 | Clean canvas: live rps, Analytic p99 and utilization on every node, protocol-labeled hops, one summary bar. Animated edges are not Phase 1 (Decision 18–19: hockey-stick, not particles) | SysSimulator | P0 |
 | C2 | Scenario-based tutorials: brief, hints, an evaluate step, an optional timer, and a mentor that explains each result | SysLab | P1 |
 | C3 | Challenge mode: incident events with response choices, a running cost, a score and a post-mortem | SystemLore | P2 |
 | C4 | Deep component models: every behavior-changing parameter configurable and explained in a config panel; palette grouped by category | SyDe | P0 |
@@ -39,7 +39,7 @@ Our target is to beat four existing simulators by combining what each does best 
 | C7 | Canvas filter by request class (read, write, async) | SyDe | P1 |
 | C8 | Import a topology from Terraform, Kubernetes, Mermaid or JSON (import only; export stays out of v1) | SyDe | P2 |
 
-**Where we exceed all four (the model, not the demo):** every number shows its source and confidence (calibration library); edges carry typed requests instead of one traffic number; two run modes on one topology; deterministic replay and flow-conservation checks. Fidelity against a real load test is still blocked (Decision 6). C1’s **animated edges** are not shipped: a Fluid run labels hops with rps and then holds the last tick (Oct 28 stakeholder review). C1 to C8 are merged into the requirements table: C1 into F7, C4 into F3, and C2, C3, C5, C6, C7, C8 as F20, F21, F22, F23, F24, F25.
+**Where we exceed all four (the model, not the demo):** every number shows its source and confidence (calibration library); edges carry typed requests instead of one traffic number; two run modes on one topology (analytic steady-state, then discrete-event); deterministic replay and flow-conservation checks; **hockey-stick wait** (Erlang C) so 6 servers at 97% util is not “OK” just because 300 ≥ 290. Fidelity against a real load test is still blocked (Decision 6). C1’s **animated edges** are not the Phase 1 answer (Decision 18 amended). C1 to C8 are merged into the requirements table: C1 into F7 and F30, C4 into F3, and C2, C3, C5, C6, C7, C8 as F20, F21, F22, F23, F24, F25.
 
 Sources: [SysSimulator](https://syssimulator.com/simulator), [SystemLore](https://systemlore.com/), [SyDe](https://syde.cc/), [SysLab](https://syslabs.app/) (page not readable). Screenshots of all four simulators were supplied by you on 14 Oct 2026.
 
@@ -65,11 +65,12 @@ The requirements for this section are F15 to F19 in the Requirements table.
 - **Connect components.** Drag from a source handle (right or bottom) to a target handle (left or top), or click Connect and then two components. Clients only emit load: they cannot be a target, and two Clients cannot connect. One directed hop per pair; extra request classes live on that edge (F4, F19), not a second parallel line. Cross-provider edges stay Estimated (Decision 17).
 - **Icons.** Follow Real-base DS/Icons. Palette tiles and canvas cards always show a 20px / 16px glyph. Service is the original service mark; Normal is the generic kind shape. Switch with Icons → Service | Normal under the palette search row.
 - **Two palette layouts.** The ▦ / ☰ control is in the palette search row, next to Search services. ▦ is button view (icon above, label below, 68px tile, status dot top-right). ☰ is list view (16px icon, name, limits word) and is the default. One provider folder is open at a time; Generic starts open; categories collapse under it. Search opens every matching folder. Load at the bottom replaces the canvas with Generic, AWS, Azure or GCP (same 9-block wiring, catalog bindings only) or the YouTube example.
-- **Run mode.** Fluid-flow and Discrete-event sit next to Run (short labels Fluid / Discrete). Workload repeats the same control. Same topology either way. Fluid has rates, not tails: KPI P50/P90/P99 stay unknown. Discrete KPI latency is mean wait from the event run.
-- **Node cards.** After a run each card shows utilization, completed rate (`n /s`), queue depth and loss. The completed-rate slot is not P99. A traffic generator emits; it is not scored as 100% loss because it never `finish-service`. Rename a service in Config **Title**; the catalog kind does not change (YouTube Viewers and Uploaders are Clients with role titles).
-- **Edge classes.** Click the line, not the node. The Edge tab turns Read / Write / Async / Bulk on or off and sets routing (single, weighted, broadcast), weight, call kind, fan-out and latency. Clients rates come from the Workload tab: one rate block per Clients card, for the classes on that card's outgoing edges. Duration, dt and seed are one run clock with the same default on Viewers, Uploaders and Clients (60 s, 0.1 s, 4821). The generic reference wires R/W to CDN and A/B to Queue. An empty class map is zero flow, not every class. Class chips above the canvas only hide paths.
-- **Discrete-event guard.** Discrete Run is refused when expected arrivals exceed 20_000, so the tab does not freeze. Use fluid, or lower rate / duration. This is tab safety, not a closed N6 and not a 60 FPS claim.
-- **How a Run looks today (Oct 28, 2026).** Fluid is a **rate model**, not request particles. Edge labels such as 290 /s, 240 /s and 50 /s are conservation (offered splits across hops; 240 + 50 = 290), not a toy plus-minus. Default workload is **constant**, so after the worker finishes the cards **stop changing**. Edges are static SmoothStep lines (heatmap stroke, rps label). There is no SysSimulator-style moving flow and no playback chart. A 6px pulse on a card only while the worker is running is not edge animation. That still-frame is why a reviewer can call it a toy even when the engine is doing hundreds of ticks. Decision 18.
+- **Run mode.** Phase 1 default is **Analytic** (closed-form steady state). Discrete-event sits next to it as the verifier (engine slice E2) and later for bursts and faults (E3). The Fluid/Discrete toggle in the shipped UI is the old pair; wiring Analytic is Decision 19. Same topology either way. Analytic p50/p95/p99 are labeled **Analytic**, never Measured. Discrete KPI latency is mean wait from samples. The fluid **rate** stepper is not deleted: it is the overload branch when ρ ≥ 1.
+- **Node cards.** After a Phase 1 run each card shows ρ, wait, Analytic percentiles, queue length (Little’s law) and throughput. Status is Stable, Saturating or Unstable. A traffic generator emits; it is not scored as 100% loss. Rename a service in Config **Title**; the catalog kind does not change (YouTube Viewers and Uploaders are Clients with role titles).
+- **Edge classes.** Click the line, not the node. The Edge tab turns Read / Write / Async / Bulk on or off and sets routing (single, weighted, broadcast), weight, call kind, fan-out and latency. Clients rates come from the **Workload tab** (already its own tab): one rate block per Clients card, all four classes, empty class = 0. Duration, dt and seed are one run clock (60 s, 0.1 s, 4821). Phase 1 uses the **constant** profile plus arrival SCV for Allen-Cunneen. Poisson, step and spike wait for engine slices E2/E3. The generic reference wires R/W to CDN and A/B to Queue. Class chips above the canvas only hide paths.
+- **Faults tab.** Already its own Workspace tab (not buried in Config). Phase 1 ignores faults. The tab stays visible and is labeled engine slice **E3** (product Phase 4, F8): node crash, latency spike, link cut, packet drop. Do not run faults through the steady-state solver.
+- **Discrete-event guard.** Discrete Run is refused when expected arrivals exceed 20_000, so the tab does not freeze. Use Analytic, or lower rate / duration. This is tab safety, not a closed N6 and not a 60 FPS claim.
+- **How a Run looks (Decision 18 + 19, Oct 28).** Hop rates that add up (290 = 240 + 50) are Jackson conservation, not the product. The professional output is the **hockey-stick**: 6 servers at 290 rps / 20 ms is technically stable (ρ = 97%) and about 5× slower than 8 servers. F30 in Phase 1 is that latency-vs-load chart, not particle overlay on a frozen constant run.
 
 ## Requirements
 
@@ -81,10 +82,10 @@ The tool must let a user build a topology, run it under load, and trust the answ
 | F2 | Component palette: provider services listed directly under AWS, Azure, GCP and Kubernetes, plus a Generic group (clients, load balancer, service, cache, database, queue, worker pool, CDN, object store). File explorer: one provider folder open at a time, collapsible categories, sticky search, ☰ list default, ▦ button view. Icons follow Real-base DS/Icons (Service original glyph vs Normal kind shape) on tiles and on canvas cards; each service shows whether its limits are checked. Load picks Generic / AWS / Azure / GCP (same 9-block) or the YouTube example | Canvas | P0 | Blueprint, SyDe |
 | F3 | Per-component configuration: instance title, concurrency, pool size, service time per request class, capacity. Title is the card label; catalog kind stays. Every behavior-changing parameter is configurable and explained in the panel | Model | P0 | Blueprint, SyDe |
 | F4 | Typed edges: request classes, rates, payload sizes, call semantics (see System model). Classes are switched on the selected edge (on/off). Clients rates come from Workload, one block per Clients card. An empty class map is zero flow, not every class | Model | P0 | Proposed |
-| F5 | Workload definition: constant, Poisson, step and spike profiles; per Clients card on the canvas, per request class on that card's outgoing edges. Duration, dt and seed are one run clock, same default on every Clients card | Run | P0 | Blueprint |
-| F6 | Two run modes (fluid-flow and discrete-event) on the same topology. The mode switch sits next to Run; Workload repeats it | Run | P0 | SysLab Architect spec |
-| F7 | Live metrics on every node: utilization, completed rate, queue depth, loss, utilization heatmap, labeled edges, and one summary bar (rps, latency, errors, bottlenecks). Fluid P50/P90/P99 stay unknown (rates, not tails). Discrete KPI latency is mean wait; P99 needs samples. A generator is not 100% loss. **Gap (Oct 28):** C1 animated edges are not implemented. The canvas shows the last fluid tick as a still (rps labels, heat color). Pulse exists only during the worker. Playback / dash-flow is Decision 18, not a change to the rate model | Results | P0 | Both specs, SysSimulator |
-| F8 | Fault injection: node crash, latency spike, link cut, packet drop | Run | P1 | Blueprint |
+| F5 | Workload definition: one Workspace tab; one rate block per Clients card, Read / Write / Async / Bulk. Phase 1 uses constant load plus arrival SCV (Allen-Cunneen). Poisson, step and spike are engine slices E2/E3. Duration, dt and seed are one run clock, same default on every Clients card. Empty class map is zero flow | Run | P0 | Blueprint; Decision 19 |
+| F6 | Two run modes on the same topology: Analytic steady-state (Phase 1 default) and discrete-event (verifier, then E2/E3). The fluid rate stepper is the overload branch (ρ ≥ 1), not the sizing answer. Switch sits next to Run; Workload repeats it | Run | P0 | SysLab Architect spec; Decision 19 |
+| F7 | Live metrics on every node: ρ, wait, Analytic p50/p95/p99, queue length, throughput, status (Stable / Saturating / Unstable), heatmap, labeled hops, one summary bar. Analytic percentiles are labeled Analytic, never Measured. Discrete KPI latency is mean wait from samples. A generator is not 100% loss. Unknown service time keeps wait unknown. C1 animated edges are not Phase 1 | Results | P0 | Both specs, SysSimulator; Decision 19 |
+| F8 | Fault injection: node crash, latency spike, link cut, packet drop. Engine slice E3 / product Phase 4. The Faults tab stays visible in Phase 1 and does not feed the steady-state solver | Run | P1 | Blueprint; Decision 19 |
 | F9 | Blast-radius view: components impacted by a failed node | Results | P1 | SysLab Architect spec |
 | F10 | Calibration library as a full page: one profile per Workspace canvas component, same titles and catalog icons, with source, date, version, tier, region and confidence (Measured, Vendor figure or Estimated); load-test CSV import | Calibration | P0 | Proposed |
 | F11 | Cost estimate from instance and pricing inputs | Providers | P2 | Proposed |
@@ -99,19 +100,20 @@ The tool must let a user build a topology, run it under load, and trust the answ
 | F20 | Scenario-based tutorials: brief, hints, an evaluate step, an optional timer, and a mentor that explains each result | Learning | P1 | SysLab |
 | F21 | Challenge mode: incident events with response choices, a running cost, a score and a post-mortem | Learning | P2 | SystemLore |
 | F22 | Blueprint and quick-start template library, each with its calibration source | Learning | P1 | SysSimulator, SyDe |
-| F23 | Bottleneck explainer: cause, numbers (utilization, queue length, expected wait from the queueing model) and a suggested fix, derived from the model rather than a flat threshold | Results | P0 | SysLab |
+| F23 | Bottleneck explainer: highest ρ, which component breaks the SLO first, Erlang-C wait, queue length (Little’s law), headroom (max rps by bisection before SLO or the 70% util ceiling), N+1 check, and a suggested fix. Derived from the queueing model, not a flat “capacity ≥ load” tick | Results | P0 | SysLab; Decision 19 |
 | F24 | Canvas filter by request class (read, write, async, bulk) | Canvas | P1 | SyDe |
 | F25 | Import a topology from Terraform, Kubernetes, Mermaid or JSON (import only; export stays out of v1) | Platform | P2 | SyDe |
+| F30 | Phase 1 Results: hockey-stick chart of latency against load per component, plus headroom. Tick playback / dash-flow is a later **view** of the same ρ(λ), not a second engine and not the professional proof. Does not stamp Measured, close Phase 1/5, or claim 60 FPS | Results | P0 | Stakeholder Oct 28, C1; Decision 18–19 |
 | N1 | Fidelity: simulated bottleneck predictions are checked against actual load-test results. The Blueprint's numeric target (Simulation Fidelity Ratio, over 92% correlation with staging load-test benchmarks) is dropped for now. Open KPI until the metric, dataset and method are defined | Quality | P0 | Blueprint KPI |
 | N2 | Deterministic replay: same topology version, workload, mode, seed and calibration give an identical timeline | Quality | P0 | SysLab Architect spec |
-| N3 | Conservation of flow holds at every tick (inflow = outflow + change in backlog), with retries and drops defined | Quality | P0 | SysLab Architect spec |
+| N3 | Conservation of flow: Jackson traffic λᵢ = γᵢ + Σ λⱼ·pⱼᵢ at steady state; overload branch keeps offered = admitted + rejected + network drop and ΔB = (admitted − completed) Δt. Retries and drops defined. Throughput never exceeds offered load | Quality | P0 | SysLab Architect spec; Decision 19 |
 | N4 | UI stays responsive: simulation off the main thread, 60 FPS canvas | Quality | P0 | SysLab Architect spec |
 | N5 | Time to build and evaluate a design under 4 hours | Quality | P1 | Blueprint KPI |
 | N6 | Limits: maximum nodes per canvas, simulated duration, browser support, discrete-event request volume. Interim tab-safety guard: Discrete refuses above 20_000 expected arrivals. Other numbers not yet set (Decision 8) | Quality | P1 | Open |
-| N7 | Mode agreement: stable, light-load scenarios match within a stated tolerance; scenarios where the modes should differ are documented | Quality | P0 | Multi-cloud brief |
+| N7 | Mode agreement: Analytic vs discrete-event on stable, light-load scenarios within a stated tolerance (starting guess ±5% mean, ±10% p99, fixed when tests are written). Documented cases where they should differ (bursts, faults, ρ ≥ 1) | Quality | P0 | Multi-cloud brief; Decision 19 |
 | F26 | Every catalog value carries a limit type: hard limit, adjustable quota, best-effort target or performance guidance. Only the first two may act as a hard ceiling in the engine | Calibration | P0 (proposed) | AWS check, Oct 18, 2026 |
 | F27 | Every catalog value stores unit, scope, conditions (API type, engine, execution model), source URL, retrieval date and status. Provider entries are split where behavior differs (API Gateway types, SQS Standard and FIFO, ECS and EKS configurations, MemoryDB as a database profile) | Calibration, Catalog | P0 (proposed) | AWS check, Oct 18, 2026; Provider catalogs, Catalog value rules |
-| F28 | Every calibration value can be typed by hand: median and P95 service time per request class, connection pool and other capacity inputs, plus custom request classes. The label follows the evidence: no source is Estimated, a source link is Vendor figure, an imported load-test CSV is Measured. P95 must be at least the median; Reset to default restores the starting values. The CSV is optional | Calibration | P0 (proposed) | Your request, Oct 19, 2026; Calibration screen |
+| F28 | Every calibration value can be typed by hand: median and P95 service time per request class, arrival and service SCV (Allen-Cunneen), connection pool and other capacity inputs, plus custom request classes. The label follows the evidence: no source is Estimated, a source link is Vendor figure, an imported load-test CSV is Measured. A fit of S and SCV from typed p50/p95 is Estimated (Decision 16: no full distribution family in v1). P95 must be at least the median; Reset to default restores the starting values. The CSV is optional | Calibration | P0 (proposed) | Your request, Oct 19, 2026; Calibration screen; Decision 19 |
 | F29 | Mixed-provider designs: each component carries its own provider, so one topology can use AWS, Azure and GCP together. A connection that leaves a provider is marked, and its latency and capacity are Estimated until measured | Canvas, Providers | P0 (proposed) | Your request, Oct 19, 2026; Workspace screen |
 
 ## System model
@@ -130,7 +132,7 @@ A component has four parts:
 | Behavior field | Meaning | Notes |
 | --- | --- | --- |
 | `servers` | Concurrency: parallel workers, slots, connections | c in the queueing model |
-| `serviceTime[class]` | Time to serve one request of a class, as a distribution | Mean for fluid mode, sampled in discrete-event mode |
+| `serviceTime[class]` | Time to serve one request of a class | Mean S for Analytic (Erlang C / Allen-Cunneen); optional SCV; sampled in discrete-event. Unknown S keeps wait unknown |
 | `queueCapacity` | Waiting room size; beyond it, requests are rejected | Finite or unbounded |
 | `throughputLimit` | Hard cap on requests or bytes per second, if the service has one | Optional |
 | `scaling` | Fixed, or autoscaled with minimum, maximum and delay | Delay matters during spikes |
@@ -158,7 +160,7 @@ The palette lists provider services directly, so placing one fixes its kind. The
 
 ### Shared edge contract
 
-An edge is defined once, statically. Each run mode then derives its own runtime state from it (see Simulation engine). The contract has six groups.
+An edge is defined once, statically. Analytic mode solves Jackson traffic on it. Discrete-event and the overload rate stepper derive runtime state from the same contract (see Simulation engine). The contract has six groups.
 
 | Group | Fields | Rule |
 | --- | --- | --- |
@@ -557,52 +559,83 @@ If the plan text does not state a number, omit the value and set status unknown.
 
 ## Simulation engine
 
-The engine runs one topology in two modes: a fast fluid-flow pass for feasibility and cost, and a discrete-event pass for tail latency and failure cascades.
+Product phases stay **0–5** (roadmap). Inside the engine, slices are **E1–E4** so “Phase 4 Monte Carlo” never replaces product Phase 4 persistence.
 
-|  | Fluid-flow | Discrete-event |
+| Slice | What | Product phase |
 | --- | --- | --- |
-| Data unit | Rate vector per request class | Individual request objects |
-| Cost | Very cheap, scales to millions of users | Higher, grows with request count |
-| Answers | Capacity and throughput curves, rough cost | P99 latency, queue saturation, retries, cascades |
-| Use it for | First feasibility check and sizing | Bottlenecks, bursts, fault injection |
+| **E1** | Closed-form **steady state**. Nothing failing, nothing bursting. Jackson traffic + M/M/c (Erlang C) + G/G/c (Allen-Cunneen). Hockey-stick wait, Analytic percentiles, headroom. | Phase 1 |
+| **E2** | Seeded discrete-event as **verifier** of E1 (N7), then deep runs | End of Phase 1, into Phase 2 |
+| **E3** | Bursts, failures, retries, autoscale lag | Phase 4 (F8, F9). Faults tab stays visible in E1, unused |
+| **E4** | Monte Carlo ranges | Later. Not product Phase 4 |
 
-### Fluid-flow runtime model
-
-Fluid-flow mode tracks rates per request class, in small time steps Δt (for example 100 ms). It answers "does this design have room?" quickly, at high traffic, without simulating single requests.
-
-**Runtime state.** For each edge and class the engine keeps five rates (`FluidEdgeState`): offered, delivered (after network loss and bandwidth), admitted (accepted by the receiver), completed, and retried. For each component and class it keeps a backlog B. Dropped is not stored; it is the difference, so the counts cannot disagree.
-
-**One step, in order**
-
-1. **Offered.** Compute each edge's offered rate from its source with the routing formulas in the shared edge contract, plus the retry rate from the previous step.
-2. **Network.** Delivered = offered × (1 − lossProb), then capped by bandwidth divided by bytes per request. The difference is a network drop.
-3. **Admission.** The receiver has capacity μ = c / s̄ per second, where c is `servers` and s̄ the mean service time (mixed over the classes). It admits what fits in service plus the free queue room; the rest is an application rejection.
-4. **Service.** Completed = min(admitted + B/Δt, μ). The backlog updates: B(t+Δt) = B(t) + (admitted − completed) Δt.
-5. **Cache.** A cache removes the hit fraction h from the downstream flow: downstream = (1 − h) × admitted.
-6. **Retries.** Failed = network drops + rejections + timeouts. Retried next step = min(failed × A-factor share, budget × first attempts), if the class is eligible (idempotent or allowed).
-
-Because retries and loops can feed back, the engine iterates steps 1 to 4 to a fixed point inside each Δt, with a small damping factor, and stops after a set number of passes (a decision to confirm).
-
-**Utilization and waiting.** ρ = λ / μ. For the report, the expected wait comes from the M/M/c result (Erlang C) as an approximation, labeled as such, because fluid mode has no individual requests.
-
-**Worked example: an overloaded worker pool** (illustrative). 16 slots, 100 ms per event, so μ = 160 per second. Waiting room K = 50.
-
-| Offered | Utilization | What happens |
+|  | Analytic (E1 default) | Discrete-event (E2+) |
 | --- | --- | --- |
-| 150 per second | 94% | Stable; queue stays short |
-| 200 per second | 125% | Backlog grows by 40 per second and fills the 50 places in 1.25 s; after that 40 per second are rejected |
+| Data unit | Closed-form λ, ρ, wait | Individual request objects |
+| Cost | Cheap | Grows with request count |
+| Answers | Stable / Saturating / Unstable; ρ; mean wait; Analytic p50/p95/p99; queue length; headroom | Sampled tails, bursts, faults |
+| Use it for | Sizing at a stable load | Checking E1, then E3 |
 
-**Conservation, checked every step**, for each component and class:
+Do **not** use Kahn topological order as the traffic solver. Cycles (retries) are normal; Jackson is a linear system. Graph tests: disconnected nodes do not steal load; duplicate hops do not double-count; async is excluded from user-facing sync latency; cycle members still conserve flow.
+
+### Why this is not +/- (hockey-stick)
+
+Load 290 rps, each server μ = 50 rps (S = 20 ms). Capacity ≥ load says all three rows are fine. Erlang C does not.
+
+| Servers | ρ | Mean latency W | p95 wait | Old rate model |
+| --- | --- | --- | --- | --- |
+| 6 | 97% | 111 ms | 290 ms | “OK, 300 ≥ 290” |
+| 7 | 83% | 29 ms | 40 ms | “OK” |
+| 8 | 73% | 23 ms | 17 ms | “OK” |
+
+6 servers is technically stable and about 5× slower. That table is the Phase 1 acceptance case (J14).
+
+### E1 Analytic runtime
+
+**Traffic.** Solve λᵢ = γᵢ + Σⱼ λⱼ·pⱼᵢ (Jackson). Fan-out, cache hit ratio, read/write split and replica multipliers are routing probabilities. Payload size is a bandwidth check on the edge, not a silent cap on λ.
+
+**Component.** Servers c, service time S, μ = 1/S, ρ = λ/(cμ). Wait uses Erlang C for M/M/c. Non-Poisson arrivals and service use Allen-Cunneen G/G/c with two SCV inputs (arrival Ca², service Cs²). Mean latency W = Wq + S. Queue length from Little’s law. Catalog **hard_limit** and **adjustable_quota** may cap c or μ; best-effort and guidance never cap; unknown never caps.
+
+**Percentiles.** M/M/c wait tail has a closed form. End-to-end p50/p95/p99 is a moment-matched gamma along the path. Means add exactly; percentiles do not. Label **Analytic**. Check against discrete-event (N7). Not Measured. Not a 92% claim.
+
+**Overload branch (old fluid rate stepper).** If ρ ≥ 1, status **Unstable**. Bounded buffer → drop probability (M/M/c/K). Unbounded queue → growth rate. This is where rate subtraction survives:
 
 ```latex
 \text{offered} = \text{admitted} + \text{rejected} + \text{network drop},\qquad \Delta B = (\text{admitted} - \text{completed})\,\Delta t
 ```
 
-Backpressure is this admission step, not a hidden multiplier: a full queue rejects, the rejection is counted, and the caller's retry and circuit-breaker settings decide what happens next.
+**Component library (canonical kinds, still provider-agnostic)**
 
-### Discrete-event runtime model
+| Kind | Model |
+| --- | --- |
+| Server pool / service / worker | M/M/c |
+| Load balancer | Split with an imbalance factor |
+| Cache / CDN | Hit ratio splits the flow |
+| Database | Connection pool as c; read/write service times |
+| Queue / broker | Consumer rate vs arrival; lag growth when unstable |
+| External / cross-provider link | Fixed latency, Estimated until measured (Decision 17) |
 
-Discrete-event mode follows individual requests. It answers "what do queues, bursts, retries, timeouts and failures do to the tail latency?", which averages cannot show. It reads the same topology and the same component and edge definitions as fluid mode.
+**Inputs.** Arrival rate and mix (Workload tab), payload size, S and SCV per component (each Estimated / Vendor / Measured), SLO latency, utilization ceiling (default 70%). Phase 1 workload profile is **constant**.
+
+**Outputs.** Status Stable / Saturating / Unstable. Per component: ρ, wait, Analytic p50/p95/p99, queue length, throughput. Bottleneck: highest ρ and which component limits the SLO first. Headroom: max rps before SLO or ceiling (bisection) plus N+1. Hockey-stick chart: latency vs load. Cost stays deferred (F11).
+
+**Build order (E1, then E2).** Types → traffic solver → queue formulas and unit tests → component library → percentiles → headroom and bottleneck → Web Worker → Results and Workspace (F30 hockey-stick) → calibration SCV fields → seeded discrete as verifier (starts E2).
+
+**Acceptance (necessary, not sufficient to close product Phase 1).** The 6/7/8-server table is reproduced exactly. Little’s law, Jackson conservation, latency never decreases as load rises. Unstable is always flagged, never silently capped. Analytic vs discrete within the stated N7 tolerance on five reference graphs is E2. **Closing product Phase 1 still requires a real load test of the 9-block reference stack (Decision 6).** J12 A/B stay blocked until that recording exists.
+
+### Overload rate stepper (kept)
+
+The existing fluid Δt loop is the overload branch, not the sizing answer. Hop labels that add up (290 = 240 + 50) are Jackson conservation. They must not be presented as “the engine.”
+
+**Worked example: unbounded overload** (illustrative). 16 slots, 100 ms per event, μ = 160 /s, K = 50.
+
+| Offered | ρ | What happens |
+| --- | --- | --- |
+| 150 /s | 94% | Analytic: Stable; Erlang-C wait (J4) |
+| 200 /s | 125% | Unstable; backlog grows 40 /s; fills 50 places in 1.25 s; then 40 /s rejected |
+
+### Discrete-event runtime model (E2 verifier, then E3)
+
+Discrete-event mode follows individual requests. It answers "do the Analytic formulas match a seeded run?" (E2) and later "what do queues, bursts, retries, timeouts and failures do to the tail?" (E3). It reads the same topology and the same component and edge definitions as Analytic mode.
 
 **A request** carries: a request id and a trace id, its class, request and response bytes, creation time, deadline and priority (when set), attempt count, and the path taken so far. Retries keep the trace id and increase the attempt count.
 
@@ -621,13 +654,13 @@ Discrete-event mode follows individual requests. It answers "what do queues, bur
 
 **Deadlines and priority.** A request past its deadline is dropped at the next event and counted as expired. Within a queue, higher priority goes first.
 
-**Cache.** A cache holds keys. Each cacheable request draws a key from the configured popularity distribution; a hit is served by the cache and a miss continues downstream and fills the cache. The configured aggregate hit rate in fluid mode is the target the key model must reproduce, within a stated tolerance, in a steady state.
+**Cache.** A cache holds keys. Each cacheable request draws a key from the configured popularity distribution; a hit is served by the cache and a miss continues downstream and fills the cache. The configured aggregate hit rate in Analytic mode is the target the key model must reproduce, within a stated tolerance, in a steady state.
 
-**Metrics.** Every request logs its path and timestamps, so P50, P90 and P99, queue depth over time, and per-class counts all come from the same record, and a single trace can be opened and replayed.
+**Metrics.** Every request logs its path and timestamps, so sampled P50, P90 and P99, queue depth over time, and per-class counts all come from the same record, and a single trace can be opened and replayed. These sample tails check Analytic percentiles (N7); they do not stamp Measured.
 
-**Where the modes differ, on purpose.** Under bursts, priorities, deadlines, finite queues and random variation, discrete-event mode will show higher tail latency and earlier rejections than fluid mode. That is the reason both exist. They are compared only in stable, light-load cases (N7).
+**Where the modes differ, on purpose.** Under bursts, priorities, deadlines, finite queues, faults and random variation, discrete-event mode will show higher tail latency and earlier rejections than Analytic. That is the reason E2/E3 exist. They are compared only in stable, light-load cases (N7). ρ ≥ 1 is Unstable in E1, not a silent cap.
 
-**What the canvas shows.** Cards paint utilization and completed rate in both modes. Fluid KPI latency stays unknown. Discrete KPI latency is mean wait from the event log. A `traffic_generator` counts offered as emitted and loss as 0: it creates requests; it does not `finish-service`. Light-load Generic reference (Read 200, Write 40, Async 30, Bulk 20) should agree on utilization within N7's 5% starting guess (CDN ~1-2%, Service ~3%, Queue ~17%, Worker ~63-64%, Object store ~21%).
+**What Results and the canvas show (E1).** Status Stable / Saturating / Unstable. Cards: ρ, wait, Analytic p50/p95/p99, queue length, throughput. Summary bar: load, Analytic latency, errors, bottleneck, cost unknown until typed. Hockey-stick (F30): latency vs load; headroom and N+1. A `traffic_generator` counts offered as emitted and loss as 0. Light-load Generic reference (Read 200, Write 40, Async 30, Bulk 20) should agree on utilization within N7 (CDN ~1-2%, Service ~3%, Queue ~17%, Worker ~63-64%, Object store ~21%). C1 animated edges are not Phase 1. The shipped UI still paints the last fluid tick until Analytic is wired.
 
 ## Calibration
 
@@ -643,7 +676,9 @@ A number is trusted in proportion to its evidence, and the screen always shows w
 
 When several profiles apply to one component, the simulator uses the most trusted one and shows the others as alternatives. It never blends them silently.
 
-**A profile records:** the component kind, source URL or dataset name, capture date, software or service version, region and tier or SKU, request class, the configuration under test, the values (service-time distribution, saturation point, limits), the label, and who added it.
+**A profile records:** the component kind, source URL or dataset name, capture date, software or service version, region and tier or SKU, request class, the configuration under test, the values (mean service time S, optional arrival and service SCV, saturation point, limits), the label, and who added it. Phase 1 Analytic reads S and SCV. Unknown S keeps wait unknown.
+
+**Calibration screen (Phase 1).** The user types measured p50/p95 from a load test of **this** service. The engine may derive S and SCV for Allen-Cunneen. That fit is **Estimated** unless an imported load-test CSV of this service exists (Measured). Decision 16 still: no full distribution-family fit in v1; discrete-event resamples the CSV when present. Only calibrated results may carry a Measured stamp. Fitting does not close J12.
 
 **Three files, do not mix them.**
 
@@ -663,7 +698,7 @@ When several profiles apply to one component, the simulator uses the most truste
 | `status` | Error and rejection rates |
 | `concurrency` or `rps` | Where latency starts to climb: the saturation point |
 
-Decision 16 (Oct 19): no distribution fit in the first release. Show median and P95 from the data and let discrete-event resample the measured values. Low-sample files get the low-sample label. The latency-knee rps is the throughput where latency climbs (J12 B, tolerance after the first measurement).
+Decision 16 (Oct 19): no **distribution family** fit in the first release. Show median and P95 from the data and let discrete-event resample the measured values. Low-sample files get the low-sample label. **Amended Oct 28 for E1:** Allen-Cunneen needs two SCV numbers. Deriving S and SCV from typed or imported p50/p95 is allowed and stays Estimated unless the CSV is a real load test of this service (Measured). That is not a gamma/lognormal package fit. The latency-knee rps is the throughput where latency climbs (J12 B, tolerance after the first measurement).
 
 **Typing values by hand (F28, decided Oct 19, 2026).** A user does not need a load test. Each profile has editable fields for the median and P95 service time per request class, the connection pool and other capacity inputs, and can add custom request classes. The label follows the evidence: no source gives Estimated, a source link gives Vendor figure, an imported CSV gives Measured. Typed values never get the Measured label. The writes-per-second bound is calculated from the typed values, not typed. The CSV hint reads "concurrency or requests per second", matching the table above. Decided Oct 19, 2026: any valid link is accepted and its date recorded; the label shows Vendor figure with "source not checked" until confirmed.
 
@@ -679,22 +714,26 @@ Every test below is written before the code it checks. Where a tolerance cannot 
 
 | # | Test | Setup | Pass when | Status |
 | --- | --- | --- | --- | --- |
-| J1 | Flow conservation, fluid | Any topology, every step, every component and class | offered = admitted + rejected + network drop, and ΔB = (admitted − completed) Δt, to floating-point precision | Defined |
+| J1 | Flow conservation, overload branch | Any topology, every step, every component and class | offered = admitted + rejected + network drop, and ΔB = (admitted − completed) Δt, to floating-point precision | Defined |
 | J2 | Flow conservation, discrete-event | Any run | Requests created = completed + rejected + dropped + expired + still in flight at the end | Defined |
 | J3 | Deterministic replay | Same topology version, workload, mode, seed and calibration, run twice | The two event logs are byte-identical | Defined |
-| J4 | Queueing theory | One component, Poisson arrivals, exponential service times, c servers | Fluid utilization equals λ/(cμ); discrete-event mean wait matches the M/M/c (Erlang C) value within the tolerance over many seeds | Decided: very tight tolerance (exact formula) |
-| J5 | Mode agreement | Stable, light load (utilization below about 50%) on the reference architecture | Utilization and throughput agree within the tolerance | Decided: 5% to start (a labeled guess), tightened later |
-| J6 | Routing examples | The weighted, broadcast and fan-out cases of the shared edge contract | The offered rates match the worked numbers exactly | Defined |
+| J4 | Queueing theory | One component, Poisson arrivals, exponential service times, c servers | Analytic ρ = λ/(cμ); wait matches Erlang C (exact formula). Discrete-event mean wait matches within N7 over many seeds. M/M/1 at ρ = 0.8 gives W = 5·S | Decided: very tight tolerance (exact formula) |
+| J5 | Mode agreement | Stable, light load (utilization below about 50%) on the reference architecture | Analytic vs discrete utilization, throughput and mean wait agree within the tolerance | Decided: 5% mean / 10% p99 to start (labeled guess), fixed when tests are written |
+| J6 | Routing examples | Weighted, broadcast, fan-out; plus disconnected nodes, duplicate hops, async off the sync latency path, cycles | Offered rates match the worked numbers; disconnected nodes steal no load; duplicates do not double-count; cycles conserve (Jackson, not Kahn) | Defined |
 | J7 | Retry behavior | Failing dependency with f = 0.1 and 2 retries | Attempts per request converge to 1.11; retries never exceed the budget | Budget value fixed after the first measurement |
 | J8 | Cache hit rate | Discrete-event cache with a key distribution | Measured hit rate reproduces the configured aggregate within the tolerance | Tolerance fixed after the first measurement |
 | J9 | Fault: node crash | Crash a component mid-run | Its inflow becomes rejections or timeouts from that moment; blast radius lists the affected components | Defined |
 | J10 | Fault: link cut, loss, latency spike | Cut a link; set loss p; add a delay | A cut gives 100% network drop on that edge; measured loss approaches p; latency rises by the added delay | Defined |
 | J11 | Circuit breaker | Failing dependency | Transitions follow the rule below | Decided Oct 19, 2026 |
-| J12 | Fidelity | Recorded load test of the reference architecture | Simulated and measured bottleneck ranking correlate above the KPI | Decided: A and B pass, C diagnostic; B tolerance after the first measurement |
+| J12 | Fidelity | Recorded load test of the reference architecture | Simulated and measured bottleneck ranking correlate above the KPI | Decided: A and B pass, C diagnostic; B tolerance after the first measurement. Blocked until a lab recording exists (Decision 6) |
+| J13 | Jackson traffic | Multi-node graph with cache hit, fan-out, R/W split | Solved λ matches the linear system; throughput never exceeds offered | Defined |
+| J14 | Hockey-stick table | 290 rps, S = 20 ms, c = 6, 7, 8 | ρ, mean W and p95 wait match the Phase 1 table; 6 servers is not reported “OK” | Defined |
+| J15 | Little’s law and monotonic wait | One M/M/c swept in load | L = λW; wait never falls as λ rises | Defined |
+| J16 | Unstable never silent | ρ ≥ 1, bounded and unbounded | Status Unstable; drop probability or growth rate; no silent cap | Defined |
 
 **Circuit-breaker rule (decided Oct 19, 2026).** Closed to open when the error rate over a sliding window reaches the threshold and at least a minimum number of requests were seen. Open to half-open after the open duration. In half-open, a small number of probe requests are allowed: if they succeed the breaker closes, and if one fails it opens again. Requests rejected while open are counted as breaker rejections, separate from application rejections. All parameters are configurable with documented defaults.
 
-An example in J4, from the earlier worked numbers: 16 servers, 100 ms service time and 150 arrivals per second give utilization 93.75% and an expected wait of about 73 ms. The test recomputes this value; it is not assumed.
+An example in J4, from the earlier worked numbers: 16 servers, 100 ms service time and 150 arrivals per second give utilization 93.75% and an expected wait of about 73 ms. The test recomputes this value; it is not assumed. J14 is the 6/7/8-server hockey-stick at 290 rps.
 
 ## Architecture and stack
 
@@ -852,7 +891,7 @@ export function conservationHolds(
 // Expected: weighted 200 and 600; broadcast 150; fan-out 400; retries 1.11; conservation true
 ```
 
-Before building: `FluidEdgeState`'s drop counts are derived from the stored rates, and the tests for J4, J5 and J8 need their tolerances (see Validation and tests) before they can be written.
+Before building: `FluidEdgeState`'s drop counts are derived from the stored rates (overload branch). J4, J5 and J13–J16 need their tolerances recorded before comparison runs. Analytic percentiles stay labeled Analytic.
 
 ## Data model
 
@@ -877,12 +916,12 @@ Build the engine and prove it against theory and one real stack first, then add 
 | Phase | Scope | Exit criteria |
 | --- | --- | --- |
 | 0. Lock requirements | Apply the decisions in Decisions; fix request classes and limits (N6); sign off the edge contract and the circuit-breaker rule | Decisions recorded; requirements table signed off |
-| 1. Engine core and validation | Graph and matrix structures, canonical component schema (F15), generic catalog (F16), edge contract (F19), discrete-event kernel, typed requests, invariants, one calibrated reference stack built from generic components; tests J1 to J3, J6, J7, J9 to J11 | Conservation of flow and deterministic replay pass; M/M/c results match theory; reference stack predicted against a real load test |
-| 2. Canvas, config and telemetry | React Flow canvas, provider services in the palette with mixed-provider designs, config panel (unknown and estimated fields shown), workload editor, request-class filter (F24), worker integration, live metrics and heatmap | A user builds the reference stack and runs it; UI holds 60 FPS during a run |
-| 3. Fluid-flow mode and calibration | Fluid-flow mode, calibration library with CSV import and typed entry, bottleneck explainer (F23), tests J4, J5, J8, first provider catalog as data (F17) | Modes agree on a stable scenario within the set tolerance; every number in a run shows its profile source |
-| 4. Faults and persistence | Fault injection, blast-radius view, save and load, auth, template library and tutorials (F22, F20), cross-provider comparison (F18, capacity and limits), cost estimate (F11), more catalogs | Chaos checks trip upstream breakers; topologies survive reload and replay exactly |
-| 5. Fidelity validation and hardening | Compare reference architectures with real load tests, including the reference architecture mapped to each provider; enforce limits; test J12 | Bottleneck predictions checked against real load tests; gaps documented per profile |
-| Later | Nested sub-systems, IaC export (Terraform, CloudFormation), multi-region networking, server-side runs, challenge mode (F21), topology import (F25) | Scheduled after Phase 5 results |
+| 1. Engine core and validation | **E1 Analytic:** Jackson traffic, Erlang C, Allen-Cunneen, canonical schema (F15), generic catalog (F16), edge contract (F19), tests J4, J6, J13–J16 (hockey-stick table). Overload rate stepper kept for ρ ≥ 1 (J1). **E2 starts:** discrete-event kernel as verifier (J2, J3, J5), not the sizing UI. One 9-block reference. | Hockey-stick table reproduced; Little’s law; unstable never silently capped; M/M/c matches theory. **Close still needs a real 9-block load test (Decision 6).** |
+| 2. Canvas, config and telemetry | React Flow canvas, provider services, config (unknown shown), Workload tab (constant + SCV), request-class filter (F24), worker, ρ/wait/Analytic percentiles on cards, hockey-stick and headroom (F30, F23) | A user builds the reference stack, runs Analytic, sees Stable/Saturating/Unstable and the 6-vs-8-server wait story. 60 FPS unclaimed (Decision 8) |
+| 3. Calibration and catalogs | Calibration library with CSV import, typed S/SCV (F28, F10), bottleneck explainer (F23), J8, first provider catalog as data (F17). Discrete remains the verifier | Every number in a run shows its profile source; N7 agreement on a stable scenario |
+| 4. Faults and persistence | Fault injection and blast radius (F8, F9) = engine slice **E3**; save/load; **auth/Postgres only in this phase**; templates and tutorials (F22, F20); F18 capacity/limits; F11 cost; more catalogs. Monte Carlo is Later (E4), not this phase | Chaos checks trip upstream breakers; topologies survive reload and replay exactly |
+| 5. Fidelity validation and hardening | Compare reference architectures with real load tests, including the reference mapped to each provider; enforce limits; test J12 | Bottleneck predictions checked against real load tests; gaps documented per profile |
+| Later | Nested sub-systems, IaC export, multi-region, server-side runs, challenge mode (F21), topology import (F25), Monte Carlo (E4) | Scheduled after Phase 5 results |
 
 ## Risks
 
@@ -891,15 +930,15 @@ The biggest risk is a simulator that looks precise but is wrong; the calibration
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
 | Calibration data is thin or stale | Confident but wrong predictions | Show source and confidence on every number; import the user's own load tests; early validation loop |
-| A Fluid run looks like frozen arithmetic (rps labels, no moving flow) | Reviewers call it a toy and stop trusting the engine | Decision 18: keep the rate model; add playback and edge motion so time is visible; do not fake Measured with particles |
+| A run looks like frozen arithmetic (rps labels, 300 ≥ 290) | Reviewers call it a toy and stop trusting the engine | Decision 19: E1 hockey-stick (Erlang C). Decision 18: do not fake professionalism with particles. Rate stepper is overload-only |
 | Fidelity goal is hard to define or measure | KPI cannot be proven | Define the correlation measure in Phase 0; report fidelity per profile |
-| Discrete-event runs are too slow at large scale | Poor interactivity | Use fluid-flow mode for scale; limit request counts; profile before moving to Rust/WASM |
-| Models too simple (single-queue approximations) miss real behavior | Missed bottlenecks | Typed requests, retries and backpressure modeled from Phase 1 |
+| Discrete-event runs are too slow at large scale | Poor interactivity | Use Analytic for scale; Discrete as verifier then E3; Decision 8 guard; profile before Rust/WASM |
+| Models too simple (capacity ≥ load) miss the wait hockey-stick | 6 servers reported OK at 97% util | E1 Erlang C / Allen-Cunneen; J14 table |
 | Scope grows toward a general infrastructure tool | Build never finishes | Keep IaC export and nested systems out of v1 |
 
 ## Decisions
 
-Every open design and architecture item in this plan, grouped for discussion. All 17 items were decided on Oct 19, 2026 by accepting my recommendation; each shows its decision under the item. Who the users are is out of scope for now (Oct 19, 2026): decisions here follow from the design and architecture alone.
+Every open design and architecture item in this plan, grouped for discussion. Items 1 to 17 were decided on Oct 19, 2026 by accepting my recommendation; each shows its decision under the item. Decision 18 (how a run is shown) and Decision 19 (Phase 1 engine is Analytic steady-state) were added Oct 28, 2026 after a stakeholder review that called the rate model a toy. Who the users are is out of scope for now (Oct 19, 2026): decisions here follow from the design and architecture alone.
 
 Each item has four lines: what it is, the options, my recommendation, and what it blocks. To change one, tell me in chat and I will update the item and what it blocks.
 
@@ -1055,7 +1094,9 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 - **Recommendation.** No fit in the first release. Show median and P95 from the data and let discrete-event mode resample the measured values, which avoids guessing a distribution shape. Low-sample files get the low-sample label. Add a fitted distribution later if the engine needs one.
 - **Blocks.** The engine's service-time model, and Phase 1 scope.
 
-**Decided Oct 19, 2026.** No fit in the first release: show median and P95 and resample measured values; low-sample files get the low-sample label.
+**Decided Oct 19, 2026.** No distribution-family fit in the first release: show median and P95 and resample measured values; low-sample files get the low-sample label.
+
+**Amended Oct 28, 2026 (Decision 19).** Allen-Cunneen needs Ca² and Cs². Deriving S and SCV from p50/p95 is allowed and stays Estimated unless the CSV is a real load test of this service (Measured). Still not a gamma/lognormal package.
 
 #### 17. Cross-provider connections
 
@@ -1065,6 +1106,28 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 - **Blocks.** The edge contract (F19, Shared edge contract), which needs a link capacity field, and the cost estimate (item 2), because egress is charged.
 
 **Decided Oct 19, 2026.** (a): a normal edge with user-entered latency and capacity, labeled Estimated, plus a link profile in the calibration library; a link catalog comes later.
+
+### Group 4. How a run is shown, and which engine (added Oct 28, 2026)
+
+#### 18. Professional simulator vs frozen rps labels
+
+- **What it is.** A stakeholder ran (or watched) Fluid on the canvas and said the product is only plus-and-minus calculation (examples: 290 rps, 240 rps, 50 rps), the animation is stopped, nothing changes, and they need a professional simulator, not a toy. Decision 6 fallback (a) still holds: no lab, public/vendor data only, no Measured stamp.
+- **What is true.** Hop rates that add up are conservation (N3 / Jackson). That is not a missing engine, and it is not a lab.
+- **What is also true.** “300 ≥ 290, therefore OK” is the toy. 6 servers at 97% util is technically stable and about 5× slower than 8 (hockey-stick). Particle overlay on a constant load would move without telling that story.
+- **Options.** (a) Keep the rate stepper as the product and decorate it with F30 motion. (b) Motion only, still capacity ≥ load. (c) Default Discrete (Decision 8 guard). (d) Stop until a lab exists. (e) **Analytic E1** (Erlang C / Allen-Cunneen) as the product; hockey-stick and headroom as F30; rate stepper only when ρ ≥ 1; particles later as a view.
+- **Recommendation.** **(e)**, which is Decision 19. Reject (a) and (b) as the professional answer. Reject (c) as the default. Reject (d). Do not claim 92% or 60 FPS. Do not close Phase 1 or Phase 5.
+- **Blocks.** F7, F23, F30, C1, how we demo a Run.
+
+**Decided Oct 28, 2026 (amended same day).** (e): the professional output is the hockey-stick, not moving dashes. F30 in Phase 1 is latency vs load and headroom. Particles if needed are a view of ρ(λ), not the engine. No lab, no Measured, no Phase 1/5 close.
+
+#### 19. Phase 1 engine is closed-form steady state
+
+- **What it is.** E1 reports whether a constant load is Stable / Saturating / Unstable, with ρ, Erlang-C (or Allen-Cunneen) wait, Analytic percentiles, queues and headroom. Failures and bursts are out of E1. Product phases 0–5 do not get renumbered: E3 faults map to product Phase 4; E4 Monte Carlo is Later, not persistence.
+- **Options.** (a) Keep fluid Δt as the sizing engine. (b) Discrete-only. (c) Analytic Jackson + M/M/c + G/G/c; rate stepper as overload; discrete as verifier then E3.
+- **Recommendation.** **(c).** Do not copy Kahn DAG solvers. Workload tab stays (already shipped) and feeds λ plus SCV; Phase 1 profile is constant. Faults tab stays visible, unused until E3. Decision 16: SCV from p50/p95 is Estimated, not a distribution-family fit. Decision 6: analytic-vs-sim on five graphs is necessary and not sufficient to close Phase 1.
+- **Blocks.** F6, F7, F23, F30, J4, J13–J16, N7, Calibration SCV fields, Results copy.
+
+**Decided Oct 28, 2026.** (c): Phase 1 is Analytic steady-state queueing. Overload rate model survives only for ρ ≥ 1. Discrete starts as verifier (E2). Faults are E3 / product Phase 4. No silent cap. No 92%. No Measured from typed numbers.
 
 ## Changelog
 
@@ -1092,3 +1155,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 26, 2026 | CloudFront quotas page recorded from the supplied copy (read 2026-10-26). Canonical 18; default 250,000 rps and 150 Gbps per distribution. Counts unchanged (already Verified with no number). Not wired as node throughput. AWS S3 (2).md is a duplicate of the S3 performance page; S3 stays Partial. Other new AWS md files are real quota pages but not yet recorded (stay Listed): EKS (other-service quotas, not the EKS cluster table), EBS, EFS, FSx, Storage Gateway, DocumentDB, Neptune (file named Nepture), Keyspaces, Timestream (file named Timesteam), Redshift, Route 53, NLB, API Gateway, Global Accelerator, VPC, Direct Connect, WAF, Shield, EventBridge, Kinesis, MSK, Step Functions, MQ, OpenSearch (defers to General Reference), Athena, EMR (burst/rate explainer), MediaPackage, IVS. Missing md vs the AWS 50: EC2, App Runner, Elastic Beanstalk, Lightsail, SNS, AppSync, Glue, MediaConvert, MediaLive. Azure/GCP 9-block Partials were not replaced: Front Door is still routing-limits, Application Gateway still autoscaling, Cloud CDN still caching. |
 | Oct 27, 2026 | Calibration lists the live Workspace canvas cards (titles and catalog icons), not leftover seed profile names such as AKS transcode workers. Unbound edge profiles stay out of the component list. |
 | Oct 28, 2026 | Palette On canvas lists every live card (Azure Front Door included) so Load does not hide a 9-block service inside a collapsed Network folder. Load opens the provider categories that hold those catalog ids. YouTube Viewers emit Async on the viewer path (R/W/A); Workload shows Read, Write, Async and Bulk on every Clients card, same as the Class chips. AWS 9-block LB title matches Application Load Balancer; Azure DB title matches Database for PostgreSQL. |
+| Oct 28, 2026 | Stakeholder review of a Fluid run: “only + and − calculation” (290 / 240 / 50 rps) and “stopped animation / no changing / toy, not a professional simulator.” Decision 18 amended to (e): the professional output is the hockey-stick, not particle overlay. Decision 19: Phase 1 engine is Analytic steady-state (Jackson, Erlang C, Allen-Cunneen). Fluid Δt survives only as the ρ ≥ 1 overload branch. Discrete is verifier (E2) then faults (E3). Product phases 0–5 unchanged: E3 faults = Phase 4; Monte Carlo = Later, not persistence. Workload stays its own tab (constant + SCV in E1). Faults tab stays visible, unused in E1. Analytic p50/p95/p99 labeled Analytic, never Measured. J13–J16 added. Decision 6 still closes Phase 1. Decision 16 amended only for SCV, not a distribution-family fit. No 92%, no 60 FPS. |

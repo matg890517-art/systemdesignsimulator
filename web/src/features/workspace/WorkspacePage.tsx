@@ -96,7 +96,9 @@ import {
   upsertProject,
   type TopologySnapshot,
 } from './persistence.ts'
-import { hopLabelWithRate, hopTypeLabel } from './edge-data.ts'
+import { hopLabelWithRate, hopTypeLabel, readEdgeData } from './edge-data.ts'
+import { PlaybackBar } from './PlaybackBar.tsx'
+import { playbackWallMs, viewRunAt } from './playback.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
@@ -191,6 +193,8 @@ export function WorkspacePage() {
   const [classFilter, setClassFilter] = useState<ClassFilter>('all')
   const [lastRun, setLastRun] = useState<WorkspaceRun>()
   const [running, setRunning] = useState(false)
+  const [playhead, setPlayhead] = useState(0)
+  const [playingBack, setPlayingBack] = useState(false)
   const [scene, setScene] = useState<'youtube' | 'reference' | 'custom'>(
     boot.current.snapshot?.scene ?? 'youtube',
   )
@@ -206,6 +210,14 @@ export function WorkspacePage() {
   const runHistory = useRunHistory()
   const runGen = useRef(0)
   const paintFrame = useRef(0)
+  const playbackRaf = useRef(0)
+  const playbackGen = useRef(0)
+  const lastRunRef = useRef<WorkspaceRun | undefined>(undefined)
+  const classFilterRef = useRef(classFilter)
+  const playheadRef = useRef(0)
+  lastRunRef.current = lastRun
+  classFilterRef.current = classFilter
+  playheadRef.current = playhead
   const [sessionReady, setSessionReady] = useState(false)
   const [history, setHistory] = useState<CanvasHistory>(emptyHistory)
   const [notice, setNotice] = useState<Notice>()
@@ -316,13 +328,15 @@ export function WorkspacePage() {
     })
   }, [bottlenecks, classFilter, nodes, edges])
 
-  function paintRun(run: WorkspaceRun, filter: ClassFilter) {
+  function paintRun(run: WorkspaceRun, filter: ClassFilter, live = false) {
+    const blastIds = run.affectedComponentIds ?? []
+    const breakerEdges = run.breakerOpenEdges ?? []
     setNodes((current) =>
       current.map((node) => {
         if (node.type === 'zone') return node
         const data = node.data as ServiceNodeData
         const stat = pickNodeStat(run, node.id, filter)
-        const inBlast = run.affectedComponentIds.includes(node.id)
+        const inBlast = blastIds.includes(node.id)
         const blastOrigin = run.blastOriginId === node.id
         if (!stat || (filter !== 'all' && stat.offered <= 0 && stat.completed <= 0)) {
           return {
@@ -334,7 +348,7 @@ export function WorkspacePage() {
               meta: `${run.mode} · ${filter === 'all' ? 'not on path' : `off ${filter} path`}`,
               inBlast,
               blastOrigin,
-              live: false,
+              live,
             },
           }
         }
@@ -344,10 +358,14 @@ export function WorkspacePage() {
             ...data,
             util: stat.util,
             p99: stat.p99,
-            meta: filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`,
+            meta: live
+              ? `${filter === 'all' ? stat.meta : `${stat.meta} · ${filter}`} · live`
+              : filter === 'all'
+                ? stat.meta
+                : `${stat.meta} · ${filter}`,
             inBlast,
             blastOrigin,
-            live: false,
+            live,
             queueDepth: `q ${stat.backlog.toFixed(1)}`,
             loss: stat.loss > 0 ? `loss ${(stat.loss * 100).toFixed(0)}%` : 'loss 0%',
           },
@@ -356,39 +374,20 @@ export function WorkspacePage() {
     )
     setEdges((current) =>
       current.map((edge) => {
+        const offered = pickEdgeOffered(run, edge.id, filter) ?? 0
         const hit =
-          run.affectedComponentIds.includes(edge.source) ||
-          run.affectedComponentIds.includes(edge.target) ||
-          run.breakerOpenEdges.includes(edge.id)
+          blastIds.includes(edge.source) ||
+          blastIds.includes(edge.target) ||
+          breakerEdges.includes(edge.id)
+        const extra = readEdgeData(edge)
         return {
           ...edge,
-          label: hopLabelWithRate(hopTypeLabel(edge), pickEdgeOffered(run, edge.id, filter)),
+          animated: offered > 0,
+          data: { ...extra, flowRps: offered },
+          label: hopLabelWithRate(hopTypeLabel(edge), offered > 0 ? offered : undefined),
           style: {
             ...edge.style,
             stroke: hit ? '#B3261E' : '#7B8794',
-          },
-        }
-      }),
-    )
-  }
-
-  function paintLiveStats(stats: WorkspaceRun['nodeStats']) {
-    setNodes((current) =>
-      current.map((node) => {
-        if (node.type === 'zone') return node
-        const data = node.data as ServiceNodeData
-        const stat = stats[node.id]
-        if (!stat) return node
-        return {
-          ...node,
-          data: {
-            ...data,
-            util: stat.util,
-            p99: stat.p99,
-            meta: `${stat.meta} · live`,
-            live: true,
-            queueDepth: `q ${stat.backlog.toFixed(1)}`,
-            loss: `loss ${(stat.loss * 100).toFixed(0)}%`,
           },
         }
       }),
@@ -405,7 +404,9 @@ export function WorkspacePage() {
     setWorkloadDraft(referenceWorkloadDraft())
     setScene('reference')
     setRan(false)
+    stopPlayback()
     setLastRun(undefined)
+    setPlayhead(0)
     setKpis(idleKpis)
     setBottlenecks([])
     setSelected(undefined)
@@ -425,7 +426,9 @@ export function WorkspacePage() {
     setProjectName('Example: Video streaming platform (YouTube-style)')
     setSavedHint('Local draft')
     setRan(false)
+    stopPlayback()
     setLastRun(undefined)
+    setPlayhead(0)
     setKpis(idleKpis)
     setBottlenecks(seedBottlenecks)
     setSelected(undefined)
@@ -455,7 +458,9 @@ export function WorkspacePage() {
     setScene(snapshot.scene)
     setProjectName(snapshot.name)
     setRan(false)
+    stopPlayback()
     setLastRun(undefined)
+    setPlayhead(0)
     setKpis(idleKpis)
     setBottlenecks(snapshot.scene === 'youtube' ? seedBottlenecks : [])
     setSelected(undefined)
@@ -580,14 +585,81 @@ export function WorkspacePage() {
     )
   }
 
+  function stopPlayback() {
+    playbackGen.current += 1
+    cancelAnimationFrame(playbackRaf.current)
+    setPlayingBack(false)
+  }
+
+  function showRunAt(run: WorkspaceRun, t: number, live: boolean) {
+    const duration = run.durationSec || run.ticks?.at(-1)?.t || 0
+    const clamped = Math.min(duration, Math.max(0, t))
+    playheadRef.current = clamped
+    setPlayhead(clamped)
+    paintRun(viewRunAt(run, clamped), classFilterRef.current, live)
+  }
+
+  function startPlayback(run: WorkspaceRun, from = 0) {
+    playbackGen.current += 1
+    cancelAnimationFrame(playbackRaf.current)
+    const id = playbackGen.current
+    const duration = run.durationSec || run.ticks?.at(-1)?.t || 0
+    if (!run.ticks?.length || duration <= 0) {
+      setPlayingBack(false)
+      showRunAt(run, duration, false)
+      return
+    }
+    const wallMs = playbackWallMs(duration)
+    const startT = Math.min(from, duration)
+    const span = Math.max(0.01, duration - startT)
+    const t0 = performance.now()
+    setPlayingBack(true)
+    const loop = (now: number) => {
+      if (playbackGen.current !== id) return
+      const u = Math.min(1, (now - t0) / wallMs)
+      const t = startT + u * span
+      playheadRef.current = t
+      setPlayhead(t)
+      paintRun(viewRunAt(run, t), classFilterRef.current, true)
+      if (u < 1) {
+        playbackRaf.current = requestAnimationFrame(loop)
+        return
+      }
+      setPlayingBack(false)
+      showRunAt(run, duration, false)
+    }
+    playbackRaf.current = requestAnimationFrame(loop)
+  }
+
+  function onScrubPlayhead(next: number) {
+    stopPlayback()
+    const run = lastRunRef.current
+    if (!run) return
+    showRunAt(run, next, false)
+  }
+
+  function onTogglePlayback() {
+    const run = lastRunRef.current
+    if (!run || running) return
+    if (playingBack) {
+      stopPlayback()
+      showRunAt(run, playheadRef.current, false)
+      return
+    }
+    const duration = run.durationSec || 0
+    const from = playheadRef.current >= duration - 0.05 ? 0 : playheadRef.current
+    startPlayback(run, from)
+  }
+
   function onStop() {
     // Bump the generation first so a result that was already in flight is ignored.
     runGen.current += 1
     cancelAnimationFrame(paintFrame.current)
+    stopPlayback()
     const stopped = stopWorkspaceRun()
     setRunning(false)
     if (lastRun) {
-      paintRun(lastRun, classFilter)
+      showRunAt(lastRun, lastRun.durationSec || playheadRef.current, false)
       setRunHint(`${lastRun.hint} · stopped a newer run`)
     } else {
       clearLive()
@@ -599,9 +671,12 @@ export function WorkspacePage() {
   async function onRun() {
     const id = runGen.current + 1
     runGen.current = id
+    stopPlayback()
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
+    setPlayhead(0)
+    playheadRef.current = 0
     // Mark cards live immediately. A short fluid run can finish before the first progress frame.
     setNodes((current) =>
       current.map((node) =>
@@ -625,7 +700,26 @@ export function WorkspacePage() {
           cancelAnimationFrame(paintFrame.current)
           paintFrame.current = requestAnimationFrame(() => {
             if (!live || runGen.current !== id) return
-            paintLiveStats(progress.nodeStats)
+            playheadRef.current = progress.t
+            setPlayhead(progress.t)
+            paintRun(
+              {
+                mode: getWorkloadDraft().mode,
+                kpis: idleKpis,
+                bottlenecks: [],
+                nodeStats: progress.nodeStats,
+                classStats: progress.classStats ?? {},
+                edgeOffered: progress.edgeOffered ?? {},
+                edgeClassOffered: progress.edgeClassOffered ?? {},
+                ticks: [],
+                durationSec: progress.t,
+                hint: '',
+                affectedComponentIds: [],
+                breakerOpenEdges: [],
+              },
+              classFilterRef.current,
+              true,
+            )
             setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
           })
         },
@@ -641,15 +735,15 @@ export function WorkspacePage() {
       setRan(true)
       setKpis(result.run.kpis)
       setBottlenecks(result.run.bottlenecks)
-      setRunHint(result.run.hint)
+      setRunHint(`${result.run.hint} · playback`)
       setLastRun(result.run)
-      paintRun(result.run, classFilter)
       publishRun({
         projectName,
         hint: result.run.hint,
         run: result.run,
         ranking: rankingFromNodes(nodes, result.run),
       })
+      startPlayback(result.run, 0)
     } catch (error) {
       if (runGen.current !== id || isRunStopped(error)) return
       clearLive()
@@ -660,7 +754,9 @@ export function WorkspacePage() {
   }
 
   useEffect(() => {
-    if (lastRun) paintRun(lastRun, classFilter)
+    const run = lastRunRef.current
+    if (!run) return
+    paintRun(viewRunAt(run, playheadRef.current), classFilter, playingBack || running)
     // Paint from the last engine run when the class filter changes. Node positions stay in setNodes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classFilter])
@@ -757,7 +853,8 @@ export function WorkspacePage() {
     setBottlenecks(record.run.bottlenecks)
     setLastRun(record.run)
     setRunHint(record.run.hint)
-    paintRun(record.run, classFilter)
+    stopPlayback()
+    showRunAt(record.run, record.run.durationSec || 0, false)
   }
 
   function onEscape() {
@@ -841,7 +938,13 @@ export function WorkspacePage() {
     : runError
       ? runError
       : [
-          running ? 'Running on a Web Worker' : ran ? 'Last run from @sds/engine' : modeMeta.hint,
+          running
+            ? 'Running on a Web Worker'
+            : playingBack
+              ? 'Replaying stored ticks'
+              : ran
+                ? 'Last run from @sds/engine'
+                : modeMeta.hint,
           library.fault !== 'none' ? `fault ${library.fault}` : undefined,
           runHint,
           running && fps > 0 ? `${fps} FPS` : undefined,
@@ -1143,6 +1246,15 @@ export function WorkspacePage() {
                 <ClassFilterChips value={classFilter} onChange={setClassFilter} />
                 <HeatLegend />
               </Stack>
+              {lastRun ? (
+                <PlaybackBar
+                  t={playhead}
+                  durationSec={lastRun.durationSec || lastRun.ticks?.at(-1)?.t || 60}
+                  playing={playingBack || running}
+                  onScrub={onScrubPlayhead}
+                  onTogglePlay={onTogglePlayback}
+                />
+              ) : null}
             </Box>
             </Box>
             <Inspector

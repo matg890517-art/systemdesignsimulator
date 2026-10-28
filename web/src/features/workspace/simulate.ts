@@ -205,7 +205,7 @@ function kpisFromRun(run: AksRun, hint: string): KpiState {
     bottlenecks: hot ? '1+' : '0',
     bottleneckHint: hot ? hint : 'none at the 83% target',
     latency: 'unknown',
-    latencyHint: 'P50 / P90 / P99 unknown — fluid mode has rates, not tails. Util from Estimated · AKS transcode workers.',
+    latencyHint: 'Analytic percentiles not wired yet. Unknown until then. Not Measured. Util from Estimated · AKS transcode workers.',
     errors: run.offered > 0 ? `${((run.rejected / run.offered) * 100).toFixed(1)}%` : 'unknown',
     cost: cost.value,
     costHint: cost.hint,

@@ -30,7 +30,7 @@ import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 const SHAPES = [
   { id: 'constant', label: 'Constant', body: 'Offered rate stays at the baseline for the whole run.' },
   { id: 'poisson', label: 'Poisson', body: 'Same mean as constant in fluid. Discrete mode draws exponential gaps.' },
-  { id: 'step', label: 'Step', body: 'Baseline, then multiply by a factor from a given second onward.' },
+  { id: 'step', label: 'Step', body: 'Default demo. Baseline, then multiply from a given second so hop rates visibly change.' },
   { id: 'spike', label: 'Spike', body: 'Baseline, a short burst, then back to baseline.' },
 ] as const
 
@@ -108,8 +108,9 @@ export function WorkloadEditor({
       <Typography variant="h2">Workload</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
         One rate block per Clients card on the canvas. Every card has Read, Write, Async and Bulk,
-        same as the Class chips. A class with no outgoing hop stays 0 until you turn it on. Unknown
-        capacity does not cap the engine.
+        same as the Class chips. A class with no outgoing hop stays 0 until you turn it on. Phase 1
+        Analytic uses the constant profile (this is λ). Poisson, step and spike wait for discrete
+        verifier and bursts. Unknown capacity does not cap the engine.
       </Typography>
 
       {generators.length === 0 ? (

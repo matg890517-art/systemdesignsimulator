@@ -1,4 +1,4 @@
-/** F8: util heat. Not a latency heatmap. Fluid tails stay unknown. */
+/** F8: util heat. Not a latency heatmap. Analytic percentiles are labeled Analytic, never Measured. */
 export function heatStroke(util: number): string {
   if (util >= 0.85) return '#B3261E'
   if (util >= 0.7) return '#B7791F'

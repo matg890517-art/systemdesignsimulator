@@ -7,10 +7,10 @@ export function FaultsPanel() {
     <Box sx={{ p: 3, maxWidth: 640 }}>
       <Typography variant="h2">Faults</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-        These change the next engine run on the compiled canvas. Packet drop and link
-        cut set lossProb on the uploaders → AKS edge. Crash zeros AKS slots, lists the
-        downstream blast radius, and trips the documented upstream breaker in
-        discrete-event. Latency spike applies in discrete-event mode.
+        Engine slice E3 (product Phase 4). Phase 1 Analytic ignores faults: nothing
+        failing, nothing bursting. The controls stay so the tab does not vanish. Packet
+        drop and link cut set lossProb on the uploaders → AKS edge. Crash zeros AKS
+        slots. Latency spike applies in discrete-event only.
       </Typography>
       <RadioGroup
         sx={{ mt: 2 }}
