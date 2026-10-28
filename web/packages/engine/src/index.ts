@@ -51,6 +51,23 @@ export {
 export type { StabilityStatus } from './queueing.ts'
 export { hockeyStickRow, runAnalytic } from './analytic.ts'
 export type { AnalyticComponentReport, AnalyticRunResult, ResultLabel } from './analytic.ts'
+export {
+  compileScenario,
+  runAnalyticScenario,
+  runEngine,
+  runEngineFromLegacy,
+  scenarioFromLegacy,
+  simulateOnce,
+  solveAnalytic,
+} from './core.ts'
+export { zipfHitRatio } from './analytic/zipf.ts'
+export { md1WaitMs, mmckBlocking, mm1kBlocking, rhoBand } from './analytic/queue.ts'
+export {
+  ENGINE_VERSION,
+  SCHEMA_VERSION,
+  DEFAULT_EVENT_BUDGET,
+} from './schema/index.ts'
+export type { Scenario, EngineResult, EngineMode, Evidence } from './schema/index.ts'
 export { baselineRps, expectedArrivals, offeredAt, peakFactor, shapeFactor } from './workload.ts'
 export {
   aksInputsFromProfiles,
@@ -78,7 +95,7 @@ export {
 export type { CheckStatus, FidelityCheck, FidelityReport, ProfileGap, RecordedLoadTest } from './fidelity.ts'
 export { blastRadius } from './blast.ts'
 export { documentedBreaker } from './breaker.ts'
-export { createRng } from './rng.ts'
+export { createRng, createStreamRng } from './rng.ts'
 export { fluidStep, initialFluidState } from './fluid.ts'
 export { replayDiscreteLog, replayLog, runDiscrete, runFluid } from './run.ts'
 export {
