@@ -10,7 +10,7 @@ The simulator is a capacity-planning tool: users model an architecture, apply a 
 
 - **Users:**~~ ~~engineers and architects sizing and validating distributed systems.
 - **Core promise:** results come from calibrated real-world numbers (service times, pool sizes, throughput limits), not from guesses.
-- **Two source specs:** the Enterprise System Design Simulator blueprint (product shell, canvas, node types, fault injection) and SysLab Architect (graph and matrix model, fluid-flow versus discrete-event modes, invariants). This plan merges them. **Phase 1 engine (Decision 19, Oct 28):** closed-form steady-state queueing (Jackson traffic, Erlang C, Allen-Cunneen). The fluid rate stepper is the overload branch only. Discrete-event is the verifier, then bursts and faults.
+- **Two source specs:** the Enterprise System Design Simulator blueprint (product shell, canvas, node types, fault injection) and SysLab Architect (graph and matrix model, fluid-flow versus discrete-event modes, invariants). This plan merges them. **Phase 1 engine (Decision 19, Oct 28; SysSimulator pages read Oct 28):** one schema, two views. Analytic (Jackson, Erlang C, Allen-Cunneen) is the sizing answer. Seeded discrete-event is the verifier, then bursts and faults. The fluid rate stepper is the overload branch only. SysSimulator’s public speed claims are not copied.
 - **Assumption:** "real-base" is read as "grounded in real benchmark data". Confirm or correct this in the open decisions.
 
 **Out of scope for v1:** exporting Terraform or CloudFormation, multi-region network modeling, and team collaboration features.
@@ -618,6 +618,8 @@ Load 290 rps, each server μ = 50 rps (S = 20 ms). Capacity ≥ load says all th
 
 **Outputs.** Status Stable / Saturating / Unstable. Per component: ρ, wait, Analytic p50/p95/p99, queue length, throughput. Bottleneck: highest ρ and which component limits the SLO first. Headroom: max rps before SLO or ceiling (bisection) plus N+1. Hockey-stick chart: latency vs load. Cost stays deferred (F11).
 
+**Runtime.** TypeScript in the engine package (provider-agnostic, no React). A Web Worker and typed arrays come when Results streams aggregates, not per-event messages. Decision 8’s 20,000-arrival Discrete guard stays until a benchmark on our hardware says otherwise. Rust/WASM is an option only if that benchmark requires it. Do not claim 10K+ RPS, 0 GC pauses, 200 ms for 60 s, 92% fidelity, or 60 FPS.
+
 **Build order (E1, then E2).** Types → traffic solver → queue formulas and unit tests → component library → percentiles → headroom and bottleneck → Web Worker → Results and Workspace (F30 hockey-stick) → calibration SCV fields → seeded discrete as verifier (starts E2).
 
 **Acceptance (necessary, not sufficient to close product Phase 1).** The 6/7/8-server table is reproduced exactly. Little’s law, Jackson conservation, latency never decreases as load rises. Unstable is always flagged, never silently capped. Analytic vs discrete within the stated N7 tolerance on five reference graphs is E2. **Closing product Phase 1 still requires a real load test of the 9-block reference stack (Decision 6).** J12 A/B stay blocked until that recording exists.
@@ -639,7 +641,7 @@ Discrete-event mode follows individual requests. It answers "do the Analytic for
 
 **A request** carries: a request id and a trace id, its class, request and response bytes, creation time, deadline and priority (when set), attempt count, and the path taken so far. Retries keep the trace id and increase the attempt count.
 
-**The scheduler** is a priority queue of events ordered by timestamp, with a tie-break by a sequence number so replays are exact. There is no blocking loop: the engine pops the next event, handles it, and may schedule new ones. A random generator seeded from the run seed supplies all randomness, one stream per component, so adding a component does not change another's draws.
+**The scheduler** is a min-heap of events ordered by `(time, sequence number)` so equal timestamps stay deterministic. Time is simulated, not wall time. There is no blocking loop: the engine pops the next event, handles it, and may schedule new ones. Components and edges are arrays with fixed ids; iteration never depends on hash-map order. Randomness is one seeded `xoshiro128**` stream inside the engine (not a library `SmallRng` whose output can change between versions). Seed + topology + workload is the whole scenario. The first discrete run is constant Poisson, no faults; a warm-up interval is discarded before comparing to Analytic (N7). Several seeds and confidence intervals come with E2, not E1.
 
 | Event | What it does |
 | --- | --- |
@@ -654,7 +656,7 @@ Discrete-event mode follows individual requests. It answers "do the Analytic for
 
 **Deadlines and priority.** A request past its deadline is dropped at the next event and counted as expired. Within a queue, higher priority goes first.
 
-**Cache.** A cache holds keys. Each cacheable request draws a key from the configured popularity distribution; a hit is served by the cache and a miss continues downstream and fills the cache. The configured aggregate hit rate in Analytic mode is the target the key model must reproduce, within a stated tolerance, in a steady state.
+**Cache.** Analytic uses the configured aggregate hit ratio `h` (miss fraction `1 − h` loads the origin). Discrete-event must reproduce that same `h` in steady state. A Zipf working-set key model is the E2 way to get miss storms; it does not replace `h` in E1 and it does not invent a measured hit ratio.
 
 **Metrics.** Every request logs its path and timestamps, so sampled P50, P90 and P99, queue depth over time, and per-class counts all come from the same record, and a single trace can be opened and replayed. These sample tails check Analytic percentiles (N7); they do not stamp Measured.
 
@@ -938,7 +940,7 @@ The biggest risk is a simulator that looks precise but is wrong; the calibration
 
 ## Decisions
 
-Every open design and architecture item in this plan, grouped for discussion. Items 1 to 17 were decided on Oct 19, 2026 by accepting my recommendation; each shows its decision under the item. Decision 18 (how a run is shown) and Decision 19 (Phase 1 engine is Analytic steady-state) were added Oct 28, 2026 after a stakeholder review that called the rate model a toy. Who the users are is out of scope for now (Oct 19, 2026): decisions here follow from the design and architecture alone.
+Every open design and architecture item in this plan, grouped for discussion. Items 1 to 17 were decided on Oct 19, 2026 by accepting my recommendation; each shows its decision under the item. Decision 18 (how a run is shown) and Decision 19 (Phase 1 engine is Analytic steady-state) were added Oct 28, 2026 after a stakeholder review that called the rate model a toy. Decision 20 (same day) records what to copy from SysSimulator’s DES pages and what not to claim. Who the users are is out of scope for now (Oct 19, 2026): decisions here follow from the design and architecture alone.
 
 Each item has four lines: what it is, the options, my recommendation, and what it blocks. To change one, tell me in chat and I will update the item and what it blocks.
 
@@ -1107,7 +1109,7 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 
 **Decided Oct 19, 2026.** (a): a normal edge with user-entered latency and capacity, labeled Estimated, plus a link profile in the calibration library; a link catalog comes later.
 
-### Group 4. How a run is shown, and which engine (added Oct 28, 2026)
+### Group 4. How a run is shown, and which engine (added Oct 28, 2026; Decision 20 same day)
 
 #### 18. Professional simulator vs frozen rps labels
 
@@ -1128,6 +1130,18 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 - **Blocks.** F6, F7, F23, F30, J4, J13–J16, N7, Calibration SCV fields, Results copy.
 
 **Decided Oct 28, 2026.** (c): Phase 1 is Analytic steady-state queueing. Overload rate model survives only for ρ ≥ 1. Discrete starts as verifier (E2). Faults are E3 / product Phase 4. No silent cap. No 92%. No Measured from typed numbers.
+
+**Amended Oct 28, 2026 (SysSimulator pages).** Hybrid (c) stays. It does **not** replace Decision 18 (how a run is shown). SysSimulator is a fast DES in the browser; we keep event queue + simulated clock, seed + config as the scenario, Poisson arrivals, node capacity / service time / buffer drops, edge latency, Little’s law, and post-run percentiles. We do not copy `rand::SmallRng`, hash-map iteration, unverified speed claims, or the cost page’s SKU arithmetic. Own `xoshiro128**`; ties by `(time, seq)`; warm-up before N7; Zipf cache in E2 against Analytic `h`; cost still deferred (F11) with catalog source links later. Chaos library is E3 / Phase 4.
+
+#### 20. SysSimulator as a DES recipe, not a product claim
+
+- **What it is.** Public pages (How it works, Distributed systems simulator, AWS cost estimator) describe a Rust/WASM DES, a seeded PRNG, Zipf caches, a 28-scenario chaos library, and an AWS cost panel. The pages do not say how equal timestamps are ordered, do not give a steady-state oracle, and do not name a pricing source. “10K+ RPS”, “0 GC pauses”, and “200 ms for 60 s” are self-reported with no hardware.
+- **What we copy.** Event queue, simulated time, seed + JSON scenario, log-normal service as a *family* (values stay Estimated / Vendor / Measured), Poisson / burst / spike / ramp as workload shapes, cache miss loading the origin, Little’s law, 2×/5×/10× bottleneck runs (cost still unknown until sourced).
+- **What we do not copy.** Library RNG; HashMap node order; speed or GC claims; SKU prices or “8 × t4g.medium at ~1,200 RPS”; the “~85%” CloudFront saving (it is the whole-bill $12,000 → $1,800 difference, and 8 × 1,200 is 9,600 not 10K headroom); Flutter/WASM as a requirement; 28 chaos scenarios in Phase 1.
+- **Recommendation.** Keep Decision 19 (c). First DES run: constant Poisson, no faults, warm-up discarded, must match Analytic. Decision 8 guard until we benchmark. Rust/WASM only if the benchmark requires it.
+- **Blocks.** E2 kernel, N6, N7, F11, J8 cache.
+
+**Decided Oct 28, 2026.** (c) hybrid stands. Decision 18 is display. Decision 8 is still a guard, not a performance claim.
 
 ## Changelog
 
@@ -1156,3 +1170,4 @@ Each item has four lines: what it is, the options, my recommendation, and what i
 | Oct 27, 2026 | Calibration lists the live Workspace canvas cards (titles and catalog icons), not leftover seed profile names such as AKS transcode workers. Unbound edge profiles stay out of the component list. |
 | Oct 28, 2026 | Palette On canvas lists every live card (Azure Front Door included) so Load does not hide a 9-block service inside a collapsed Network folder. Load opens the provider categories that hold those catalog ids. YouTube Viewers emit Async on the viewer path (R/W/A); Workload shows Read, Write, Async and Bulk on every Clients card, same as the Class chips. AWS 9-block LB title matches Application Load Balancer; Azure DB title matches Database for PostgreSQL. |
 | Oct 28, 2026 | Stakeholder review of a Fluid run: “only + and − calculation” (290 / 240 / 50 rps) and “stopped animation / no changing / toy, not a professional simulator.” Decision 18 amended to (e): the professional output is the hockey-stick, not particle overlay. Decision 19: Phase 1 engine is Analytic steady-state (Jackson, Erlang C, Allen-Cunneen). Fluid Δt survives only as the ρ ≥ 1 overload branch. Discrete is verifier (E2) then faults (E3). Product phases 0–5 unchanged: E3 faults = Phase 4; Monte Carlo = Later, not persistence. Workload stays its own tab (constant + SCV in E1). Faults tab stays visible, unused in E1. Analytic p50/p95/p99 labeled Analytic, never Measured. J13–J16 added. Decision 6 still closes Phase 1. Decision 16 amended only for SCV, not a distribution-family fit. No 92%, no 60 FPS. |
+| Oct 28, 2026 | SysSimulator pages read (How it works, Distributed systems simulator, AWS cost estimator). Hybrid engine confirmed: Analytic + seeded DES on one schema; does not replace Decision 18. Own `xoshiro128**`; ties by (time, seq); array iteration; Little’s law; J14 hockey-stick in engine tests. No speed/GC claims. Decision 8 20k Discrete guard stays until a benchmark. Zipf cache is E2 against Analytic h. Cost stays deferred; their SKU arithmetic is not copied. Chaos is E3. Engine code lives in `web/packages/engine`, not in this plan. |

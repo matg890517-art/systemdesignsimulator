@@ -39,7 +39,18 @@ export {
   requestConservationHolds,
 } from './conservation.ts'
 export { meanMs, sampleDistribution, setValue, unwrap } from './values.ts'
-export { erlangC, erlangCWaitMs } from './queueing.ts'
+export {
+  allenCunneenWaitMs,
+  erlangC,
+  erlangCWaitMs,
+  littlesLawHolds,
+  mmcWaitQuantileMs,
+  statusFromRho,
+  utilizationRho,
+} from './queueing.ts'
+export type { StabilityStatus } from './queueing.ts'
+export { hockeyStickRow, runAnalytic } from './analytic.ts'
+export type { AnalyticComponentReport, AnalyticRunResult, ResultLabel } from './analytic.ts'
 export { baselineRps, expectedArrivals, offeredAt, peakFactor, shapeFactor } from './workload.ts'
 export {
   aksInputsFromProfiles,
@@ -76,6 +87,7 @@ export {
   failingDependency,
   generator,
   genericBlocks,
+  hockeyStickTopology,
   mmcTopology,
   referenceStack,
   worker,

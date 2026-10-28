@@ -145,6 +145,17 @@ export function mmcTopology(): Topology {
   }
 }
 
+/** J14 hockey-stick: 290 rps, S = 20 ms, μ = 50 /s. */
+export function hockeyStickTopology(servers: number): Topology {
+  return {
+    components: [
+      generator('clients'),
+      worker('pool', { servers, serviceMs: 20, queue: 'unbounded', exponential: true }),
+    ],
+    edges: [edge('e1', 'clients', 'pool')],
+  }
+}
+
 export function failingDependency(): Topology {
   return {
     components: [

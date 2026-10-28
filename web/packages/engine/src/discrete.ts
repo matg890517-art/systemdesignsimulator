@@ -38,6 +38,7 @@ type CompRuntime = {
   finishAt: Map<string, number>
 }
 
+/** Equal timestamps keep insertion order so a seeded run is deterministic. */
 function less(a: HeapItem, b: HeapItem): boolean {
   return a.t < b.t || (a.t === b.t && a.seq < b.seq)
 }
