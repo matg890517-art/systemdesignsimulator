@@ -29,9 +29,11 @@ export function solveAnalytic(compiled: CompiledModel): EngineResult {
 
   const ids = classIdsOf(compiled)
   const lambdaTotal = compiled.nodes.map(() => 0)
+  const lambdaByClass: Record<string, number[]> = {}
   const arrivalScv = compiled.nodes.map(() => 1)
   for (const classId of ids) {
     const lambda = solveClassLambda(compiled, classId) ?? compiled.nodes.map(() => 0)
+    lambdaByClass[classId] = lambda
     for (let i = 0; i < lambda.length; i++) lambdaTotal[i] = (lambdaTotal[i] ?? 0) + (lambda[i] ?? 0)
   }
 
@@ -49,11 +51,11 @@ export function solveAnalytic(compiled: CompiledModel): EngineResult {
 
   const edges: EngineResult['edges'] = {}
   for (const edge of compiled.edges) {
-    const src = nodes[edge.from]
+    const srcIndex = compiled.index.get(edge.from)
     const flow: Record<string, number> = {}
     for (const classId of Object.keys(edge.perClass)) {
       const hop = edge.perClass[classId]!
-      const out = src?.throughput ?? src?.lambda ?? 0
+      const out = srcIndex === undefined ? 0 : (lambdaByClass[classId]?.[srcIndex] ?? 0)
       let p = 1
       if (hop.routing === 'weighted') {
         const sibs = compiled.edges.filter((item) => item.from === edge.from && item.perClass[classId])

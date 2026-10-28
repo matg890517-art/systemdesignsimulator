@@ -12,6 +12,7 @@ import {
 import type { KpiState } from '../workspace/types.ts'
 import { Explainer } from './Explainer.tsx'
 import { FidelityPanel } from './FidelityPanel.tsx'
+import { LineChart } from './LineChart.tsx'
 import { RankingTable } from './RankingTable.tsx'
 import { absentRecordedTest, parseRecordedTest } from './recorded-test.ts'
 import { scoreReferenceFidelity } from './score-reference.ts'
@@ -81,7 +82,35 @@ export function ResultsPage() {
         {record ? (
           <>
             <RankingTable rows={record.ranking} />
-            <Explainer bottlenecks={record.run.bottlenecks} />
+            <Stack spacing={1.5} sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+              {record.run.hockeyStick ? (
+                <LineChart
+                  title="Hockey-stick · latency vs load"
+                  hint={`${record.run.stability ?? 'steady state'} · headroom ${record.run.headroomRps !== undefined ? `${Math.round(record.run.headroomRps)} rps` : '—'} · Analytic sojourn, never Measured. ρ ≥ 1 is omitted (Unstable).`}
+                  xLabel="offered rps"
+                  yLabel="ms"
+                  yMax={Math.max(
+                    1,
+                    ...record.run.hockeyStick.lines.flatMap((line) =>
+                      line.waitMs.filter((y) => Number.isFinite(y)),
+                    ),
+                  )}
+                  lines={record.run.hockeyStick.lines
+                    .filter((line) => line.waitMs.some((y) => Number.isFinite(y)))
+                    .slice(0, 6)
+                    .map((line, index) => ({
+                      id: line.id,
+                      label: line.title,
+                      color: ['#2744C7', '#B3261E', '#2E7D5B', '#B7791F', '#6B4C9A', '#1D6F8A'][index] ?? '#2744C7',
+                      points: record.run.hockeyStick!.rps.map((rps, i) => ({
+                        t: rps,
+                        y: line.waitMs[i] ?? 0,
+                      })).filter((p) => Number.isFinite(p.y)),
+                    }))}
+                />
+              ) : null}
+              <Explainer bottlenecks={record.run.bottlenecks} />
+            </Stack>
           </>
         ) : (
           <Box
@@ -97,8 +126,8 @@ export function ResultsPage() {
             <Typography sx={{ mt: 1, fontSize: 13, color: 'text.secondary', maxWidth: 520 }}>
               Run the canvas on Workspace. Phase 1 Results is steady-state queueing: Stable /
               Saturating / Unstable, ρ, wait, Analytic p50/p95/p99 (never Measured), headroom, and
-              a hockey-stick of latency vs load. The current run is still the fluid rate model until
-              Analytic is wired. J12 A/B stay blocked. Cost stays unknown until you type $/hr.
+              a hockey-stick of latency vs load. J12 A/B stay blocked. Cost stays unknown until you
+              type $/hr.
               Catalog has no SKU prices.
             </Typography>
           </Box>

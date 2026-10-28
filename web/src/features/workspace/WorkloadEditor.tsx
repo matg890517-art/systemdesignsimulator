@@ -24,14 +24,14 @@ import {
 } from './workload-store.ts'
 import { getProfiles } from '../calibration/library.ts'
 import { RunModeToggle } from './RunModeToggle.tsx'
-import { RUN_MODES } from './run-mode.ts'
+import { RUN_MODES, isSimulatedMode, normalizeRunMode } from './run-mode.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 const SHAPES = [
-  { id: 'constant', label: 'Constant', body: 'Offered rate stays at the baseline for the whole run.' },
-  { id: 'poisson', label: 'Poisson', body: 'Same mean as constant in fluid. Discrete mode draws exponential gaps.' },
-  { id: 'step', label: 'Step', body: 'Default demo. Baseline, then multiply from a given second so hop rates visibly change.' },
-  { id: 'spike', label: 'Spike', body: 'Baseline, a short burst, then back to baseline.' },
+  { id: 'constant', label: 'Constant', body: 'Phase 1. Offered rate stays at the baseline. Analytic reads this as λ.' },
+  { id: 'poisson', label: 'Poisson', body: 'Engine slice E2. Same mean as constant. Simulated draws exponential gaps.' },
+  { id: 'step', label: 'Step', body: 'Engine slice E2. Baseline, then multiply from a given second.' },
+  { id: 'spike', label: 'Spike', body: 'Engine slice E2. Baseline, a short burst, then back to baseline.' },
 ] as const
 
 const CLASS_LABEL: Record<(typeof REQUEST_CLASSES)[number], string> = {
@@ -83,8 +83,8 @@ function RunClockFields({ draft }: { draft: WorkloadDraft }) {
         />
       </Stack>
       <Typography sx={{ mt: 0.75, fontSize: 11, color: 'text.secondary' }}>
-        Same on Viewers, Uploaders and Clients. Duration is simulated seconds, dt is the Fluid
-        step, seed replays Discrete.
+        Same on Viewers, Uploaders and Clients. Duration is simulated seconds. Warm-up is 20% of
+        duration. Seed replays Simulated. dt is unused in Analytic.
       </Typography>
     </>
   )
@@ -101,7 +101,7 @@ export function WorkloadEditor({
   const generators = canvasGenerators(nodes, edges)
   const compiled = compileCanvas(nodes, edges, draft, getProfiles(), 'none')
   const arrivals = expectedArrivals(compiled.workload)
-  const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
+  const discreteBlocked = isSimulatedMode(draft.mode) && arrivals > DISCRETE_EVENT_GUARD
 
   return (
     <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
@@ -156,7 +156,7 @@ export function WorkloadEditor({
         </Typography>
         <RunModeToggle />
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          {RUN_MODES.find((item) => item.id === draft.mode)?.hint} Same topology either way. Also
+          {RUN_MODES.find((item) => item.id === normalizeRunMode(draft.mode))?.hint} Same topology either way. Also
           next to Run on the canvas.
         </Typography>
       </Stack>
@@ -253,7 +253,7 @@ export function WorkloadEditor({
 
       <Typography sx={{ mt: 2, fontSize: 12, color: discreteBlocked ? 'error.main' : 'text.secondary' }}>
         {discreteBlocked
-          ? `Discrete mode would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use fluid, or lower rate / duration.`
+          ? `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use Analytic, or lower rate / duration.`
           : `About ${Math.round(arrivals).toLocaleString()} arrivals over ${draft.durationSec}s at peak.`}
       </Typography>
     </Box>

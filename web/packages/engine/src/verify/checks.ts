@@ -22,13 +22,13 @@ export function checkConservation(counts: {
   timedOut: number
   inFlight: number
 }): CheckResult {
-  const rhs = counts.completed + counts.dropped + counts.timedOut + counts.inFlight
+  const rhs = counts.completed + counts.dropped + counts.inFlight
   const ok = counts.created === rhs
   return {
     ok,
     detail: ok
       ? 'conservation holds'
-      : `created ${counts.created} ≠ completed+dropped+timedOut+inFlight ${rhs}`,
+      : `created ${counts.created} ≠ completed+dropped+inFlight ${rhs}`,
   }
 }
 

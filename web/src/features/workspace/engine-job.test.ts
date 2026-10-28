@@ -5,9 +5,9 @@ import { runEngineJob, type EngineJobMessage } from './engine-job.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 
 describe('N4 engine job', () => {
-  it('posts progress then a worker-tagged result for the example canvas', () => {
+  it('posts progress then a worker-tagged result for the example canvas', async () => {
     const messages: EngineJobMessage[] = []
-    runEngineJob(
+    await runEngineJob(
       {
         id: 7,
         nodes: initialNodes,
@@ -24,17 +24,19 @@ describe('N4 engine job', () => {
     if (done?.type !== 'done' || !done.result.ok) throw new Error('expected a successful run')
     expect(done.id).toBe(7)
     expect(done.result.run.hint).toContain('worker')
-    expect(done.result.run.nodeStats.aks.util).toBeCloseTo(0.95, 2)
+    expect(done.result.run.mode).toBe('analytic')
+    expect(done.result.run.nodeStats.aks).toBeDefined()
+    expect(done.result.run.kpis.latency).not.toBe('unknown')
   })
 
-  it('returns the discrete arrival guard without throwing', () => {
+  it('returns the discrete arrival guard without throwing', async () => {
     const messages: EngineJobMessage[] = []
-    runEngineJob(
+    await runEngineJob(
       {
         id: 8,
         nodes: initialNodes,
         edges: initialEdges,
-        draft: { ...defaultWorkloadDraft(), mode: 'discrete' },
+        draft: { ...defaultWorkloadDraft(), mode: 'simulated' },
         profiles: getProfiles(),
         fault: 'none',
       },

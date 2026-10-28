@@ -13,6 +13,7 @@ export function LineChart({
   lines,
   yMax,
   yLabel,
+  xLabel = 'time (s)',
   target,
 }: {
   title: string
@@ -20,6 +21,7 @@ export function LineChart({
   lines: ChartLine[]
   yMax: number
   yLabel: string
+  xLabel?: string
   target?: { y: number; label: string }
 }) {
   const width = 640
@@ -132,7 +134,7 @@ export function LineChart({
           fontSize="11"
           fill="#566273"
         >
-          time (s)
+          {xLabel}
         </text>
       </Box>
       <Stack direction="row" spacing={2} sx={{ mt: 0.5, flexWrap: 'wrap' }}>

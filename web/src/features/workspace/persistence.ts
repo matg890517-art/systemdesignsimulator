@@ -119,7 +119,16 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
     if (!parsed.id || !parsed.name || !parsed.draft || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
       return undefined
     }
-    if (parsed.draft.mode !== 'fluid' && parsed.draft.mode !== 'discrete') return undefined
+    if (
+      parsed.draft.mode !== 'fluid' &&
+      parsed.draft.mode !== 'discrete' &&
+      parsed.draft.mode !== 'analytic' &&
+      parsed.draft.mode !== 'simulated'
+    ) {
+      return undefined
+    }
+    parsed.draft.mode =
+      parsed.draft.mode === 'discrete' || parsed.draft.mode === 'simulated' ? 'simulated' : 'analytic'
     if (!Array.isArray(parsed.profiles)) return undefined
     const normalized = parsed.nodes.map((node) => {
       if (node.type === 'zone') {

@@ -53,10 +53,32 @@ function emptyNode(status: NodeResult['status']): NodeResult {
   }
 }
 
-export function simulateOnce(compiled: CompiledModel, seed: number): EngineResult {
+export const WORKER_SLICE_MS = 8
+
+export type SimHooks = {
+  cancelled?: () => boolean
+  onProgress?: (info: { events: number; t_s: number; fraction: number }) => void
+  sliceMs?: number
+  now?: () => number
+}
+
+export function simulateOnce(compiled: CompiledModel, seed: number, hooks?: SimHooks): EngineResult {
+  return buildSim(compiled, seed, hooks).runSync()
+}
+
+export async function simulateWithSlices(
+  compiled: CompiledModel,
+  seed: number,
+  hooks?: SimHooks,
+): Promise<EngineResult> {
+  return buildSim(compiled, seed, hooks).runAsync()
+}
+
+function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
   const warnings = compiled.warnings.map((w) => w.message)
   if (compiled.invalid) {
-    return invalidResult(compiled, seed, compiled.invalid, warnings)
+    const result = invalidResult(compiled, seed, compiled.invalid, warnings)
+    return { runSync: () => result, runAsync: async () => result }
   }
   const { scenario, nodes, edges } = compiled
   const durationUs = scenario.run.duration_s * US
@@ -94,13 +116,14 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     lookups: 0,
   }))
 
-  type Req = { classId: string; birth: number; arrived: number; deadline: number }
+  type Req = { classId: string; birth: number; arrived: number; deadline: number; serviceAt: number }
   const reqs: Req[] = []
   const heap = new EventHeap()
   let seq = 1
   let events = 0
   let inFlight = 0
   let created = 0
+  let systemDone = 0
 
   const schedule = (t: number, kind: number, a: number, b: number) => {
     heap.push(Math.round(t), seq++, kind, a, b)
@@ -188,6 +211,7 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     const rtN = rt[ni]!
     const req = reqs[reqIndex]!
     rtN.busy++
+    req.serviceAt = t
     const serviceMs = sampleServiceMs(stream(node.id, 'service'), node.service)
     const finish = t + Math.max(1, Math.round(serviceMs * 1000))
     schedule(finish, EventKind.depart, ni, reqIndex)
@@ -211,14 +235,18 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
       const hit = key <= rtN.cacheSize
       if (hit) {
         rtN.hits++
-        completeReq(ni, reqIndex, t)
+        finishAt(ni, reqIndex, t)
+        systemDone++
+        inFlight--
         return
       }
     } else if ((node.kind === 'cache' || node.kind === 'cdn') && rtN.hitRatio > 0) {
       rtN.lookups++
       if (stream(node.id, 'cache').next() < rtN.hitRatio) {
         rtN.hits++
-        completeReq(ni, reqIndex, t)
+        finishAt(ni, reqIndex, t)
+        systemDone++
+        inFlight--
         return
       }
     }
@@ -235,15 +263,22 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     rtN.queue.push(reqIndex)
   }
 
-  const completeReq = (ni: number, reqIndex: number, t: number) => {
+  const finishAt = (ni: number, reqIndex: number, t: number) => {
     const rtN = rt[ni]!
     const req = reqs[reqIndex]!
     if (record(t)) {
       rtN.completed++
-      rtN.hist.addUs(t - req.birth)
-      rtN.waitHist.addUs(Math.max(0, req.arrived ? t - req.arrived : 0))
+      const start = req.arrived || req.birth
+      const dwell = Math.max(0, t - start)
+      const wait = req.serviceAt ? Math.max(0, req.serviceAt - start) : 0
+      rtN.hist.addUs(dwell)
+      rtN.waitHist.addUs(wait)
       if (req.deadline > 0 && t > req.deadline) rtN.timedOut++
     }
+  }
+
+  const completeReq = (ni: number, reqIndex: number, t: number) => {
+    finishAt(ni, reqIndex, t)
     route(ni, reqIndex, t)
   }
 
@@ -252,6 +287,7 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     const from = nodes[ni]!.id
     const targets = pickTargets(from, req.classId)
     if (!targets.length) {
+      systemDone++
       inFlight--
       return
     }
@@ -261,32 +297,43 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
         birth: req.birth,
         arrived: 0,
         deadline: req.deadline,
+        serviceAt: 0,
       }
       reqs.push(child)
       inFlight++
-      created++
       const delay = Math.max(0, Math.round(target.latencyUs))
       const jitter = sampleExponential(stream(from, 'network'), Math.max(1, delay * 0.01))
       schedule(t + delay + jitter, EventKind.arrive, target.to, reqs.length - 1)
     }
+    if (targets.length > 1) created += targets.length - 1
     inFlight--
   }
 
-  while (heap.size) {
-    const ev = heap.pop()
-    if (!ev) break
+  const handle = (ev: NonNullable<ReturnType<EventHeap['pop']>>): 'ok' | 'stop' => {
     events++
     if (events > budget) {
       warnings.push(`event budget ${budget} reached`)
-      break
+      return 'stop'
     }
-    if (ev.t > durationUs) break
+    if (ev.t > durationUs) return 'stop'
+    if ((events & 511) === 0) {
+      if (hooks?.cancelled?.()) {
+        warnings.push('cancelled')
+        return 'stop'
+      }
+      const t_s = ev.t / US
+      hooks?.onProgress?.({
+        events,
+        t_s,
+        fraction: Math.min(1, t_s / Math.max(scenario.run.duration_s, 1e-9)),
+      })
+    }
     if (ev.kind === EventKind.generate) {
       const ni = ev.a
       const ci = ev.b
       const classId = classList[ci]
       const node = nodes[ni]
-      if (!classId || !node) continue
+      if (!classId || !node) return 'ok'
       const row = scenario.workload.find((w) => w.clientId === node.id && w.classId === classId)
       if (row) {
         const ia = sampleExponential(stream(node.id, 'arrivals'), 1 / row.rate_rps) * US
@@ -297,6 +344,7 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
         birth: ev.t,
         arrived: 0,
         deadline: node.timeout_ms ? ev.t + node.timeout_ms * 1000 : 0,
+        serviceAt: 0,
       }
       reqs.push(req)
       created++
@@ -314,9 +362,23 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
       const next = rtN.queue.shift()
       if (next !== undefined) startService(ni, next, ev.t)
     }
+    return 'ok'
   }
 
-  const T = Math.max(1e-9, (Math.min(durationUs, durationUs) - warmupUs) / US)
+  const pump = (): boolean => {
+    if (!heap.size) return false
+    let n = 0
+    while (heap.size && n < 512) {
+      const ev = heap.pop()
+      if (!ev) return false
+      if (handle(ev) === 'stop') return false
+      n++
+    }
+    return heap.size > 0
+  }
+
+  const finish = (): EngineResult => {
+  const T = Math.max(1e-9, (durationUs - warmupUs) / US)
   const nodeResults: Record<string, NodeResult> = {}
   const evidence: Evidence[] = []
   for (let i = 0; i < nodes.length; i++) {
@@ -348,9 +410,9 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
       status: rho >= 1 ? 'unstable' : rho >= 0.85 ? 'critical' : rho >= 0.7 ? 'warning' : 'healthy',
       Wq_ms,
       W_ms,
-      p50: r.hist.percentileMs(0.5),
-      p95: r.hist.percentileMs(0.95),
-      p99: r.hist.percentileMs(0.99),
+      p50: r.waitHist.percentileMs(0.5),
+      p95: r.waitHist.percentileMs(0.95),
+      p99: r.waitHist.percentileMs(0.99),
       L: lambda * (W_ms / 1000),
       Lq: lambda * (Wq_ms / 1000),
       throughput,
@@ -361,11 +423,9 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
   }
 
   let dropped = 0
-  let completed = 0
   let timedOut = 0
   for (const r of rt) {
     dropped += r.dropped
-    completed += r.completed
     timedOut += r.timedOut
   }
 
@@ -373,7 +433,7 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     little: checkLittle(nodeResults),
     conservation: checkConservation({
       created,
-      completed,
+      completed: systemDone,
       dropped,
       timedOut,
       inFlight: Math.max(0, inFlight),
@@ -424,6 +484,30 @@ export function simulateOnce(compiled: CompiledModel, seed: number): EngineResul
     },
     checks,
     invalid,
+  }
+  }
+
+  return {
+    runSync() {
+      while (pump()) {}
+      return finish()
+    },
+    async runAsync() {
+      const now = hooks?.now ?? Date.now
+      const slice = hooks?.sliceMs ?? WORKER_SLICE_MS
+      let last = now()
+      while (pump()) {
+        if (hooks?.cancelled?.()) {
+          warnings.push('cancelled')
+          break
+        }
+        if (now() - last >= slice) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          last = now()
+        }
+      }
+      return finish()
+    },
   }
 }
 

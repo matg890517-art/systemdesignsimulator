@@ -47,6 +47,33 @@ export function headroomOf(
   return { headroom_rps: lo * base, firstFailing: fail }
 }
 
+export type HockeyStickPoint = {
+  rps: number
+  waitMs: Record<string, number>
+  bottleneck?: string
+}
+
+/** Latency vs offered load. Infinite wait is omitted (Unstable). */
+export function hockeyStickSweep(
+  compiled: CompiledModel,
+  solve: (model: CompiledModel) => EngineResult,
+  steps = 10,
+): HockeyStickPoint[] {
+  const base = compiled.scenario.workload.reduce((sum, row) => sum + row.rate_rps, 0)
+  const points: HockeyStickPoint[] = []
+  for (let i = 1; i <= steps; i++) {
+    const scale = i / steps
+    const result = solve(scaleWorkload(compiled, scale))
+    const waitMs: Record<string, number> = {}
+    for (const [id, row] of Object.entries(result.nodes)) {
+      if (row.waitUnknown || row.status === 'not_wired') continue
+      if (Number.isFinite(row.W_ms)) waitMs[id] = row.W_ms
+    }
+    points.push({ rps: base * scale, waitMs, bottleneck: result.system.bottleneck })
+  }
+  return points
+}
+
 export function nPlusOne(compiled: CompiledModel, solve: (model: CompiledModel) => EngineResult) {
   return compiled.nodes
     .filter((node) => node.kind !== 'client')

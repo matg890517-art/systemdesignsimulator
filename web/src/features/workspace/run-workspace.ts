@@ -6,9 +6,17 @@ import {
   runFluid,
   unwrap,
   costFromProfiles,
+  compileScenario,
+  scenarioFromLegacy,
+  solveAnalytic,
+  simulateOnce,
+  simulateWithSlices,
+  headroomOf,
+  hockeyStickSweep,
   type CalibrationProfile,
   type Component,
   type DiscreteRunResult,
+  type EngineResult,
   type FluidState,
   type SimEvent,
   type Topology,
@@ -38,6 +46,7 @@ import type {
 } from './types.ts'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 import { emitEvery, shouldEmitTick } from './playback.ts'
+import { isSimulatedMode, normalizeRunMode } from './run-mode.ts'
 
 export function kpisFromDraft(
   draft: WorkloadDraft,
@@ -53,7 +62,7 @@ export function kpisFromDraft(
     load: formatRps(load),
     loadHint: hint,
     latency: 'unknown',
-    latencyHint: 'Analytic percentiles not wired yet. Unknown until then. Not Measured.',
+    latencyHint: 'Run Analytic for closed-form p50/p95/p99. Never Measured.',
     errors: 'unknown',
     bottlenecks: '—',
     bottleneckHint: 'Run to rank from the engine',
@@ -164,7 +173,7 @@ function kpisFromStats(
   stats: Record<string, NodeRunStat>,
   topology: Topology,
   offered: Workload['offered'],
-  mode: 'fluid' | 'discrete',
+  mode: string,
   extra: { errors: number; latency: string; latencyHint: string },
   profiles: CalibrationProfile[],
 ): { kpis: KpiState; bottlenecks: Bottleneck[] } {
@@ -452,6 +461,183 @@ export function pickEdgeOffered(
   return run.edgeClassOffered[edgeId]?.[filter]
 }
 
+function planStatusLabel(status: string): string {
+  if (status === 'unstable') return 'Unstable'
+  if (status === 'warning' || status === 'critical') return 'Saturating'
+  if (status === 'not_wired') return 'Not wired'
+  if (status === 'unknown') return 'Unknown'
+  return 'Stable'
+}
+
+function statsFromEngine(
+  topology: Topology,
+  result: EngineResult,
+  mode: 'analytic' | 'simulated',
+  profiles: CalibrationProfile[],
+) {
+  const label = mode === 'analytic' ? 'Analytic' : 'Simulated'
+  const stats: Record<string, NodeRunStat> = {}
+  const classStats: Record<string, Record<string, NodeRunStat>> = {}
+  for (const component of topology.components) {
+    const row = result.nodes[component.id]
+    const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
+    const citation = profileCitation(profile)
+    const servers = component.behavior.servers.state === 'set' ? unwrap(component.behavior.servers) : undefined
+    let serviceMs: number | undefined
+    for (const service of Object.values(component.behavior.serviceTime)) {
+      if (service?.state === 'set') serviceMs = Math.max(serviceMs ?? 0, meanMs(unwrap(service)))
+    }
+    if (!row) continue
+    const generator = component.kind === 'traffic_generator'
+    const waitText = generator
+      ? formatRps(row.lambda)
+      : row.waitUnknown || !Number.isFinite(row.p99)
+        ? 'unknown wait'
+        : `${row.p99.toFixed(0)} ms p99`
+    const mu = serviceMs && servers ? servers / (serviceMs / 1000) : Number.POSITIVE_INFINITY
+    const offered = row.lambda
+    const completed = row.throughput
+    const rejected = row.dropRate
+    stats[component.id] = {
+      util: generator ? 0 : Number.isFinite(row.rho) ? Math.min(1, Math.max(0, row.rho)) : 0,
+      completed,
+      rejected,
+      offered,
+      mu,
+      capped: Number.isFinite(mu),
+      p99: waitText,
+      meta: generator
+        ? `${label} · generator`
+        : `${label} · ${planStatusLabel(row.status)} · ρ ${Number.isFinite(row.rho) ? (row.rho * 100).toFixed(0) : '—'}% · ${citation}`,
+      citation,
+      backlog: Number.isFinite(row.Lq) ? row.Lq : 0,
+      loss: offered > 0 ? rejected / offered : 0,
+      servers,
+      serviceMs,
+    }
+    classStats[component.id] = {}
+  }
+  for (const edge of topology.edges) {
+    const flow = result.edges[edge.id]
+    if (!flow) continue
+    const dest = stats[edge.to]
+    if (!dest) continue
+    const destClasses = (classStats[edge.to] ??= {})
+    for (const [classId, rps] of Object.entries(flow.flow_rps)) {
+      const prev = destClasses[classId]
+      const offered = (prev?.offered ?? 0) + rps
+      destClasses[classId] = {
+        ...dest,
+        offered,
+        completed: offered,
+        rejected: 0,
+        loss: 0,
+      }
+    }
+  }
+  const edgeOffered: Record<string, number> = {}
+  const edgeClassOffered: Record<string, Record<string, number>> = {}
+  for (const [id, edge] of Object.entries(result.edges)) {
+    let sum = 0
+    const byClass: Record<string, number> = {}
+    for (const [classId, rps] of Object.entries(edge.flow_rps)) {
+      byClass[classId] = rps
+      sum += rps
+    }
+    edgeOffered[id] = sum
+    edgeClassOffered[id] = byClass
+  }
+  return { stats, classStats, edgeOffered, edgeClassOffered }
+}
+
+function hockeyFromSweep(
+  topology: Topology,
+  sweep: { rps: number; waitMs: Record<string, number> }[],
+) {
+  const rps = sweep.map((point) => point.rps)
+  const ids = topology.components.filter((c) => c.kind !== 'traffic_generator').map((c) => c.id)
+  const lines = ids.map((id) => ({
+    id,
+    title: topology.components.find((c) => c.id === id)?.name ?? id,
+    waitMs: sweep.map((point) => point.waitMs[id] ?? Number.NaN),
+  }))
+  return { rps, lines }
+}
+
+type WorkspaceOutcome = { ok: true; run: WorkspaceRun } | { ok: false; reason: string }
+
+function finishFromEngine(
+  topology: Topology,
+  workload: Workload,
+  compiled: Parameters<typeof solveAnalytic>[0],
+  result: EngineResult,
+  mode: 'analytic' | 'simulated',
+  profiles: CalibrationProfile[],
+  onProgress?: (progress: RunProgress) => void,
+): WorkspaceOutcome {
+  const { stats, classStats, edgeOffered, edgeClassOffered } = statsFromEngine(
+    topology,
+    result,
+    mode,
+    profiles,
+  )
+  const room = mode === 'analytic' ? headroomOf(compiled, solveAnalytic) : undefined
+  const stick =
+    mode === 'analytic' ? hockeyFromSweep(topology, hockeyStickSweep(compiled, solveAnalytic, 10)) : undefined
+  const errors = Object.values(result.nodes).reduce((sum, row) => sum + row.dropRate + row.timeoutRate, 0)
+  const offeredSum = Object.values(result.nodes)
+    .filter((row) => row.status !== 'not_wired')
+    .reduce((sum, row) => sum + row.lambda, 0)
+  const hot = result.system.bottleneck ? result.nodes[result.system.bottleneck] : undefined
+  const latency =
+    hot && Number.isFinite(hot.W_ms)
+      ? `${hot.W_ms.toFixed(0)} ms`
+      : hot && !Number.isFinite(hot.W_ms)
+        ? 'unstable'
+        : '—'
+  const { kpis, bottlenecks } = kpisFromStats(stats, topology, workload.offered, mode, {
+    errors: offeredSum > 0 ? errors / offeredSum : 0,
+    latency,
+    latencyHint:
+      mode === 'analytic'
+        ? `${result.evidence} · Analytic p99 on the hottest node. Never Measured.`
+        : `${result.evidence} · Simulated mean sojourn on the hottest node. Not Measured.`,
+  }, profiles)
+  if (room?.headroom_rps !== undefined) {
+    kpis.bottleneckHint = `${kpis.bottleneckHint} · headroom ${formatRps(room.headroom_rps)}`
+  }
+  const lastTick: RunTick = {
+    t: workload.durationSec,
+    nodeStats: stats,
+    classStats,
+    edgeOffered,
+    edgeClassOffered,
+  }
+  onProgress?.({ ...lastTick, fraction: 1 })
+  return {
+    ok: true,
+    run: {
+      mode,
+      kpis,
+      bottlenecks,
+      nodeStats: stats,
+      classStats,
+      edgeOffered,
+      edgeClassOffered,
+      ticks: [lastTick],
+      durationSec: workload.durationSec,
+      hint: `${mode} · seed ${workload.seed} · ${result.evidence}`,
+      affectedComponentIds: [],
+      breakerOpenEdges: [],
+      evidence: result.evidence,
+      stability: result.system.stability,
+      headroomRps: room?.headroom_rps,
+      firstFailing: room?.firstFailing,
+      hockeyStick: stick,
+    },
+  }
+}
+
 export function runWorkspace(
   nodes: Node<ServiceNodeData | ZoneNodeData>[],
   rfEdges: RfEdge[],
@@ -459,16 +645,45 @@ export function runWorkspace(
   profiles: CalibrationProfile[],
   fault: FaultMode,
   onProgress?: (progress: RunProgress) => void,
-): { ok: true; run: WorkspaceRun } | { ok: false; reason: string } {
+  cancelled?: () => boolean,
+): WorkspaceOutcome {
   const { topology, workload } = compileCanvas(nodes, rfEdges, draft, profiles, fault)
   if (topology.components.length === 0) {
     return { ok: false, reason: 'Canvas has no service nodes to compile.' }
   }
   const arrivals = expectedArrivals(workload)
-  if (draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD) {
+  const mode = normalizeRunMode(draft.mode)
+  if (mode === 'analytic' || (mode === 'simulated' && fault === 'none')) {
+    if (mode === 'simulated' && arrivals > DISCRETE_EVENT_GUARD) {
+      return {
+        ok: false,
+        reason: `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString('en-US')} arrivals. Guard is ${DISCRETE_EVENT_GUARD.toLocaleString('en-US')} so the tab does not freeze. Use Analytic, or lower rate / duration.`,
+      }
+    }
+    const compiled = compileScenario(scenarioFromLegacy(topology, workload))
+    if (compiled.invalid) return { ok: false, reason: compiled.invalid }
+    const result =
+      mode === 'analytic'
+        ? solveAnalytic(compiled)
+        : simulateOnce(compiled, workload.seed, {
+            cancelled,
+            onProgress: (info) => {
+              onProgress?.({
+                t: info.t_s,
+                fraction: info.fraction,
+                nodeStats: {},
+                classStats: {},
+                edgeOffered: {},
+                edgeClassOffered: {},
+              })
+            },
+          })
+    return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)
+  }
+  if (isSimulatedMode(draft.mode) && arrivals > DISCRETE_EVENT_GUARD) {
     return {
       ok: false,
-      reason: `Discrete mode would schedule about ${Math.round(arrivals).toLocaleString('en-US')} arrivals. Guard is ${DISCRETE_EVENT_GUARD.toLocaleString('en-US')} so the tab does not freeze. Use fluid, or lower rate / duration.`,
+      reason: `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString('en-US')} arrivals. Guard is ${DISCRETE_EVENT_GUARD.toLocaleString('en-US')} so the tab does not freeze. Use Analytic, or lower rate / duration.`,
     }
   }
 
@@ -580,4 +795,50 @@ export function runWorkspace(
       ...blast,
     },
   }
+}
+
+/** Worker path: Simulated DES yields every 8 ms so cancel can land. Analytic stays sync. */
+export async function runWorkspaceSliced(
+  nodes: Node<ServiceNodeData | ZoneNodeData>[],
+  rfEdges: RfEdge[],
+  draft: WorkloadDraft,
+  profiles: CalibrationProfile[],
+  fault: FaultMode,
+  onProgress?: (progress: RunProgress) => void,
+  cancelled?: () => boolean,
+): Promise<WorkspaceOutcome> {
+  const { topology, workload } = compileCanvas(nodes, rfEdges, draft, profiles, fault)
+  if (topology.components.length === 0) {
+    return { ok: false, reason: 'Canvas has no service nodes to compile.' }
+  }
+  const arrivals = expectedArrivals(workload)
+  const mode = normalizeRunMode(draft.mode)
+  if (mode === 'analytic' || (mode === 'simulated' && fault === 'none')) {
+    if (mode === 'simulated' && arrivals > DISCRETE_EVENT_GUARD) {
+      return {
+        ok: false,
+        reason: `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString('en-US')} arrivals. Guard is ${DISCRETE_EVENT_GUARD.toLocaleString('en-US')} so the tab does not freeze. Use Analytic, or lower rate / duration.`,
+      }
+    }
+    const compiled = compileScenario(scenarioFromLegacy(topology, workload))
+    if (compiled.invalid) return { ok: false, reason: compiled.invalid }
+    const result =
+      mode === 'analytic'
+        ? solveAnalytic(compiled)
+        : await simulateWithSlices(compiled, workload.seed, {
+            cancelled,
+            onProgress: (info) => {
+              onProgress?.({
+                t: info.t_s,
+                fraction: info.fraction,
+                nodeStats: {},
+                classStats: {},
+                edgeOffered: {},
+                edgeClassOffered: {},
+              })
+            },
+          })
+    return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)
+  }
+  return runWorkspace(nodes, rfEdges, draft, profiles, fault, onProgress, cancelled)
 }

@@ -2,7 +2,7 @@ import type { CalibrationProfile } from '@sds/engine'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 import type { FaultMode } from '../calibration/types.ts'
 import type { WorkloadDraft } from './compile.ts'
-import { runWorkspace } from './run-workspace.ts'
+import { runWorkspaceSliced } from './run-workspace.ts'
 import type { RunTick, ServiceNodeData, WorkspaceRun, ZoneNodeData } from './types.ts'
 
 export type EngineJobRequest = {
@@ -21,9 +21,13 @@ export type EngineJobMessage =
   | { id: number; type: 'done'; result: EngineJobResult }
   | { id: number; type: 'error'; message: string }
 
-export function runEngineJob(request: EngineJobRequest, post: (message: EngineJobMessage) => void) {
+export async function runEngineJob(
+  request: EngineJobRequest,
+  post: (message: EngineJobMessage) => void,
+  cancelled?: () => boolean,
+) {
   try {
-    const result = runWorkspace(
+    const result = await runWorkspaceSliced(
       request.nodes,
       request.edges,
       request.draft,
@@ -36,6 +40,7 @@ export function runEngineJob(request: EngineJobRequest, post: (message: EngineJo
           ...progress,
         })
       },
+      cancelled,
     )
     if (result.ok) {
       result.run.hint = `${result.run.hint} · worker`

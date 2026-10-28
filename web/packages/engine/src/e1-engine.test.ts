@@ -3,7 +3,7 @@ import { compileScenario } from './compile/compile.ts'
 import { md1WaitMs, mm1kBlocking, erlangCWaitMs } from './analytic/queue.ts'
 import { zipfHitRatio } from './analytic/zipf.ts'
 import { solveAnalytic, runAnalyticScenario } from './analytic/solve.ts'
-import { simulateOnce } from './des/simulate.ts'
+import { simulateOnce, simulateWithSlices } from './des/simulate.ts'
 import { createStreamRng } from './des/rng.ts'
 import { SCHEMA_VERSION, defaultRun, defaultTargets } from './schema/index.ts'
 import type { Scenario, ScenarioNode } from './schema/scenario.ts'
@@ -197,5 +197,30 @@ describe('E1.5 headroom', () => {
     expect(result.system.headroom_rps).toBeGreaterThan(10)
     expect(result.mode).toBe('analytic')
     expect(result.evidence).toBe('estimated')
+  })
+})
+
+describe('E1.8 cancel and slices', () => {
+  it('stops a DES run when cancelled()', () => {
+    const compiled = compileScenario(mmcScenario(200, 4, 10))
+    const result = simulateOnce(compiled, 1, { cancelled: () => true })
+    expect(result.warnings).toContain('cancelled')
+  })
+
+  it('yields on the async slice path and honors cancel', async () => {
+    const long = mmcScenario(200, 4, 10)
+    long.run = { ...long.run, duration_s: 30, warmup_s: 6 }
+    const compiled = compileScenario(long)
+    let wall = 0
+    const result = await simulateWithSlices(compiled, 1, {
+      sliceMs: 1,
+      now: () => {
+        wall += 2
+        return wall
+      },
+      cancelled: () => wall > 8,
+    })
+    expect(result.warnings).toContain('cancelled')
+    expect(result.mode).toBe('simulated')
   })
 })

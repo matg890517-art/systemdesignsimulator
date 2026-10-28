@@ -30,7 +30,7 @@ export type WorkloadDraft = {
   durationSec: number
   dtSec: number
   seed: number
-  mode: 'fluid' | 'discrete'
+  mode: 'analytic' | 'simulated' | 'fluid' | 'discrete'
   shapeKind: LoadShape['kind']
   stepAtSec: number
   stepFactor: number
@@ -57,8 +57,8 @@ export const WORKLOAD_RUN_CLOCK = {
 
 export const defaultWorkloadDraft = (): WorkloadDraft => ({
   ...WORKLOAD_RUN_CLOCK,
-  mode: 'fluid',
-  shapeKind: 'step',
+  mode: 'analytic',
+  shapeKind: 'constant',
   stepAtSec: 20,
   stepFactor: 2,
   spikeAtSec: 20,

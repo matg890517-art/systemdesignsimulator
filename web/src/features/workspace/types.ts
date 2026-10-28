@@ -127,8 +127,13 @@ export type RunTick = {
   edgeClassOffered: Record<string, Record<string, number>>
 }
 
+export type HockeyStickSeries = {
+  rps: number[]
+  lines: { id: string; title: string; waitMs: number[] }[]
+}
+
 export type WorkspaceRun = {
-  mode: 'fluid' | 'discrete'
+  mode: 'fluid' | 'discrete' | 'analytic' | 'simulated'
   kpis: KpiState
   bottlenecks: Bottleneck[]
   nodeStats: Record<string, NodeRunStat>
@@ -141,4 +146,9 @@ export type WorkspaceRun = {
   affectedComponentIds: string[]
   blastOriginId?: string
   breakerOpenEdges: string[]
+  evidence?: string
+  stability?: 'stable' | 'saturating' | 'unstable'
+  headroomRps?: number
+  firstFailing?: string
+  hockeyStick?: HockeyStickSeries
 }

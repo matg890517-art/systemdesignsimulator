@@ -69,7 +69,7 @@ import {
   type ClassFilter,
 } from './compile.ts'
 import { RunModeToggle } from './RunModeToggle.tsx'
-import { RUN_MODES } from './run-mode.ts'
+import { RUN_MODES, isSimulatedMode, normalizeRunMode } from './run-mode.ts'
 import {
   activeRecord,
   chooseRun,
@@ -305,10 +305,10 @@ export function WorkspacePage() {
     : kpisFromDraft(draft, library.profiles, nodes, edges)
   const modeMeta = RUN_MODES.find((item) => item.id === draft.mode) ?? RUN_MODES[0]!
   const arrivals = useMemo(() => {
-    if (draft.mode !== 'discrete') return 0
+    if (normalizeRunMode(draft.mode) !== 'simulated') return 0
     return expectedArrivals(compileCanvas(nodes, edges, draft, getProfiles(), getFault()).workload)
   }, [nodes, edges, draft, library])
-  const discreteBlocked = draft.mode === 'discrete' && arrivals > DISCRETE_EVENT_GUARD
+  const discreteBlocked = isSimulatedMode(draft.mode) && arrivals > DISCRETE_EVENT_GUARD
   const challengeScore =
     challengeId === AKS_HEADROOM_CHALLENGE.id ? scoreAksHeadroom(lastRun) : undefined
   const shownBottlenecks = useMemo(() => {
@@ -940,7 +940,7 @@ export function WorkspacePage() {
 
   const statusTone = discreteBlocked || runError ? 'error.main' : 'text.secondary'
   const statusText = discreteBlocked
-    ? `Discrete-event would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use fluid, or lower rate / duration.`
+    ? `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use Analytic, or lower rate / duration.`
     : runError
       ? runError
       : [
@@ -1091,7 +1091,7 @@ export function WorkspacePage() {
             disabled={discreteBlocked}
             title={
               discreteBlocked
-                ? 'Discrete-event would schedule too many arrivals. Use fluid, or lower rate / duration.'
+                ? 'Simulated mode would schedule too many arrivals. Use Analytic, or lower rate / duration.'
                 : withHotkey(modeMeta.hint, 'run')
             }
           >

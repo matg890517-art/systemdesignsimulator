@@ -1,7 +1,7 @@
 import { compileScenario } from './compile/compile.ts'
 import { scenarioFromLegacy } from './compile/from-legacy.ts'
 import { runAnalyticScenario, solveAnalytic } from './analytic/solve.ts'
-import { simulateOnce } from './des/simulate.ts'
+import { simulateOnce, simulateWithSlices } from './des/simulate.ts'
 import type { Scenario } from './schema/scenario.ts'
 import type { EngineMode, EngineResult } from './schema/result.ts'
 import type { Topology, Workload } from './types.ts'
@@ -40,4 +40,11 @@ export function runEngineFromLegacy(
   return runEngine(scenarioFromLegacy(topology, workload), mode)
 }
 
-export { compileScenario, solveAnalytic, runAnalyticScenario, simulateOnce, scenarioFromLegacy }
+export {
+  compileScenario,
+  solveAnalytic,
+  runAnalyticScenario,
+  simulateOnce,
+  simulateWithSlices,
+  scenarioFromLegacy,
+}

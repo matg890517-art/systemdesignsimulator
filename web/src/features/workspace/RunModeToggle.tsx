@@ -1,6 +1,6 @@
 import { ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { patchWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
-import { RUN_MODES, isRunMode } from './run-mode.ts'
+import { RUN_MODES, isRunMode, normalizeRunMode } from './run-mode.ts'
 
 export function RunModeToggle({
   disabled,
@@ -10,13 +10,14 @@ export function RunModeToggle({
   compact?: boolean
 }) {
   const draft = useWorkloadDraft()
-  const selected = RUN_MODES.find((item) => item.id === draft.mode) ?? RUN_MODES[0]!
+  const selected =
+    RUN_MODES.find((item) => item.id === normalizeRunMode(draft.mode)) ?? RUN_MODES[0]!
 
   return (
     <ToggleButtonGroup
       exclusive
       size="small"
-      value={draft.mode}
+      value={selected.id}
       disabled={disabled}
       onChange={(_, next: string | null) => {
         if (next && isRunMode(next)) patchWorkloadDraft({ mode: next })

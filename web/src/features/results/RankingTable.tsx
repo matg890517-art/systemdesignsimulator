@@ -115,7 +115,7 @@ export function RankingTable({ rows }: { rows: RankRow[] }) {
         Utilization ranking
       </Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
-        From the Workspace run. Utilization is the engine rate against each bound
+        From the Workspace run. Utilization is Analytic ρ against each bound
         profile. Unknown capacity is not a measurement.
       </Typography>
       <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>

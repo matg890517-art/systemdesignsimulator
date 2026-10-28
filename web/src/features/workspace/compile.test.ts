@@ -44,7 +44,7 @@ describe('compileCanvas', () => {
     expect(copy?.network.bandwidthBps).toBeUndefined()
     expect(ecs?.behavior.servers.state).toBe('unknown')
     expect(workload.offered.viewers.read).toBe(50_000)
-    expect(workload.shape).toMatchObject({ kind: 'step', atSec: 20, factor: 2 })
+    expect(workload.shape).toMatchObject({ kind: 'constant' })
     expect(workload.offered.viewers.write).toBe(1_200)
     expect(workload.offered.viewers.async).toBe(2_600)
     expect(workload.offered.uploaders.bulk).toBe(2)
@@ -192,7 +192,7 @@ describe('compileCanvas', () => {
     const blocked = runWorkspace(
       initialNodes,
       initialEdges,
-      { ...defaultWorkloadDraft(), mode: 'discrete' },
+      { ...defaultWorkloadDraft(), mode: 'simulated' },
       getProfiles(),
       'none',
     )
@@ -203,7 +203,7 @@ describe('compileCanvas', () => {
       initialEdges,
       {
         ...defaultWorkloadDraft(),
-        mode: 'discrete',
+        mode: 'simulated',
         durationSec: 2,
         classes: { read: 0, write: 0, async: 0, bulk: 2 },
       },
@@ -212,38 +212,40 @@ describe('compileCanvas', () => {
     )
     expect(ok.ok).toBe(true)
     if (ok.ok) {
-      expect(ok.run.mode).toBe('discrete')
+      expect(ok.run.mode).toBe('simulated')
       expect(ok.run.nodeStats.aks.offered).toBeGreaterThan(0)
       expect(ok.run.nodeStats.viewers.loss).toBe(0)
     }
   })
 
-  it('shows fluid completed rate on cards and does not mark a generator as 100% loss', () => {
+  it('shows Analytic wait on cards and does not mark a generator as 100% loss', () => {
     const graph = referenceStackGraph('generic')
-    const fluid = runWorkspace(
+    const analytic = runWorkspace(
       graph.nodes,
       graph.edges,
-      { ...referenceWorkloadDraft(), mode: 'fluid', durationSec: 8 },
+      { ...referenceWorkloadDraft(), mode: 'analytic', durationSec: 8 },
       referenceStackProfiles,
       'none',
     )
-    expect(fluid.ok).toBe(true)
-    if (!fluid.ok) return
-    expect(fluid.run.nodeStats.cdn.p99).toMatch(/\/s$/)
-    expect(fluid.run.nodeStats.cdn.p99).not.toMatch(/unknown/)
-    expect(fluid.run.kpis.latency).toBe('unknown')
+    expect(analytic.ok).toBe(true)
+    if (!analytic.ok) return
+    expect(analytic.run.mode).toBe('analytic')
+    expect(analytic.run.nodeStats.cdn.p99).toMatch(/p99|wait/)
+    expect(analytic.run.nodeStats.cdn.p99).not.toMatch(/unknown · fluid/)
+    expect(analytic.run.kpis.latency).not.toBe('unknown')
+    expect(analytic.run.hockeyStick?.rps.length).toBeGreaterThan(0)
 
-    const discrete = runWorkspace(
+    const simulated = runWorkspace(
       graph.nodes,
       graph.edges,
-      { ...referenceWorkloadDraft(), mode: 'discrete', durationSec: 2 },
+      { ...referenceWorkloadDraft(), mode: 'simulated', durationSec: 2 },
       referenceStackProfiles,
       'none',
     )
-    expect(discrete.ok).toBe(true)
-    if (!discrete.ok) return
-    expect(discrete.run.nodeStats.clients.loss).toBe(0)
-    expect(discrete.run.nodeStats.cdn.p99).toMatch(/\/s$/)
+    expect(simulated.ok).toBe(true)
+    if (!simulated.ok) return
+    expect(simulated.run.nodeStats.clients.loss).toBe(0)
+    expect(simulated.run.mode).toBe('simulated')
   })
 
   it('trips the upload breaker and lists the AKS blast radius after a crash', () => {
@@ -447,7 +449,7 @@ describe('generic reference stack', () => {
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(50, 0)
     expect(result.run.edgeOffered['c-cdn']).toBeCloseTo(240, 0)
     expect(result.run.edgeOffered['c-q']).toBeCloseTo(50, 0)
-    expect(result.run.ticks.length).toBeGreaterThan(2)
+    expect(result.run.ticks.length).toBeGreaterThanOrEqual(1)
     expect(result.run.durationSec).toBe(8)
     expect(result.run.edgeClassOffered['c-cdn']?.read).toBeCloseTo(200, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
@@ -489,7 +491,7 @@ describe('generic reference stack', () => {
     expect(result.run.nodeStats.queue.offered).toBeCloseTo(90, 0)
   })
 
-  it('keeps hop rates doubling after the default step (playback ticks, not a second engine)', () => {
+  it('keeps Analytic hop rates at the constant baseline (step waits for E2)', () => {
     const graph = referenceStackGraph('generic')
     const result = runWorkspace(
       graph.nodes,
@@ -500,12 +502,8 @@ describe('generic reference stack', () => {
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const before = result.run.ticks.find((tick) => tick.t < 20)
-    const after = result.run.ticks.find((tick) => tick.t >= 20.5)
-    expect(before).toBeDefined()
-    expect(after).toBeDefined()
-    expect(after!.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan((before!.edgeOffered['c-cdn'] ?? 0) * 1.5)
-    expect(result.run.nodeStats.cdn.offered).toBeCloseTo(480, 0)
+    expect(result.run.mode).toBe('analytic')
+    expect(result.run.nodeStats.cdn.offered).toBeCloseTo(240, 0)
   })
 })
 

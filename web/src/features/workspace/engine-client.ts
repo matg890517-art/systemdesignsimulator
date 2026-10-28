@@ -25,11 +25,16 @@ function getWorker(): Worker {
 }
 
 /**
- * The engine runs synchronously inside the worker, so the only way to stop a job mid-run is
- * to terminate the worker. The next run spins up a fresh one. Returns false when idle.
+ * Cooperative cancel posts first so a yielding Simulated run can stop. Terminate still
+ * unfreezes the tab if the job is in a blocking slice.
  */
 export function stopWorkspaceRun(): boolean {
   if (!worker || pending.size === 0) return false
+  try {
+    worker.postMessage({ type: 'cancel' })
+  } catch {
+    /* terminate below */
+  }
   worker.terminate()
   worker = undefined
   const rejects = [...pending.values()]

@@ -58,9 +58,12 @@ export {
   runEngineFromLegacy,
   scenarioFromLegacy,
   simulateOnce,
+  simulateWithSlices,
   solveAnalytic,
 } from './core.ts'
 export { zipfHitRatio } from './analytic/zipf.ts'
+export { headroomOf, hockeyStickSweep, nPlusOne } from './analytic/headroom.ts'
+export type { HockeyStickPoint } from './analytic/headroom.ts'
 export { md1WaitMs, mmckBlocking, mm1kBlocking, rhoBand } from './analytic/queue.ts'
 export {
   ENGINE_VERSION,
