@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table'
 import { TopNav } from '../../components/TopNav.tsx'
-import type { CalibrationField, CalibrationProfile } from './types.ts'
+import { CatalogIcon } from '../workspace/CatalogIcon.tsx'
+import type { CalibrationField } from './types.ts'
 import { applyProfileFields } from './field-edit.ts'
 import { FieldEditor } from './FieldEditor.tsx'
 import {
@@ -12,6 +13,11 @@ import {
   updateProfile,
   useLibrary,
 } from './library.ts'
+import {
+  calibrationRowsForCanvas,
+  readCurrentCanvas,
+  type CanvasCalibrationRow,
+} from './canvas-library.ts'
 
 function chipLabel(field: CalibrationField) {
   if (field.value.state === 'unknown') return 'Unknown'
@@ -30,11 +36,35 @@ function chipColor(field: CalibrationField) {
   return { bgcolor: 'warning.light', color: 'warning.dark' }
 }
 
+function RowIcon({ row }: { row: CanvasCalibrationRow }) {
+  return (
+    <CatalogIcon
+      mode="service"
+      name={row.title}
+      catalogId={row.catalogId}
+      size={16}
+      title={row.title}
+    />
+  )
+}
+
 const features = tableFeatures({})
-const helper = createColumnHelper<typeof features, CalibrationProfile>()
+const helper = createColumnHelper<typeof features, CanvasCalibrationRow>()
 const columns = helper.columns([
-  helper.accessor('name', { header: 'Profile' }),
-  helper.accessor('bindsTo', {
+  helper.display({
+    id: 'component',
+    header: 'Component',
+    cell: ({ row }) => (
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <RowIcon row={row.original} />
+        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {row.original.title}
+        </Box>
+      </Stack>
+    ),
+  }),
+  helper.accessor((row) => row.profile.bindsTo, {
+    id: 'bindsTo',
     header: 'Binds',
     cell: (info) => info.getValue() ?? '—',
   }),
@@ -42,30 +72,34 @@ const columns = helper.columns([
     id: 'fields',
     header: 'Fields',
     cell: ({ row }) =>
-      row.original.fields
+      row.original.profile.fields
         .map((field) => {
           const value =
             field.value.state === 'set' ? String(field.value.value) : field.value.state
           return `${field.label} ${value}`
         })
-        .join(' · '),
+        .join(' · ') || '—',
   }),
 ])
 
 export function CalibrationPage() {
   const { profiles } = useLibrary()
-  const [selectedId, setSelectedId] = useState('aks-transcode')
+  const canvas = readCurrentCanvas()
+  const rows = useMemo(
+    () => calibrationRowsForCanvas(canvas.nodes, profiles),
+    [canvas.nodes, profiles],
+  )
+  const [selectedId, setSelectedId] = useState<string>()
   const [csv, setCsv] = useState(sampleCalibrationCsv)
   const [message, setMessage] = useState<string>()
-  const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles[0]
+  const selectedRow = rows.find((row) => row.nodeId === selectedId) ?? rows[0]
+  const draft = selectedRow?.profile
 
   const table = useTable({
     features,
     columns,
-    data: profiles,
+    data: rows,
   })
-
-  const draft = selected
 
   const fieldSummary = useMemo(() => draft?.fields ?? [], [draft])
 
@@ -99,18 +133,18 @@ export function CalibrationPage() {
       <TopNav page="calibration" />
       <Stack direction="row" sx={{ alignItems: 'center', px: 2, py: 1, gap: 1.5 }}>
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          Projects / Example: Video streaming platform (YouTube-style) / Calibration
+          Projects / {canvas.name} / Calibration
         </Typography>
         <Chip
-          label="Client library"
+          label="Canvas components"
           size="small"
           sx={{ bgcolor: 'primary.light', color: 'primary.dark', height: 20 }}
         />
       </Stack>
-      <Box sx={{ flex: 1, display: 'flex', gap: 1.5, p: 1.5, minHeight: 0 }}>
+      <Box sx={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 1.5, p: 1.5, minHeight: 0 }}>
         <Box
           sx={{
-            width: 420,
+            width: 380,
             flexShrink: 0,
             bgcolor: 'background.paper',
             borderRadius: 3,
@@ -120,8 +154,8 @@ export function CalibrationPage() {
         >
           <Typography sx={{ fontWeight: 600, fontSize: 14, mb: 1 }}>Library</Typography>
           <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
-            Estimated / Vendor / Measured are explicit. Unknown is allowed and never
-            turned into a silent default.
+            Same cards as the Workspace canvas, with the same icons. Estimated / Vendor /
+            Measured are explicit. Unknown is allowed and never turned into a silent default.
           </Typography>
           <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
             <Box component="thead">
@@ -150,11 +184,12 @@ export function CalibrationPage() {
               {table.getRowModel().rows.map((row) => (
                 <Box
                   component="tr"
-                  key={row.id}
-                  onClick={() => setSelectedId(row.original.id)}
+                  key={row.original.nodeId}
+                  onClick={() => setSelectedId(row.original.nodeId)}
                   sx={{
                     cursor: 'pointer',
-                    bgcolor: row.original.id === selectedId ? 'primary.light' : 'transparent',
+                    bgcolor:
+                      row.original.nodeId === selectedRow?.nodeId ? 'primary.light' : 'transparent',
                   }}
                 >
                   {row.getAllCells().map((cell) => (
@@ -185,12 +220,21 @@ export function CalibrationPage() {
             borderRadius: 3,
             p: 2,
             overflow: 'auto',
-            minWidth: 0,
+            minWidth: 320,
           }}
         >
-          {draft ? (
+          {draft && selectedRow ? (
             <>
-              <Typography sx={{ fontWeight: 600, fontSize: 16 }}>{draft.name}</Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <CatalogIcon
+                  mode="service"
+                  name={selectedRow.title}
+                  catalogId={selectedRow.catalogId}
+                  size={20}
+                  title={selectedRow.title}
+                />
+                <Typography sx={{ fontWeight: 600, fontSize: 16 }}>{selectedRow.title}</Typography>
+              </Stack>
               <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>
                 {draft.notes}
               </Typography>
@@ -242,27 +286,41 @@ export function CalibrationPage() {
                 </Stack>
               </Stack>
               <Stack spacing={2} sx={{ mt: 2, maxWidth: 420 }}>
-                {fieldSummary.map((field) => (
-                  <Box key={field.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{field.label}</Typography>
-                      <Chip size="small" label={chipLabel(field)} sx={{ height: 20, ...chipColor(field) }} />
-                    </Stack>
-                    <FieldEditor
-                      field={field}
-                      sourceId="calibration"
-                      hideLabel
-                      onChange={(next) => patchField(field.id, next)}
-                    />
-                  </Box>
-                ))}
+                {fieldSummary.length === 0 ? (
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                    No capacity fields on this Clients card. Rates live on the Workload tab.
+                  </Typography>
+                ) : (
+                  fieldSummary.map((field) => (
+                    <Box key={field.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{field.label}</Typography>
+                        <Chip
+                          size="small"
+                          label={chipLabel(field)}
+                          sx={{ height: 20, ...chipColor(field) }}
+                        />
+                      </Stack>
+                      <FieldEditor
+                        field={field}
+                        sourceId="calibration"
+                        hideLabel
+                        onChange={(next) => patchField(field.id, next)}
+                      />
+                    </Box>
+                  ))
+                )}
               </Stack>
             </>
-          ) : null}
+          ) : (
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+              Open a canvas in Workspace. Calibration lists those service cards.
+            </Typography>
+          )}
         </Box>
         <Box
           sx={{
-            width: 320,
+            width: 300,
             flexShrink: 0,
             bgcolor: 'background.paper',
             borderRadius: 3,
