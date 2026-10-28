@@ -4,20 +4,22 @@ export function KpiStat({
   label,
   value,
   hint,
+  dense = false,
 }: {
   label: string
   value: string
   hint: string
+  dense?: boolean
 }) {
   return (
-    <Box sx={{ minWidth: 0, px: 2, py: 1 }}>
+    <Box sx={{ minWidth: 0, px: dense ? 1.25 : 2, py: dense ? 0.75 : 1 }}>
       <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>
         {label}
       </Typography>
       <Typography
         sx={{
           fontFamily: '"IBM Plex Mono", monospace',
-          fontSize: 18,
+          fontSize: dense ? 14 : 18,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',

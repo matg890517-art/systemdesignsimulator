@@ -78,8 +78,8 @@ describe('remaining P0 requirements', () => {
   })
 
   it('edge labels are class types; hop rates come from a run, not baked copy', () => {
-    expect(initialEdges.find((edge) => edge.id === 'v-cf')?.label).toBe('R/W')
-    expect(initialEdges.find((edge) => edge.id === 'cf-alb')?.label).toBe('R/W')
+    expect(initialEdges.find((edge) => edge.id === 'v-cf')?.label).toBe('R/W/A')
+    expect(initialEdges.find((edge) => edge.id === 'cf-alb')?.label).toBe('R/W/A')
     expect(initialEdges.find((edge) => edge.id === 'ddb-gke')?.label).toBe('R/A')
     expect(initialEdges.find((edge) => edge.id === 'up-aks')?.label).toBe('B')
     expect(initialEdges.find((edge) => edge.id === 'copy-link')?.label).toBe('B · cross · Estimated')

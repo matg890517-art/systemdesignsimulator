@@ -13,8 +13,8 @@ import {
   canvasGenerators,
   compileCanvas,
   DISCRETE_EVENT_GUARD,
-  generatorClassRate,
   REQUEST_CLASSES,
+  visibleClassRate,
   type WorkloadDraft,
 } from './compile.ts'
 import {
@@ -107,8 +107,9 @@ export function WorkloadEditor({
     <Box sx={{ p: 3, maxWidth: 720, overflow: 'auto' }}>
       <Typography variant="h2">Workload</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-        One rate block per Clients card on the canvas. Classes follow that card&apos;s outgoing
-        edges. YouTube: Viewers R/W, Uploaders Bulk. Unknown capacity does not cap the engine.
+        One rate block per Clients card on the canvas. Every card has Read, Write, Async and Bulk,
+        same as the Class chips. A class with no outgoing hop stays 0 until you turn it on. Unknown
+        capacity does not cap the engine.
       </Typography>
 
       {generators.length === 0 ? (
@@ -128,13 +129,13 @@ export function WorkloadEditor({
               {generator.title}
             </Typography>
             <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
-              {generator.classes.map((id) => (
+              {REQUEST_CLASSES.map((id) => (
                 <TextField
                   key={id}
                   size="small"
                   type="number"
                   label={`${CLASS_LABEL[id]} rps`}
-                  value={generatorClassRate(draft, generator.id, id)}
+                  value={visibleClassRate(draft, generator, id)}
                   onChange={(event) => {
                     const next = Number(event.target.value)
                     if (!Number.isFinite(next) || next < 0) return

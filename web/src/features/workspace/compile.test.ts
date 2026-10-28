@@ -9,6 +9,7 @@ import {
   edgeCarriesClass,
   kindForNode,
   nodeCarriesClass,
+  visibleClassRate,
   withGeneratorClassRate,
   WORKLOAD_RUN_CLOCK,
 } from './compile.ts'
@@ -44,7 +45,7 @@ describe('compileCanvas', () => {
     expect(ecs?.behavior.servers.state).toBe('unknown')
     expect(workload.offered.viewers.read).toBe(50_000)
     expect(workload.offered.viewers.write).toBe(1_200)
-    expect(workload.offered.viewers.async).toBeUndefined()
+    expect(workload.offered.viewers.async).toBe(2_600)
     expect(workload.offered.uploaders.bulk).toBe(2)
     expect(topology.components.find((component) => component.id === 'viewers')?.kind).toBe(
       'traffic_generator',
@@ -63,13 +64,31 @@ describe('compileCanvas', () => {
   it('lists one workload generator per Clients card', () => {
     const youtube = canvasGenerators(initialNodes, initialEdges)
     expect(youtube.map((item) => item.title)).toEqual(['Viewers', 'Uploaders'])
-    expect(youtube[0]?.classes).toEqual(['read', 'write'])
+    expect(youtube[0]?.classes).toEqual(['read', 'write', 'async'])
     expect(youtube[1]?.classes).toEqual(['bulk'])
     const graph = referenceStackGraph('generic')
     const generic = canvasGenerators(graph.nodes, graph.edges)
     expect(generic).toHaveLength(1)
     expect(generic[0]?.title).toBe('Clients')
     expect(generic[0]?.classes).toEqual(['read', 'write', 'async', 'bulk'])
+  })
+
+  it('shows Read Write Async Bulk on every Clients card; unused stay 0', () => {
+    const youtube = canvasGenerators(initialNodes, initialEdges)
+    const draft = defaultWorkloadDraft()
+    expect(visibleClassRate(draft, youtube[0]!, 'read')).toBe(50_000)
+    expect(visibleClassRate(draft, youtube[0]!, 'write')).toBe(1_200)
+    expect(visibleClassRate(draft, youtube[0]!, 'async')).toBe(2_600)
+    expect(visibleClassRate(draft, youtube[0]!, 'bulk')).toBe(0)
+    expect(visibleClassRate(draft, youtube[1]!, 'read')).toBe(0)
+    expect(visibleClassRate(draft, youtube[1]!, 'bulk')).toBe(2)
+    const generic = canvasGenerators(
+      referenceStackGraph('generic').nodes,
+      referenceStackGraph('generic').edges,
+    )
+    const clients = referenceWorkloadDraft()
+    expect(visibleClassRate(clients, generic[0]!, 'async')).toBe(30)
+    expect(visibleClassRate(clients, generic[0]!, 'bulk')).toBe(20)
   })
 
   it('uses the same duration, dt and seed for YouTube and Clients', () => {
@@ -264,7 +283,7 @@ describe('F24 class filter', () => {
     expect(nodeCarriesClass(service('alb'), initialEdges, 'bulk')).toBe(false)
     expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'bulk')).toBe(true)
     expect(nodeCarriesClass(service('viewers'), initialEdges, 'read')).toBe(true)
-    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(false)
+    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(true)
   })
 
   it('exposes per-class util so a bulk filter can still see AKS saturation', () => {

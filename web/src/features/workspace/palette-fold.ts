@@ -1,4 +1,5 @@
-import type { PaletteGroup, PaletteProvider } from '../catalog/types.ts'
+import { catalogEntryById } from '../catalog/catalog.ts'
+import type { PaletteGroup, PaletteProvider, PaletteTile } from '../catalog/types.ts'
 
 const CLOSED: Record<PaletteProvider, boolean> = {
   generic: false,
@@ -50,6 +51,60 @@ export function firstCategoryOpen(
   const first = groups[0]
   if (!first) return {}
   return { [folderKey(provider, first.category)]: true }
+}
+
+export function providersOpenOnly(id: PaletteProvider): Record<PaletteProvider, boolean> {
+  return { ...CLOSED, [id]: true }
+}
+
+/** Open every category that holds a catalog id currently on the canvas (Front Door lives in Network, not Compute). */
+export function categoriesOpenForCatalogIds(
+  provider: PaletteProvider,
+  groups: PaletteGroup[],
+  catalogIds: readonly string[],
+): Record<string, boolean> {
+  const wanted = new Set(catalogIds)
+  const next: Record<string, boolean> = {}
+  for (const group of groups) {
+    if (group.tiles.some((tile) => tile.catalogId && wanted.has(tile.catalogId))) {
+      next[folderKey(provider, group.category)] = true
+    }
+  }
+  if (Object.keys(next).length === 0) return firstCategoryOpen(provider, groups)
+  return next
+}
+
+export function canvasPaletteTiles(
+  nodes: {
+    id: string
+    type?: string
+    data: { title?: string; catalogId?: string; provider?: PaletteProvider }
+  }[],
+): PaletteTile[] {
+  const tiles: PaletteTile[] = []
+  const seen = new Set<string>()
+  for (const node of nodes) {
+    if (node.type === 'zone') continue
+    const title = node.data.title ?? node.id
+    const catalogId = node.data.catalogId
+    const key = `${catalogId ?? node.id}:${title}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const entry = catalogId ? catalogEntryById(catalogId) : undefined
+    tiles.push({
+      name: title,
+      catalogId,
+      provider: node.data.provider ?? entry?.provider ?? 'generic',
+      limitsOnPage: entry?.limitsOnPage,
+    })
+  }
+  return tiles
+}
+
+/** The On canvas folder follows the user's toggle. A search that hits it forces the folder open. */
+export function canvasFolderOpen(pinnedOpen: boolean, query: string, matchCount: number): boolean {
+  if (query.trim()) return matchCount > 0
+  return pinnedOpen
 }
 
 /** Searching opens every folder that has a match, and every matching category. */

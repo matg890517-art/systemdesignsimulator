@@ -55,7 +55,7 @@ export function blankProfileForNode(
     bindsTo: nodeId,
     notes:
       kind === 'traffic_generator'
-        ? 'This node generates traffic. Rates come from the Workload tab. Capacity is not applicable.'
+        ? 'This node generates traffic. Rates come from Workload. Capacity is not applicable.'
         : 'Unknown until you type a number. Unknown does not cap the engine. A typed number is Estimated unless you mark Vendor or Measured.',
     fields,
   }

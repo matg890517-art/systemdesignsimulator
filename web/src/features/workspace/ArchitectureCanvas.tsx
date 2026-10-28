@@ -357,7 +357,7 @@ function CanvasInner({
         />
       </ReactFlow>
       {connectClick ? (
-        <Box sx={{ position: 'absolute', left: 16, top: 12, pointerEvents: 'none' }}>
+        <Box sx={{ position: 'absolute', left: 16, top: 108, pointerEvents: 'none' }}>
           <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
             {connectFromId ? 'Click target' : 'Click source'}
           </Typography>

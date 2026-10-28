@@ -10,11 +10,12 @@ import {
   Box,
   Button,
   Chip,
+  Drawer,
   IconButton,
+  MenuItem,
+  Select,
   Snackbar,
   Stack,
-  Tab,
-  Tabs,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -68,6 +69,15 @@ import {
 } from './compile.ts'
 import { RunModeToggle } from './RunModeToggle.tsx'
 import { RUN_MODES } from './run-mode.ts'
+import {
+  activeRecord,
+  chooseRun,
+  getRunHistory,
+  publishRun,
+  rankingFromNodes,
+  runMenuLabel,
+  useRunHistory,
+} from './run-history.ts'
 import { type MappedProvider } from '../catalog/provider-maps.ts'
 import {
   referenceStackGraph,
@@ -165,7 +175,7 @@ export function WorkspacePage() {
     }
   }
   const [canvasReady, setCanvasReady] = useState(false)
-  const [tab, setTab] = useState(0)
+  const [drawer, setDrawer] = useState<'workload' | 'faults' | null>(null)
   const [kpis, setKpis] = useState<KpiState>(idleKpis)
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(seedBottlenecks)
   const [selected, setSelected] = useState<CanvasSelection>()
@@ -193,6 +203,7 @@ export function WorkspacePage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(boot.current.edges)
   const library = useLibrary()
   const draft = useWorkloadDraft()
+  const runHistory = useRunHistory()
   const runGen = useRef(0)
   const paintFrame = useRef(0)
   const [sessionReady, setSessionReady] = useState(false)
@@ -591,6 +602,14 @@ export function WorkspacePage() {
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
+    // Mark cards live immediately. A short fluid run can finish before the first progress frame.
+    setNodes((current) =>
+      current.map((node) =>
+        node.type === 'zone'
+          ? node
+          : { ...node, data: { ...(node.data as ServiceNodeData), live: true } },
+      ),
+    )
     let live = true
     try {
       const result = await runWorkspaceAsync(
@@ -625,6 +644,12 @@ export function WorkspacePage() {
       setRunHint(result.run.hint)
       setLastRun(result.run)
       paintRun(result.run, classFilter)
+      publishRun({
+        projectName,
+        hint: result.run.hint,
+        run: result.run,
+        ranking: rankingFromNodes(nodes, result.run),
+      })
     } catch (error) {
       if (runGen.current !== id || isRunStopped(error)) return
       clearLive()
@@ -647,6 +672,14 @@ export function WorkspacePage() {
       replaceProfiles(snapshot.profiles)
       setFault(snapshot.fault)
       setRunHint(`Loaded ${snapshot.name}`)
+    }
+    const active = activeRecord(getRunHistory())
+    if (active) {
+      setLastRun(active.run)
+      setKpis(active.run.kpis)
+      setBottlenecks(active.run.bottlenecks)
+      setRan(true)
+      setRunHint(active.run.hint)
     }
     setSessionReady(true)
   }, [])
@@ -713,6 +746,18 @@ export function WorkspacePage() {
     if (!result) return
     setHistory(result.history)
     applyHistorySnapshot(result.snapshot, 'Redo')
+  }
+
+  function onPickRun(id: number) {
+    chooseRun(id)
+    const record = getRunHistory().runs.find((item) => item.id === id)
+    if (!record) return
+    setRan(true)
+    setKpis(record.run.kpis)
+    setBottlenecks(record.run.bottlenecks)
+    setLastRun(record.run)
+    setRunHint(record.run.hint)
+    paintRun(record.run, classFilter)
   }
 
   function onEscape() {
@@ -896,6 +941,29 @@ export function WorkspacePage() {
           onImportFile={onImportFile}
           onInventory={onInventory}
         />
+        <Select
+          size="small"
+          displayEmpty
+          value={activeRecord(runHistory)?.id ?? ''}
+          disabled={runHistory.runs.length === 0 || running}
+          onChange={(event) => onPickRun(Number(event.target.value))}
+          renderValue={() => {
+            const record = activeRecord(runHistory)
+            return record ? runMenuLabel(record) : 'No runs yet'
+          }}
+          sx={{ minWidth: 168, maxWidth: 260, height: 32, fontSize: 12 }}
+          aria-label="Run history"
+        >
+          {runHistory.runs.length === 0 ? (
+            <MenuItem value="">No runs yet</MenuItem>
+          ) : (
+            runHistory.runs.map((item) => (
+              <MenuItem key={item.id} value={item.id} sx={{ fontSize: 12 }}>
+                {runMenuLabel(item)}
+              </MenuItem>
+            ))
+          )}
+        </Select>
         <RunModeToggle compact disabled={running} />
         {running ? (
           <Button
@@ -924,49 +992,6 @@ export function WorkspacePage() {
       </Stack>
       <Stack
         direction="row"
-        sx={{
-          alignItems: 'center',
-          bgcolor: 'background.paper',
-          px: 1.5,
-          borderBottom: 1,
-          borderColor: 'divider',
-          gap: 1.5,
-        }}
-      >
-        <Tabs value={tab} onChange={(_, value) => setTab(value)}>
-          <Tab label="Canvas" />
-          <Tab label="Workload" />
-          <Tab label="Faults" />
-        </Tabs>
-        {tab === 0 ? (
-          <>
-            <ClassFilterChips value={classFilter} onChange={setClassFilter} />
-            <HeatLegend />
-          </>
-        ) : null}
-      </Stack>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-          px: 1,
-          bgcolor: 'background.paper',
-          borderBottom: 1,
-          borderColor: 'divider',
-        }}
-      >
-        <KpiStat label="LOAD" value={kpisToShow.load} hint={kpisToShow.loadHint} />
-        <KpiStat label="LATENCY" value={kpisToShow.latency} hint={kpisToShow.latencyHint} />
-        <KpiStat label="ERRORS" value={kpisToShow.errors} hint="of requests" />
-        <KpiStat
-          label="BOTTLENECKS"
-          value={kpisToShow.bottlenecks}
-          hint={kpisToShow.bottleneckHint}
-        />
-        <KpiStat label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
-      </Box>
-      <Stack
-        direction="row"
         spacing={1}
         sx={{
           alignItems: 'center',
@@ -978,6 +1003,20 @@ export function WorkspacePage() {
           minHeight: 28,
         }}
       >
+        <Button
+          size="small"
+          variant={drawer === 'workload' ? 'contained' : 'text'}
+          onClick={() => setDrawer((current) => (current === 'workload' ? null : 'workload'))}
+        >
+          Workload
+        </Button>
+        <Button
+          size="small"
+          variant={drawer === 'faults' ? 'contained' : 'text'}
+          onClick={() => setDrawer((current) => (current === 'faults' ? null : 'faults'))}
+        >
+          Faults
+        </Button>
         <Typography
           sx={{
             fontSize: 11,
@@ -1010,9 +1049,13 @@ export function WorkspacePage() {
         ) : null}
       </Stack>
       <Box sx={{ flex: 1, display: 'flex', gap: 1.5, p: 1.5, minHeight: 0 }}>
-        {tab === 0 && (
           <>
-            <Palette onLoadReference={onLoadReference} onRestoreExample={onRestoreExample} />
+            <Palette
+              nodes={nodes}
+              onLoadReference={onLoadReference}
+              onRestoreExample={onRestoreExample}
+            />
+            <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative', display: 'flex' }}>
             {canvasReady ? (
               <ArchitectureCanvas
                 nodes={nodes}
@@ -1047,6 +1090,61 @@ export function WorkspacePage() {
                 Loading canvas
               </Box>
             )}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                left: 8,
+                right: 8,
+                zIndex: 5,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.75,
+                pointerEvents: 'none',
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                  bgcolor: 'rgba(255, 255, 255, 0.94)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  boxShadow: 1,
+                }}
+              >
+                <KpiStat dense label="LOAD" value={kpisToShow.load} hint={kpisToShow.loadHint} />
+                <KpiStat dense label="LATENCY" value={kpisToShow.latency} hint={kpisToShow.latencyHint} />
+                <KpiStat dense label="ERRORS" value={kpisToShow.errors} hint="of requests" />
+                <KpiStat
+                  dense
+                  label="BOTTLENECKS"
+                  value={kpisToShow.bottlenecks}
+                  hint={kpisToShow.bottleneckHint}
+                />
+                <KpiStat dense label="COST" value={kpisToShow.cost} hint={kpisToShow.costHint} />
+              </Box>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignSelf: 'flex-start',
+                  alignItems: 'center',
+                  pointerEvents: 'auto',
+                  bgcolor: 'rgba(255, 255, 255, 0.94)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  px: 1,
+                  boxShadow: 1,
+                }}
+              >
+                <ClassFilterChips value={classFilter} onChange={setClassFilter} />
+                <HeatLegend />
+              </Stack>
+            </Box>
+            </Box>
             <Inspector
               bottlenecks={shownBottlenecks}
               selected={selected}
@@ -1095,10 +1193,25 @@ export function WorkspacePage() {
               onNotice={notify}
             />
           </>
-        )}
-        {tab === 1 && <WorkloadEditor nodes={nodes} edges={edges} />}
-        {tab === 2 && <FaultsPanel />}
       </Box>
+      <Drawer
+        anchor="left"
+        open={drawer === 'workload'}
+        onClose={() => setDrawer(null)}
+      >
+        <Box sx={{ width: 440, maxWidth: '100vw', height: '100%', overflow: 'auto' }}>
+          <WorkloadEditor nodes={nodes} edges={edges} />
+        </Box>
+      </Drawer>
+      <Drawer
+        anchor="left"
+        open={drawer === 'faults'}
+        onClose={() => setDrawer(null)}
+      >
+        <Box sx={{ width: 440, maxWidth: '100vw', height: '100%', overflow: 'auto' }}>
+          <FaultsPanel />
+        </Box>
+      </Drawer>
       <Snackbar
         key={notice?.id}
         open={Boolean(notice)}

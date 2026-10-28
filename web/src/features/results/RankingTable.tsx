@@ -115,8 +115,8 @@ export function RankingTable({ rows }: { rows: RankRow[] }) {
         Utilization ranking
       </Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
-        Each row cites a profile. AKS util is from the fluid engine on Estimated ·
-        AKS transcode workers. Other rows stay Estimated — not catalog measurements.
+        From the Workspace run. Utilization is the engine rate against each bound
+        profile. Unknown capacity is not a measurement.
       </Typography>
       <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
         <Box component="thead">

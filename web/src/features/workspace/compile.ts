@@ -130,11 +130,11 @@ const KIND_BY_CATEGORY: Record<string, CanonicalKind> = {
 }
 
 const EDGE_CLASSES: Record<string, RequestClassId[]> = {
-  'v-cf': ['read', 'write'],
-  'cf-alb': ['read', 'write'],
-  'alb-ecs': ['read', 'write'],
-  'ecs-cache': ['read'],
-  'cache-ddb': ['read'],
+  'v-cf': ['read', 'write', 'async'],
+  'cf-alb': ['read', 'write', 'async'],
+  'alb-ecs': ['read', 'write', 'async'],
+  'ecs-cache': ['read', 'async'],
+  'cache-ddb': ['read', 'async'],
   'ddb-gke': ['read', 'async'],
   'gke-ps': ['read', 'async'],
   'ps-run': ['read', 'async'],
@@ -233,6 +233,18 @@ export function generatorClassRate(
   classId: WorkspaceClassId,
 ): number {
   return draft.generators?.[generatorId]?.[classId] ?? draft.classes[classId] ?? 0
+}
+
+/** Workload fields: same four classes as the canvas chips. Off-path stays 0 unless the user set it. */
+export function visibleClassRate(
+  draft: WorkloadDraft,
+  generator: CanvasGenerator,
+  classId: WorkspaceClassId,
+): number {
+  const own = draft.generators?.[generator.id]?.[classId]
+  if (own !== undefined) return own
+  if (!generator.classes.includes(classId)) return 0
+  return draft.classes[classId] ?? 0
 }
 
 export function withGeneratorClassRate(

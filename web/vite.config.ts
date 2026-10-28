@@ -25,6 +25,9 @@ const config = defineConfig({
     noExternal: ['@mui/material', '@mui/system', '@emotion/react', '@emotion/styled'],
   },
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
+  server: {
+    host: true
+  }
 })
 
 export default config

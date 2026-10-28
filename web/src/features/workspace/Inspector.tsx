@@ -217,7 +217,7 @@ function ConfigPanel({
       </Stack>
       {draft.fields.length === 0 ? (
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-          No capacity fields on this node. Edit rates on the Workload tab.
+          No capacity fields on this node. Edit rates in Workload.
         </Typography>
       ) : (
         draft.fields.map((field) => (
@@ -770,7 +770,7 @@ export function Inspector({
             <Typography sx={{ fontSize: 12, fontWeight: 600 }}>Origin {blastOriginId}</Typography>
           ) : (
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-              Run with AKS crash (Faults tab) to fill this view.
+              Run with AKS crash (Faults) to fill this view.
             </Typography>
           )}
           {breakerOpenEdges.length > 0 ? (

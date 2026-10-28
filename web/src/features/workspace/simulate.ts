@@ -226,7 +226,7 @@ export function simulateAksBottleneck() {
       title: 'Upload link cut',
       util: 1,
       summary: 'lossProb = 1. AKS completed 0 /s. Calibration slots are unchanged.',
-      suggestion: 'Clear the fault on the Faults tab and run again.',
+      suggestion: 'Clear the fault in Faults and run again.',
       fromEngine: true,
     }
   } else if (fault === 'packet-drop') {

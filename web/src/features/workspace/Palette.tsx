@@ -15,8 +15,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
-import { mappedProviders, type MappedProvider } from '../catalog/provider-maps.ts'
+import { catalogEntryById, PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
+import { mappedProviders, referenceBindings, type MappedProvider } from '../catalog/provider-maps.ts'
 import type { PaletteGroup, PaletteProvider, PaletteTile } from '../catalog/types.ts'
 import { CatalogIcon } from './CatalogIcon.tsx'
 import { KindIcon } from './KindIcon.tsx'
@@ -25,11 +25,17 @@ import { providerMarkSrc } from './icons/registry.ts'
 import { useIconMode } from './icon-mode.tsx'
 import {
   accordionProviders,
+  canvasFolderOpen,
+  canvasPaletteTiles,
+  categoriesOpenForCatalogIds,
   categoryLabel,
   firstCategoryOpen,
   folderKey,
+  providersOpenOnly,
   searchOpenState,
 } from './palette-fold.ts'
+import type { ServiceNodeData, ZoneNodeData } from './types.ts'
+import type { Node } from '@xyflow/react'
 
 function limitsDot(tile: PaletteTile) {
   if (tile.limitsOnPage === 'yes') return 'success.main'
@@ -71,9 +77,11 @@ const quietToggleSx = {
 } as const
 
 export function Palette({
+  nodes,
   onLoadReference,
   onRestoreExample,
 }: {
+  nodes: Node<ServiceNodeData | ZoneNodeData>[]
   onLoadReference: (provider: MappedProvider) => void
   onRestoreExample: () => void
 }) {
@@ -91,6 +99,7 @@ export function Palette({
   const [view, setView] = useState<'button' | 'list'>('list')
   const [query, setQuery] = useState('')
   const [template, setTemplate] = useState<MappedProvider | 'youtube'>('generic')
+  const [canvasOpen, setCanvasOpen] = useState(false)
 
   const groupsByProvider = useMemo(() => {
     const next = {} as Record<PaletteProvider, PaletteGroup[]>
@@ -103,6 +112,17 @@ export function Palette({
   const searchOpen = searchOpenState(query, groupsByProvider)
   const providersOpen = searchOpen?.providers ?? openProviders
   const categoriesOpen = searchOpen?.categories ?? openCategories
+  const onCanvasTiles = useMemo(() => {
+    const tiles = canvasPaletteTiles(nodes)
+    const needle = query.trim().toLowerCase()
+    if (!needle) return tiles
+    return tiles.filter((tile) => tile.name.toLowerCase().includes(needle))
+  }, [nodes, query])
+
+  function openLoadedProvider(provider: PaletteProvider, catalogIds: readonly string[]) {
+    setOpenProviders(providersOpenOnly(provider))
+    setOpenCategories(categoriesOpenForCatalogIds(provider, paletteGroupsFor(provider), catalogIds))
+  }
 
   function toggleProvider(id: PaletteProvider) {
     if (query.trim()) return
@@ -139,7 +159,7 @@ export function Palette({
     if (view === 'list') {
       return (
         <Stack
-          key={tile.catalogId ?? `${tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
+          key={`${tile.catalogId ?? tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
           direction="row"
           draggable
           onDragStart={onDragStart}
@@ -191,7 +211,7 @@ export function Palette({
     }
     return (
       <Box
-        key={tile.catalogId ?? `${tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
+        key={`${tile.catalogId ?? tile.provider}-${tile.kind ?? 'service'}-${tile.name}`}
         draggable
         onDragStart={onDragStart}
         title={`${tile.name} · ${limitsWord(tile)}`}
@@ -321,6 +341,77 @@ export function Palette({
       </Stack>
 
       <Box sx={{ flex: 1, overflow: 'auto', px: 0.75, pb: 1 }}>
+        {onCanvasTiles.length > 0 ? (
+          <Box sx={{ mb: 0.25 }}>
+            <Stack
+              component="button"
+              type="button"
+              direction="row"
+              onClick={() => {
+                if (query.trim()) return
+                setCanvasOpen((open) => !open)
+              }}
+              aria-expanded={canvasFolderOpen(canvasOpen, query, onCanvasTiles.length)}
+              sx={{
+                width: '100%',
+                alignItems: 'center',
+                gap: 0.75,
+                minHeight: 36,
+                px: 1,
+                py: 0.5,
+                border: 0,
+                borderRadius: 1,
+                borderLeft: '2px solid',
+                borderColor: canvasFolderOpen(canvasOpen, query, onCanvasTiles.length)
+                  ? 'primary.main'
+                  : 'transparent',
+                bgcolor: canvasFolderOpen(canvasOpen, query, onCanvasTiles.length)
+                  ? 'action.hover'
+                  : 'transparent',
+                cursor: 'pointer',
+                color: 'text.primary',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+            >
+              {canvasFolderOpen(canvasOpen, query, onCanvasTiles.length) ? (
+                <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              ) : (
+                <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              )}
+              <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: 'left' }}>
+                On canvas
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{onCanvasTiles.length}</Typography>
+            </Stack>
+            {canvasFolderOpen(canvasOpen, query, onCanvasTiles.length) ? (
+              view === 'list' ? (
+              onCanvasTiles.map((tile) =>
+                tileNode(
+                  tile,
+                  catalogEntryById(tile.catalogId ?? '')?.category.toUpperCase() ?? 'GENERIC',
+                ),
+              )
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  gap: 0.75,
+                  px: 0.75,
+                  py: 0.75,
+                }}
+              >
+                {onCanvasTiles.map((tile) =>
+                  tileNode(
+                    tile,
+                    catalogEntryById(tile.catalogId ?? '')?.category.toUpperCase() ?? 'GENERIC',
+                  ),
+                )}
+              </Box>
+            )
+            ) : null}
+          </Box>
+        ) : null}
         {PALETTE_PROVIDERS.map((item) => {
           const groups = groupsByProvider[item.id]
           const count = groups.reduce((sum, group) => sum + group.count, 0)
@@ -469,8 +560,17 @@ export function Palette({
           size="small"
           variant="outlined"
           onClick={() => {
-            if (template === 'youtube') onRestoreExample()
-            else onLoadReference(template)
+            if (template === 'youtube') {
+              setOpenProviders(providersOpenOnly('generic'))
+              setOpenCategories({ [folderKey('generic', 'GENERIC')]: true })
+              onRestoreExample()
+              return
+            }
+            openLoadedProvider(
+              template,
+              Object.values(referenceBindings[template]).map((bind) => bind.catalogId),
+            )
+            onLoadReference(template)
           }}
         >
           Load

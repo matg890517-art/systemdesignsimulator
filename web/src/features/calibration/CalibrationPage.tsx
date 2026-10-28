@@ -288,7 +288,7 @@ export function CalibrationPage() {
               <Stack spacing={2} sx={{ mt: 2, maxWidth: 420 }}>
                 {fieldSummary.length === 0 ? (
                   <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                    No capacity fields on this Clients card. Rates live on the Workload tab.
+                    No capacity fields on this Clients card. Rates live in Workload.
                   </Typography>
                 ) : (
                   fieldSummary.map((field) => (

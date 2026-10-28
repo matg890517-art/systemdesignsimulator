@@ -38,7 +38,7 @@ export const referenceBindings: Record<MappedProvider, Record<ReferenceRole, Rol
   aws: {
     clients: { catalogId: 'generic-clients', title: 'Clients', provider: 'generic' },
     cdn: { catalogId: 'aws-cloudfront', title: 'CloudFront', provider: 'aws' },
-    lb: { catalogId: 'aws-application-load-balancer', title: 'Application LB', provider: 'aws' },
+    lb: { catalogId: 'aws-application-load-balancer', title: 'Application Load Balancer', provider: 'aws' },
     service: { catalogId: 'aws-ecs', title: 'ECS', provider: 'aws' },
     cache: { catalogId: 'aws-elasticache', title: 'ElastiCache', provider: 'aws' },
     db: { catalogId: 'aws-rds', title: 'RDS', provider: 'aws' },
@@ -52,7 +52,7 @@ export const referenceBindings: Record<MappedProvider, Record<ReferenceRole, Rol
     lb: { catalogId: 'azure-application-gateway', title: 'Application Gateway', provider: 'azure' },
     service: { catalogId: 'azure-aks', title: 'AKS', provider: 'azure' },
     cache: { catalogId: 'azure-cache-for-redis', title: 'Cache for Redis', provider: 'azure' },
-    db: { catalogId: 'azure-database-for-postgresql', title: 'PostgreSQL', provider: 'azure' },
+    db: { catalogId: 'azure-database-for-postgresql', title: 'Database for PostgreSQL', provider: 'azure' },
     queue: { catalogId: 'azure-service-bus', title: 'Service Bus', provider: 'azure' },
     worker: { catalogId: 'azure-container-apps', title: 'Container Apps', provider: 'azure' },
     object: { catalogId: 'azure-blob-storage', title: 'Blob Storage', provider: 'azure' },

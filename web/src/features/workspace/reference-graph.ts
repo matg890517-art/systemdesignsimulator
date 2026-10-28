@@ -157,7 +157,7 @@ export const referenceStackProfiles: CalibrationProfile[] = [
     id: 'ref-clients',
     name: 'Generic clients',
     bindsTo: 'clients',
-    notes: 'Traffic generator. Rates come from the Workload tab. Not a measurement.',
+    notes: 'Traffic generator. Rates come from Workload. Not a measurement.',
     fields: [],
   },
   capacity('ref-cdn', 'Generic CDN', 'cdn', 8, 1, [

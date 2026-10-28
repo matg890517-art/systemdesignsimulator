@@ -209,11 +209,11 @@ function hop(
 }
 
 export const initialEdges: Edge[] = [
-  hop('v-cf', 'viewers', 'cloudfront', 'R/W', { classes: ['read', 'write'] }),
-  hop('cf-alb', 'cloudfront', 'alb', 'R/W'),
-  hop('alb-ecs', 'alb', 'ecs', 'R/W'),
-  hop('ecs-cache', 'ecs', 'elasticache', 'R'),
-  hop('cache-ddb', 'elasticache', 'dynamodb', 'R'),
+  hop('v-cf', 'viewers', 'cloudfront', 'R/W/A', { classes: ['read', 'write', 'async'] }),
+  hop('cf-alb', 'cloudfront', 'alb', 'R/W/A'),
+  hop('alb-ecs', 'alb', 'ecs', 'R/W/A'),
+  hop('ecs-cache', 'ecs', 'elasticache', 'R/A'),
+  hop('cache-ddb', 'elasticache', 'dynamodb', 'R/A'),
   hop('ddb-gke', 'dynamodb', 'gke', 'R/A'),
   hop('gke-ps', 'gke', 'pubsub', 'R/A'),
   hop('ps-run', 'pubsub', 'cloudrun', 'R/A'),

@@ -9,7 +9,7 @@ export function ClassFilterChips({
   onChange: (next: ClassFilter) => void
 }) {
   return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', ml: 'auto', py: 0.5 }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', py: 0.5 }}>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mr: 0.5 }}>Class</Typography>
       {CLASS_FILTERS.map((item) => {
         const selected = value === item.id

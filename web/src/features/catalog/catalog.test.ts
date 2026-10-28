@@ -138,6 +138,24 @@ describe('catalog data', () => {
     expect(JSON.stringify(referenceBindings)).not.toMatch(/\$|price|hourly/i)
   })
 
+  it('puts every 9-block catalog id in the palette, including Azure Front Door', () => {
+    const azureNames = paletteGroupsFor('azure').flatMap((group) => group.tiles.map((tile) => tile.name))
+    expect(azureNames).toContain('Front Door')
+    for (const provider of mappedProviders) {
+      const tiles = [
+        ...paletteGroupsFor(provider).flatMap((group) => group.tiles),
+        ...paletteGroupsFor('generic').flatMap((group) => group.tiles),
+      ]
+      const ids = new Set(tiles.map((tile) => tile.catalogId))
+      const names = tiles.map((tile) => tile.name)
+      for (const bind of Object.values(referenceBindings[provider])) {
+        expect(ids.has(bind.catalogId), `${provider} ${bind.catalogId}`).toBe(true)
+        const catalogName = catalogEntries.find((entry) => entry.id === bind.catalogId)?.name
+        expect(names, `${provider} ${bind.title}`).toContain(catalogName ?? bind.title)
+      }
+    }
+  })
+
   it('compares container services on sourced ceilings without inventing prices', () => {
     const rows = comparisonRows('Containers')
     const names = rows.map((row) => `${row.provider}:${row.name}`)
