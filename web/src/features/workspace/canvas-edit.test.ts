@@ -29,6 +29,8 @@ describe('canvas edit', () => {
     if ('error' in same) throw new Error(same.error)
     const added = same.edges.find((edge) => edge.source === 'alb' && edge.target === 'blob')
     expect(added?.type).toBe('smoothstep')
+    expect(added?.sourceHandle).toBeTruthy()
+    expect(added?.targetHandle).toBeTruthy()
     expect(String(added?.label)).toMatch(/cross · Estimated/)
     expect(connectComponents(initialNodes, initialEdges, 'alb', 'ecs')).toMatchObject({
       error: 'Already connected. One hop per pair; extra classes go on that edge.',

@@ -64,6 +64,8 @@ function persistableEdges(edges: RfEdge[]) {
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
     label: edge.label,
     type: edge.type,
     style: edge.style,

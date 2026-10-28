@@ -189,10 +189,7 @@ function CanvasInner({
     (connection: Connection) => {
       if (!connection.source || !connection.target) return
       setEdges((current) => {
-        const next = connectComponents(nodes, current, connection.source!, connection.target!, {
-          sourceHandle: connection.sourceHandle,
-          targetHandle: connection.targetHandle,
-        })
+        const next = connectComponents(nodes, current, connection.source!, connection.target!)
         if ('error' in next) {
           onConnectError(next.error)
           return current

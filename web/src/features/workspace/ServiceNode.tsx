@@ -32,8 +32,7 @@ const badgeTone: Record<ConfidenceBadge['tone'], { color: string; bg: string; bo
   measured: { color: '#2E7D5B', bg: '#E3F3EB', border: '1px solid transparent' },
 }
 
-const TARGET_SIDES = [Position.Left, Position.Top] as const
-const SOURCE_SIDES = [Position.Right, Position.Bottom] as const
+const SIDES = [Position.Left, Position.Right, Position.Top, Position.Bottom] as const
 
 export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNodeData>>) {
   const { filter, edges } = useClassFilter()
@@ -67,11 +66,8 @@ export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNo
         '&:hover': selected ? undefined : { boxShadow: '0 1px 4px rgba(19, 27, 38, 0.14)' },
       }}
     >
-      {TARGET_SIDES.map((side) => (
-        <Handle key={`t-${side}`} id={`t-${side}`} type="target" position={side} />
-      ))}
-      {SOURCE_SIDES.map((side) => (
-        <Handle key={`s-${side}`} id={`s-${side}`} type="source" position={side} />
+      {SIDES.map((side) => (
+        <Handle key={side} id={side} type="source" position={side} />
       ))}
       <Stack spacing={0.5}>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

@@ -6,6 +6,7 @@ import {
   isCrossProviderEdge,
   styleCrossProviderEdge,
 } from './edge-data.ts'
+import { handlesForNodes } from './edge-handles.ts'
 import { ungroupZones } from './environment.ts'
 import type { ServiceNodeData, WorkspaceNode } from './types.ts'
 
@@ -61,17 +62,17 @@ export function connectComponents(
   edges: Edge[],
   source: string,
   target: string,
-  handles?: Pick<Connection, 'sourceHandle' | 'targetHandle'>,
 ): { edges: Edge[] } | { error: string } {
   const error = connectRefusal(nodes, edges, source, target)
   if (error) return { error }
+  const handles = handlesForNodes(nodes, source, target)
   return {
     edges: addEdge(
       edgeDraftFromConnection(nodes, {
         source,
         target,
-        sourceHandle: handles?.sourceHandle ?? null,
-        targetHandle: handles?.targetHandle ?? null,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
       }),
       edges,
     ),

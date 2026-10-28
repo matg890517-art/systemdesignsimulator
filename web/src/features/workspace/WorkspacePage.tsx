@@ -33,6 +33,7 @@ import { Inspector } from './Inspector.tsx'
 import { Palette } from './Palette.tsx'
 import { IconModeProvider } from './icon-mode.tsx'
 import { deleteSelection, patchServiceTitle } from './canvas-edit.ts'
+import { routeEdges } from './edge-handles.ts'
 import {
   canRedo,
   canUndo,
@@ -797,6 +798,11 @@ export function WorkspacePage() {
     }, 250)
     return () => window.clearTimeout(handle)
   }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
+
+  // Attachment sides follow card centers. Same hop; only the handle ids change.
+  useEffect(() => {
+    setEdges((current) => routeEdges(nodes, current))
+  }, [nodes, setEdges])
 
   // Undo history records structural edits (drop, connect, delete, group, load) from any
   // source, including the canvas's own setNodes/setEdges. Moves and renames are not recorded.
