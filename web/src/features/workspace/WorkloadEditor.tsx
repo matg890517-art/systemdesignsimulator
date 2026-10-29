@@ -46,52 +46,76 @@ const CLASS_LABEL: Record<(typeof REQUEST_CLASSES)[number], string> = {
   bulk: 'Bulk',
 }
 
+const fieldGridSx = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 1.5,
+  mt: 1,
+} as const
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: number
+  onChange: (next: number) => void
+}) {
+  return (
+    <Box>
+      <Typography component="label" sx={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
+        {label}
+      </Typography>
+      <TextField
+        size="small"
+        type="number"
+        hiddenLabel
+        fullWidth
+        value={value}
+        onChange={(event) => {
+          const next = Number(event.target.value)
+          if (!Number.isFinite(next)) return
+          onChange(next)
+        }}
+        slotProps={{ htmlInput: { 'aria-label': label } }}
+      />
+    </Box>
+  )
+}
+
 function RunClockFields({ draft }: { draft: WorkloadDraft }) {
   return (
-    <>
-      <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
-        <TextField
-          size="small"
-          type="number"
+    <Box sx={{ mt: 2 }}>
+      <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>Run clock</Typography>
+      <Box sx={fieldGridSx}>
+        <NumberField
           label="Duration (s)"
           value={draft.durationSec}
-          onChange={(event) => {
-            const next = Number(event.target.value)
-            if (!Number.isFinite(next) || next <= 0) return
+          onChange={(next) => {
+            if (next <= 0) return
             patchWorkloadDraft({ durationSec: next })
           }}
-          sx={{ width: 140 }}
         />
-        <TextField
-          size="small"
-          type="number"
+        <NumberField
           label="dt (s)"
           value={draft.dtSec}
-          onChange={(event) => {
-            const next = Number(event.target.value)
-            if (!Number.isFinite(next) || next <= 0) return
+          onChange={(next) => {
+            if (next <= 0) return
             patchWorkloadDraft({ dtSec: next })
           }}
-          sx={{ width: 120 }}
         />
-        <TextField
-          size="small"
-          type="number"
+        <NumberField
           label="Seed"
           value={draft.seed}
-          onChange={(event) => {
-            const next = Number(event.target.value)
-            if (!Number.isFinite(next)) return
-            patchWorkloadDraft({ seed: next })
-          }}
-          sx={{ width: 120 }}
+          onChange={(next) => patchWorkloadDraft({ seed: next })}
         />
-      </Stack>
+      </Box>
       <Typography sx={{ mt: 0.75, fontSize: 11, color: 'text.secondary' }}>
-        Same on Viewers, Uploaders and Clients. Duration is simulated seconds. Warm-up is 20% of
-        duration. Seed replays Simulated. dt is unused in Analytic.
+        Same on every Clients card. Duration is simulated seconds. Warm-up is 20% of duration. Seed
+        replays Simulated. dt is unused in Analytic.
       </Typography>
-    </>
+    </Box>
   )
 }
 
@@ -119,42 +143,32 @@ export function WorkloadEditor({
       </Typography>
 
       {generators.length === 0 ? (
-        <Box sx={{ mt: 3 }}>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-            Drop a Clients card. Each extra Clients card adds another rate block here.
-          </Typography>
-          <Typography sx={{ mt: 2, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
-            Run clock
-          </Typography>
-          <RunClockFields draft={draft} />
-        </Box>
+        <Typography sx={{ mt: 3, fontSize: 13, color: 'text.secondary' }}>
+          Drop a Clients card. Each extra Clients card adds another rate block here.
+        </Typography>
       ) : (
         generators.map((generator) => (
           <Box key={generator.id} sx={{ mt: 3 }}>
             <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
               {generator.title}
             </Typography>
-            <Stack direction="row" spacing={1.5} sx={{ mt: 1, flexWrap: 'wrap' }}>
+            <Box sx={fieldGridSx}>
               {REQUEST_CLASSES.map((id) => (
-                <TextField
+                <NumberField
                   key={id}
-                  size="small"
-                  type="number"
                   label={`${CLASS_LABEL[id]} rps`}
                   value={visibleClassRate(draft, generator, id)}
-                  onChange={(event) => {
-                    const next = Number(event.target.value)
-                    if (!Number.isFinite(next) || next < 0) return
+                  onChange={(next) => {
+                    if (next < 0) return
                     patchGeneratorClassRate(generator.id, id, next)
                   }}
-                  sx={{ width: 150 }}
                 />
               ))}
-            </Stack>
-            <RunClockFields draft={draft} />
+            </Box>
           </Box>
         ))
       )}
+      <RunClockFields draft={draft} />
       <Stack spacing={0.75} sx={{ mt: 2 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
           Run mode
@@ -193,18 +207,16 @@ export function WorkloadEditor({
 
       {draft.shapeKind === 'ramp' ? (
         <Stack spacing={0.75} sx={{ mt: 1 }}>
-          <TextField
-            size="small"
-            type="number"
-            label="Ramp (s)"
-            value={draft.rampSec}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next <= 0) return
-              patchWorkloadDraft({ rampSec: next })
-            }}
-            sx={{ width: 140 }}
-          />
+          <Box sx={{ maxWidth: 200 }}>
+            <NumberField
+              label="Ramp (s)"
+              value={draft.rampSec}
+              onChange={(next) => {
+                if (next <= 0) return
+                patchWorkloadDraft({ rampSec: next })
+              }}
+            />
+          </Box>
           <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
             Analytic uses the target rate. Ramp plays in Simulated.
           </Typography>
@@ -212,68 +224,53 @@ export function WorkloadEditor({
       ) : null}
 
       {draft.shapeKind === 'step' ? (
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
-          <TextField
-            size="small"
-            type="number"
+        <Box sx={fieldGridSx}>
+          <NumberField
             label="Step at (s)"
             value={draft.stepAtSec}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) return
+            onChange={(next) => {
+              if (next < 0) return
               patchWorkloadDraft({ stepAtSec: next })
             }}
           />
-          <TextField
-            size="small"
-            type="number"
+          <NumberField
             label="Factor"
             value={draft.stepFactor}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next <= 0) return
+            onChange={(next) => {
+              if (next <= 0) return
               patchWorkloadDraft({ stepFactor: next })
             }}
           />
-        </Stack>
+        </Box>
       ) : null}
 
       {draft.shapeKind === 'spike' ? (
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
-          <TextField
-            size="small"
-            type="number"
+        <Box sx={fieldGridSx}>
+          <NumberField
             label="Spike at (s)"
             value={draft.spikeAtSec}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) return
+            onChange={(next) => {
+              if (next < 0) return
               patchWorkloadDraft({ spikeAtSec: next })
             }}
           />
-          <TextField
-            size="small"
-            type="number"
+          <NumberField
             label="Duration (s)"
             value={draft.spikeDurationSec}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next <= 0) return
+            onChange={(next) => {
+              if (next <= 0) return
               patchWorkloadDraft({ spikeDurationSec: next })
             }}
           />
-          <TextField
-            size="small"
-            type="number"
+          <NumberField
             label="Factor"
             value={draft.spikeFactor}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (!Number.isFinite(next) || next <= 0) return
+            onChange={(next) => {
+              if (next <= 0) return
               patchWorkloadDraft({ spikeFactor: next })
             }}
           />
-        </Stack>
+        </Box>
       ) : null}
 
       <Typography sx={{ mt: 2, fontSize: 12, color: discreteBlocked ? 'error.main' : 'text.secondary' }}>

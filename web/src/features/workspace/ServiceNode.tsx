@@ -7,7 +7,7 @@ import { kindForNode, nodeCarriesClass } from './compile.ts'
 import { useIconMode } from './icon-mode.tsx'
 import { CatalogIcon } from './CatalogIcon.tsx'
 import { ENV_MIN_HEIGHT, ENV_MIN_WIDTH } from './environment.ts'
-import { cardState, confidenceBadge, type ConfidenceBadge } from './card-state.ts'
+import { cardState, confidenceBadge, serverCountDisplay, type ConfidenceBadge } from './card-state.ts'
 import { useLibrary } from '../calibration/library.ts'
 import { confidenceLabel, profileConfidence } from '../calibration/citation.ts'
 import type { ServiceNodeData, ZoneNodeData } from './types.ts'
@@ -41,8 +41,10 @@ export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNo
   const node = { id, type: 'service', position: { x: 0, y: 0 }, data }
   const onPath = nodeCarriesClass(node, edges, filter)
   const generator = kindForNode(node) === 'traffic_generator'
-  const confidence = profileConfidence(library.profiles.find((profile) => profile.bindsTo === id))
+  const profile = library.profiles.find((item) => item.bindsTo === id)
+  const confidence = profileConfidence(profile)
   const badge = confidenceBadge(confidence)
+  const servers = generator ? undefined : serverCountDisplay(profile)
   const health = nodeHealth(data)
   const state = cardState(data, health)
   const queueLoss = [data.queueDepth, data.loss].filter(Boolean).join(' · ')
@@ -85,6 +87,23 @@ export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNo
           >
             {data.title}
           </Typography>
+          {servers ? (
+            <Tooltip title={servers.title}>
+              <Typography
+                component="span"
+                data-server-count={servers.known ? 'set' : 'unknown'}
+                noWrap
+                sx={{
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  fontSize: 11,
+                  color: servers.known ? 'text.primary' : 'text.secondary',
+                  flexShrink: 0,
+                }}
+              >
+                {servers.text}
+              </Typography>
+            </Tooltip>
+          ) : null}
           {generator ? null : (
             <Tooltip
               title={`${confidenceLabel(confidence === 'unknown' ? undefined : confidence)} capacity. ${

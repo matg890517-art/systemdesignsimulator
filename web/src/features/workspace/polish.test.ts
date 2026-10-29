@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CalibrationProfile } from '@sds/engine'
 import { profileCitation, profileConfidence } from '../calibration/citation.ts'
 import { focusRoleForBottleneck, nextFieldFocus } from './bottleneck-focus.ts'
-import { cardState, confidenceBadge } from './card-state.ts'
+import { cardState, confidenceBadge, serverCountDisplay } from './card-state.ts'
 import { isRunStopped, RunStoppedError, stopWorkspaceRun } from './engine-client.ts'
 import { nextNotice, noticeDurationMs, noticeSeverityForHint } from './notices.ts'
 import type { NodeRunStat } from './types.ts'
@@ -95,5 +95,19 @@ describe('UX polish: card states and confidence badge', () => {
     expect(profileCitation(mixed)).toBe('Estimated · Pool')
     expect(confidenceBadge('vendor')).toEqual({ label: 'Vendor', tone: 'vendor' })
     expect(confidenceBadge('unknown').label).toBe('Unknown')
+  })
+
+  it('prints n from the profile, not from the card title, and keeps unknown as unknown', () => {
+    expect(serverCountDisplay(undefined)).toMatchObject({ text: 'n —', known: false })
+    expect(
+      serverCountDisplay(
+        profile([{ id: 'servers', label: 'Slots', unit: 'count', role: 'servers', value: { state: 'set', value: 84, confidence: 'estimated', sourceId: 'example' } }]),
+      ),
+    ).toEqual({ text: 'n 84', title: '84 slots', known: true })
+    expect(
+      serverCountDisplay(
+        profile([{ id: 'servers', label: 'Servers', unit: 'count', role: 'servers', value: { state: 'unknown' } }]),
+      ),
+    ).toMatchObject({ text: 'n —', known: false })
   })
 })

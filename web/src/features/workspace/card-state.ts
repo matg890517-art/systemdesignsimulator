@@ -1,4 +1,4 @@
-import type { Confidence } from '@sds/engine'
+import type { CalibrationProfile, Confidence } from '@sds/engine'
 import type { NodeHealth, ServiceNodeData } from './types.ts'
 
 export type CardState = 'idle' | 'live' | 'hot' | 'watch' | 'failed'
@@ -23,4 +23,28 @@ export function confidenceBadge(confidence: Confidence | 'unknown'): ConfidenceB
   if (confidence === 'vendor') return { label: 'Vendor', tone: 'vendor' }
   if (confidence === 'estimated') return { label: 'Est.', tone: 'estimated' }
   return { label: 'Unknown', tone: 'unknown' }
+}
+
+export type ServerCountDisplay = {
+  text: string
+  title: string
+  known: boolean
+}
+
+/**
+ * Server / slot count from the bound profile. Unknown stays unknown and is not
+ * read from the card title (ECS ×60 is a name, not n).
+ */
+export function serverCountDisplay(profile?: CalibrationProfile): ServerCountDisplay {
+  const field = profile?.fields.find((item) => item.role === 'servers')
+  if (field?.value.state === 'set') {
+    const n = String(field.value.value)
+    const noun = /slot/i.test(field.label) ? 'slots' : 'servers'
+    return { text: `n ${n}`, title: `${n} ${noun}`, known: true }
+  }
+  return {
+    text: 'n —',
+    title: 'Server count is unknown and does not cap the engine.',
+    known: false,
+  }
 }
