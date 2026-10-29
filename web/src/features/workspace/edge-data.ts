@@ -29,7 +29,7 @@ export type WorkspaceEdgeData = {
   }
   crossProvider?: boolean
   note?: string
-  /** Offered rps from the current playback tick. Drives dash motion. */
+  /** Offered rps from the active Show mode. Drives traveling dots on the hop. */
   flowRps?: number
 }
 
@@ -84,6 +84,13 @@ function typeTokenFromLabel(raw: string): string {
   const first = base.split(/\s+/)[0] ?? ''
   if (CLASS_LABEL_RE.test(first)) return first
   return 'none'
+}
+
+/** Prefix or strip the cache-miss hop label. The miss fraction itself is 1 − hit rate on the cache/CDN card. */
+export function applyHopNoteLabel(label: string, miss: boolean): string {
+  const raw = String(label ?? '')
+  if (miss) return MISS_PREFIX.test(raw) ? raw : `miss · ${raw}`
+  return raw.replace(MISS_PREFIX, '')
 }
 
 /** Class letters (and miss / cross notes). No baked hop rates. */

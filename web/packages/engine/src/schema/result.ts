@@ -33,6 +33,30 @@ export type EdgeResult = {
   flow_rps: Record<string, number>
 }
 
+export type SimTickNode = {
+  lambda: number
+  rho: number
+  throughput: number
+  lambda_now: number
+  rho_now: number
+  throughput_now: number
+  Lq: number
+  p99: number
+  waitUnknown: boolean
+}
+
+export type SimTickEdge = {
+  flow_rps: Record<string, number>
+  flow_rps_now: Record<string, number>
+}
+
+/** One DES canvas sample. `_now` is this sample window; plain fields are 0→t. Lq is the live queue. N7 stays post-warm-up. */
+export type SimTick = {
+  t_s: number
+  nodes: Record<string, SimTickNode>
+  edges: Record<string, SimTickEdge>
+}
+
 export type ClassResult = {
   pathLatency: { mean: number; p50: number; p95: number; p99: number }
   errorRate: number
@@ -62,6 +86,8 @@ export type EngineResult = {
   interval?: { replications: number; ci95: Record<string, { mean: number; half: number }> }
   checks?: { little: CheckResult; conservation: CheckResult; utilization: CheckResult }
   invalid?: string
+  /** Simulated time series for the canvas. Analytic omits this. */
+  ticks?: SimTick[]
 }
 
 export function planStatus(status: NodeStatus): SystemStability {

@@ -32,6 +32,8 @@ export type WorkloadDraft = {
   seed: number
   mode: 'analytic' | 'simulated' | 'fluid' | 'discrete'
   shapeKind: LoadShape['kind']
+  /** Simulated Ramp 0→target. Analytic still solves the target rate. */
+  rampSec: number
   stepAtSec: number
   stepFactor: number
   spikeAtSec: number
@@ -59,6 +61,7 @@ export const defaultWorkloadDraft = (): WorkloadDraft => ({
   ...WORKLOAD_RUN_CLOCK,
   mode: 'analytic',
   shapeKind: 'constant',
+  rampSec: 12,
   stepAtSec: 20,
   stepFactor: 2,
   spikeAtSec: 20,
@@ -173,7 +176,10 @@ export function loadShapeFromDraft(draft: WorkloadDraft): LoadShape {
       factor: draft.spikeFactor,
     }
   }
-  return { kind: draft.shapeKind }
+  if (draft.shapeKind === 'ramp') {
+    return { kind: 'ramp', durationSec: Math.max(1e-9, draft.rampSec || draft.durationSec * 0.2) }
+  }
+  return { kind: draft.shapeKind === 'poisson' ? 'poisson' : 'constant' }
 }
 
 export function kindForNode(node: Node<ServiceNodeData>): CanonicalKind {
@@ -435,6 +441,39 @@ function uploadEdge(edges: Edge[]): Edge | undefined {
   return edges.find((item) => item.id === 'up-aks') ?? edges.find((item) => item.from === 'uploaders')
 }
 
+/** Two or more hops from a load balancer share the class by weight. Broadcast still copies. */
+function splitLoadBalancerEdges(components: Component[], edges: Edge[]): Edge[] {
+  const lbs = new Set(
+    components.filter((item) => item.kind === 'load_balancer').map((item) => item.id),
+  )
+  if (lbs.size === 0) return edges
+  const count = new Map<string, number>()
+  const broadcast = new Set<string>()
+  for (const edge of edges) {
+    if (!lbs.has(edge.from) || edge.routing.mode === 'broadcast') {
+      if (lbs.has(edge.from) && edge.routing.mode === 'broadcast') {
+        for (const classId of Object.keys(edge.classes)) broadcast.add(`${edge.from}:${classId}`)
+      }
+      continue
+    }
+    for (const classId of Object.keys(edge.classes)) {
+      const key = `${edge.from}:${classId}`
+      count.set(key, (count.get(key) ?? 0) + 1)
+    }
+  }
+  return edges.map((edge) => {
+    if (!lbs.has(edge.from) || edge.routing.mode === 'broadcast' || edge.routing.mode === 'weighted') {
+      return edge
+    }
+    const splits = Object.keys(edge.classes).some((classId) => {
+      const key = `${edge.from}:${classId}`
+      return (count.get(key) ?? 0) > 1 && !broadcast.has(key)
+    })
+    if (!splits) return edge
+    return { ...edge, routing: { mode: 'weighted', weight: 1 } }
+  })
+}
+
 export function compileCanvas(
   nodes: Node<ServiceNodeData | ZoneNodeData>[],
   rfEdges: RfEdge[],
@@ -496,7 +535,8 @@ export function compileCanvas(
   }
 
   const aksId = crashTarget(components)
-  const link = uploadEdge(topologyEdges)
+  const splitEdges = splitLoadBalancerEdges(components, topologyEdges)
+  const link = uploadEdge(splitEdges)
   if (fault === 'crash' && aksId) {
     const target = components.find((item) => item.id === aksId)
     if (target) target.behavior.servers = { state: 'set', value: 0, confidence: 'estimated', sourceId: 'fault' }
@@ -526,7 +566,7 @@ export function compileCanvas(
   }
 
   return {
-    topology: { components, edges: topologyEdges },
+    topology: { components, edges: splitEdges },
     workload: {
       durationSec: draft.durationSec,
       dtSec: draft.dtSec,

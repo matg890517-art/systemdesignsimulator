@@ -20,7 +20,7 @@ export type RoutingMode = 'single' | 'weighted' | 'broadcast'
 
 export type CallKind = 'sync' | 'async'
 
-export type WorkloadProfile = 'constant'
+export type WorkloadProfile = 'constant' | 'ramp'
 
 export type NumberWithEvidence = {
   value: number
@@ -89,6 +89,8 @@ export type WorkloadRow = {
   classId: string
   profile: WorkloadProfile
   rate_rps: number
+  /** Simulated Ramp only. λ(t) = rate_rps * min(1, t / ramp_s). Analytic ignores this. */
+  ramp_s?: number
 }
 
 export type ScenarioClass = { id: string; name: string }
@@ -96,7 +98,14 @@ export type ScenarioClass = { id: string; name: string }
 export type Scenario = {
   schemaVersion: number
   seed: number
-  run: { duration_s: number; warmup_s: number; replications: number; eventBudget: number }
+  run: {
+    duration_s: number
+    warmup_s: number
+    replications: number
+    eventBudget: number
+    /** Workload dt. Simulated ticks use this as the Instantaneous window, capped by the 48-frame budget. */
+    dt_s?: number
+  }
   classes: ScenarioClass[]
   nodes: ScenarioNode[]
   edges: ScenarioEdge[]

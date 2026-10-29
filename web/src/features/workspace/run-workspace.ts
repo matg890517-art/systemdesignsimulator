@@ -19,6 +19,7 @@ import {
   type EngineResult,
   type FluidState,
   type SimEvent,
+  type SimTick,
   type Topology,
   type Workload,
 } from '@sds/engine'
@@ -41,6 +42,7 @@ import type {
   NodeRunStat,
   RunTick,
   ServiceNodeData,
+  TickRates,
   WorkspaceRun,
   ZoneNodeData,
 } from './types.ts'
@@ -550,6 +552,104 @@ function statsFromEngine(
   return { stats, classStats, edgeOffered, edgeClassOffered }
 }
 
+function ratesFromSimTick(
+  topology: Topology,
+  tick: SimTick,
+  mode: 'analytic' | 'simulated',
+  profiles: CalibrationProfile[],
+  kind: 'average' | 'instant',
+): TickRates {
+  const label = mode === 'analytic' ? 'Analytic' : 'Simulated'
+  const stats: Record<string, NodeRunStat> = {}
+  const classStats: Record<string, Record<string, NodeRunStat>> = {}
+  for (const component of topology.components) {
+    const row = tick.nodes[component.id]
+    if (!row) continue
+    const profile = profiles.find((item) => component.calibrationProfileIds.includes(item.id))
+    const citation = profileCitation(profile)
+    const servers = component.behavior.servers.state === 'set' ? unwrap(component.behavior.servers) : undefined
+    let serviceMs: number | undefined
+    for (const service of Object.values(component.behavior.serviceTime)) {
+      if (service?.state === 'set') serviceMs = Math.max(serviceMs ?? 0, meanMs(unwrap(service)))
+    }
+    const generator = component.kind === 'traffic_generator'
+    const lambda = kind === 'instant' ? row.lambda_now : row.lambda
+    const rho = kind === 'instant' ? row.rho_now : row.rho
+    const throughput = kind === 'instant' ? row.throughput_now : row.throughput
+    const waitText = generator
+      ? formatRps(lambda)
+      : row.waitUnknown || !Number.isFinite(row.p99)
+        ? 'unknown wait'
+        : `${row.p99.toFixed(0)} ms p99`
+    const mu = serviceMs && servers ? servers / (serviceMs / 1000) : Number.POSITIVE_INFINITY
+    stats[component.id] = {
+      util: generator ? 0 : Number.isFinite(rho) ? Math.min(1, Math.max(0, rho)) : 0,
+      completed: throughput,
+      rejected: 0,
+      offered: lambda,
+      mu,
+      capped: Number.isFinite(mu),
+      p99: waitText,
+      meta: generator
+        ? `${label} · generator`
+        : `${label} · ${kind === 'instant' ? 'instant' : 'avg'} · ρ ${Number.isFinite(rho) ? (rho * 100).toFixed(0) : '—'}% · q ${row.Lq.toFixed(1)} · ${citation}`,
+      citation,
+      backlog: Number.isFinite(row.Lq) ? row.Lq : 0,
+      loss: 0,
+      servers,
+      serviceMs,
+    }
+    classStats[component.id] = {}
+  }
+  for (const edge of topology.edges) {
+    const flow = tick.edges[edge.id]
+    if (!flow) continue
+    const dest = stats[edge.to]
+    if (!dest) continue
+    const destClasses = (classStats[edge.to] ??= {})
+    const perClass = kind === 'instant' ? flow.flow_rps_now : flow.flow_rps
+    for (const [classId, rps] of Object.entries(perClass)) {
+      const prev = destClasses[classId]
+      const offered = (prev?.offered ?? 0) + rps
+      destClasses[classId] = {
+        ...dest,
+        offered,
+        completed: offered,
+        rejected: 0,
+        loss: 0,
+      }
+    }
+  }
+  const edgeOffered: Record<string, number> = {}
+  const edgeClassOffered: Record<string, Record<string, number>> = {}
+  for (const [id, edge] of Object.entries(tick.edges)) {
+    let sum = 0
+    const byClass: Record<string, number> = {}
+    const perClass = kind === 'instant' ? edge.flow_rps_now : edge.flow_rps
+    for (const [classId, rps] of Object.entries(perClass)) {
+      byClass[classId] = rps
+      sum += rps
+    }
+    edgeOffered[id] = sum
+    edgeClassOffered[id] = byClass
+  }
+  return { nodeStats: stats, classStats, edgeOffered, edgeClassOffered }
+}
+
+function tickFromSimTick(
+  topology: Topology,
+  tick: SimTick,
+  mode: 'analytic' | 'simulated',
+  profiles: CalibrationProfile[],
+): RunTick {
+  const average = ratesFromSimTick(topology, tick, mode, profiles, 'average')
+  return {
+    t: tick.t_s,
+    ...average,
+    instant: ratesFromSimTick(topology, tick, mode, profiles, 'instant'),
+  }
+}
+
 function hockeyFromSweep(
   topology: Topology,
   sweep: { rps: number; waitMs: Record<string, number> }[],
@@ -613,6 +713,10 @@ function finishFromEngine(
     edgeOffered,
     edgeClassOffered,
   }
+  const ticks =
+    mode === 'simulated' && result.ticks && result.ticks.length > 0
+      ? result.ticks.map((tick) => tickFromSimTick(topology, tick, mode, profiles))
+      : [lastTick]
   onProgress?.({ ...lastTick, fraction: 1 })
   return {
     ok: true,
@@ -624,7 +728,7 @@ function finishFromEngine(
       classStats,
       edgeOffered,
       edgeClassOffered,
-      ticks: [lastTick],
+      ticks,
       durationSec: workload.durationSec,
       hint: `${mode} · seed ${workload.seed} · ${result.evidence}`,
       affectedComponentIds: [],
@@ -668,14 +772,21 @@ export function runWorkspace(
         : simulateOnce(compiled, workload.seed, {
             cancelled,
             onProgress: (info) => {
-              onProgress?.({
-                t: info.t_s,
-                fraction: info.fraction,
-                nodeStats: {},
-                classStats: {},
-                edgeOffered: {},
-                edgeClassOffered: {},
-              })
+              onProgress?.(
+                info.tick
+                  ? {
+                      ...tickFromSimTick(topology, info.tick, 'simulated', profiles),
+                      fraction: info.fraction,
+                    }
+                  : {
+                      t: info.t_s,
+                      fraction: info.fraction,
+                      nodeStats: {},
+                      classStats: {},
+                      edgeOffered: {},
+                      edgeClassOffered: {},
+                    },
+              )
             },
           })
     return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)
@@ -828,14 +939,21 @@ export async function runWorkspaceSliced(
         : await simulateWithSlices(compiled, workload.seed, {
             cancelled,
             onProgress: (info) => {
-              onProgress?.({
-                t: info.t_s,
-                fraction: info.fraction,
-                nodeStats: {},
-                classStats: {},
-                edgeOffered: {},
-                edgeClassOffered: {},
-              })
+              onProgress?.(
+                info.tick
+                  ? {
+                      ...tickFromSimTick(topology, info.tick, 'simulated', profiles),
+                      fraction: info.fraction,
+                    }
+                  : {
+                      t: info.t_s,
+                      fraction: info.fraction,
+                      nodeStats: {},
+                      classStats: {},
+                      edgeOffered: {},
+                      edgeClassOffered: {},
+                    },
+              )
             },
           })
     return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)

@@ -4,6 +4,7 @@ import {
   classSummaryLabel,
   defaultEdgeData,
   isCrossProviderEdge,
+  readEdgeData,
   styleCrossProviderEdge,
 } from './edge-data.ts'
 import { handlesForNodes } from './edge-handles.ts'
@@ -21,7 +22,13 @@ export function edgeDraftFromConnection(
 ): Edge {
   const cross = isCrossProviderEdge(nodes, connection)
   const style = styleCrossProviderEdge(cross)
-  const data = { ...defaultEdgeData(), crossProvider: cross }
+  const sourceNode = asService(nodes.find((node) => node.id === connection.source))
+  const fromLb = sourceNode ? kindForNode(sourceNode) === 'load_balancer' : false
+  const data = {
+    ...defaultEdgeData(),
+    crossProvider: cross,
+    ...(fromLb ? { routing: { mode: 'weighted' as const, weight: 1 } } : {}),
+  }
   const summary = classSummaryLabel(data.classes)
   return {
     ...connection,
@@ -67,16 +74,41 @@ export function connectComponents(
   if (error) return { error }
   const handles = handlesForNodes(nodes, source, target)
   return {
-    edges: addEdge(
-      edgeDraftFromConnection(nodes, {
-        source,
-        target,
-        sourceHandle: handles.sourceHandle,
-        targetHandle: handles.targetHandle,
-      }),
-      edges,
+    edges: applyLoadBalancerRouting(
+      nodes,
+      addEdge(
+        edgeDraftFromConnection(nodes, {
+          source,
+          target,
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
+        }),
+        edges,
+      ),
     ),
   }
+}
+
+/** A second hop from a load balancer turns leftover Single hops into equal weights. */
+function applyLoadBalancerRouting(nodes: WorkspaceNode[], edges: Edge[]): Edge[] {
+  const lbs = new Set(
+    nodes.flatMap((node) => {
+      const service = asService(node)
+      return service && kindForNode(service) === 'load_balancer' ? [service.id] : []
+    }),
+  )
+  if (lbs.size === 0) return edges
+  const count = new Map<string, number>()
+  for (const edge of edges) {
+    if (!lbs.has(edge.source)) continue
+    count.set(edge.source, (count.get(edge.source) ?? 0) + 1)
+  }
+  return edges.map((edge) => {
+    if (!lbs.has(edge.source) || (count.get(edge.source) ?? 0) < 2) return edge
+    const data = readEdgeData(edge)
+    if (data.routing.mode === 'broadcast' || data.routing.mode === 'weighted') return edge
+    return { ...edge, data: { ...data, routing: { mode: 'weighted', weight: 1 } } }
+  })
 }
 
 export function patchServiceTitle(

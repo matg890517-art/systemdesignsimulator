@@ -2,7 +2,9 @@ import { zipfCdf } from '../analytic/zipf.ts'
 import { meanMsFromDist } from '../analytic/queue.ts'
 import { serverCount } from '../schema/scenario.ts'
 import type { CompiledModel } from '../compile/compile.ts'
-import type { EngineResult, NodeResult } from '../schema/result.ts'
+import type { EngineResult, NodeResult, SimTick } from '../schema/result.ts'
+import type { WorkloadRow } from '../schema/scenario.ts'
+import { tickEveryUs } from './ticks.ts'
 import { ENGINE_VERSION, SCHEMA_VERSION } from '../schema/version.ts'
 import { weakestEvidence, type Evidence } from '../schema/evidence.ts'
 import { EventHeap, EventKind } from './heap.ts'
@@ -32,6 +34,9 @@ type NodeRt = {
   hitRatio: number
   hits: number
   lookups: number
+  allArrived: number
+  allCompleted: number
+  allBusyUs: number
 }
 
 function emptyNode(status: NodeResult['status']): NodeResult {
@@ -57,9 +62,15 @@ export const WORKER_SLICE_MS = 8
 
 export type SimHooks = {
   cancelled?: () => boolean
-  onProgress?: (info: { events: number; t_s: number; fraction: number }) => void
+  onProgress?: (info: { events: number; t_s: number; fraction: number; tick?: SimTick }) => void
   sliceMs?: number
   now?: () => number
+}
+
+function offeredAt(row: WorkloadRow, tUs: number): number {
+  if (row.rate_rps <= 0) return 0
+  if (row.profile !== 'ramp' || !row.ramp_s || row.ramp_s <= 0) return row.rate_rps
+  return row.rate_rps * Math.min(1, tUs / US / row.ramp_s)
 }
 
 export function simulateOnce(compiled: CompiledModel, seed: number, hooks?: SimHooks): EngineResult {
@@ -114,6 +125,9 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
     hitRatio: compiled.hitRatio.get(node.id) ?? node.hitRatio ?? 0,
     hits: 0,
     lookups: 0,
+    allArrived: 0,
+    allCompleted: 0,
+    allBusyUs: 0,
   }))
 
   type Req = { classId: string; birth: number; arrived: number; deadline: number; serviceAt: number }
@@ -130,7 +144,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
   }
 
   for (const row of scenario.workload) {
-    if (row.profile !== 'constant' || row.rate_rps <= 0) continue
+    if ((row.profile !== 'constant' && row.profile !== 'ramp') || row.rate_rps <= 0) continue
     const ni = index.get(row.clientId)
     const ci = classIndex.get(row.classId)
     if (ni === undefined || ci === undefined) continue
@@ -194,10 +208,40 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
 
   const record = (t: number) => t >= warmupUs
 
+  const hopKey = (from: string, to: string, classId: string) => `${from}\0${to}\0${classId}`
+  const edgeIdByHop = new Map<string, string>()
+  for (const edge of edges) {
+    for (const classId of Object.keys(edge.perClass)) {
+      edgeIdByHop.set(hopKey(edge.from, edge.to, classId), edge.id)
+    }
+  }
+  const edgeHits: Record<string, Record<string, number>> = {}
+  for (const edge of edges) {
+    edgeHits[edge.id] = {}
+    for (const classId of Object.keys(edge.perClass)) {
+      edgeHits[edge.id]![classId] = 0
+    }
+  }
+  const series: SimTick[] = []
+  const dtUs = scenario.run.dt_s && scenario.run.dt_s > 0 ? scenario.run.dt_s * US : undefined
+  const tickStepUs = tickEveryUs(durationUs, dtUs)
+  let nextTickUs = 0
+  let lastSnapUs = 0
+  const lastArrived = rt.map(() => 0)
+  const lastCompleted = rt.map(() => 0)
+  const lastBusyUs = rt.map(() => 0)
+  const lastHits: Record<string, Record<string, number>> = {}
+  for (const edge of edges) {
+    lastHits[edge.id] = {}
+    for (const classId of Object.keys(edge.perClass)) lastHits[edge.id]![classId] = 0
+  }
+  let prevNow: SimTick | undefined
+
   const stampBusy = (ni: number, t: number) => {
     const node = rt[ni]!
     const dt = t - node.lastT
     if (dt > 0) {
+      node.allBusyUs += node.busy * dt
       if (record(node.lastT)) {
         node.busyUs += node.busy * dt
         node.queueUs += node.queue.length * dt
@@ -205,6 +249,75 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       node.lastT = t
     }
   }
+
+  const snapshot = (tUs: number): SimTick => {
+    const elapsed = tUs / US
+    const windowUs = Math.max(0, tUs - lastSnapUs)
+    const window = windowUs / US
+    const nodeOut: SimTick['nodes'] = {}
+    for (let i = 0; i < nodes.length; i++) {
+      stampBusy(i, tUs)
+      const node = nodes[i]!
+      const r = rt[i]!
+      const serviceMs = meanMsFromDist(node.service) ?? 0
+      const prev = prevNow?.nodes[node.id]
+      const dArr = r.allArrived - lastArrived[i]!
+      const dDone = r.allCompleted - lastCompleted[i]!
+      const dBusy = r.allBusyUs - lastBusyUs[i]!
+      nodeOut[node.id] = {
+        lambda: elapsed > 0 ? r.allArrived / elapsed : 0,
+        rho: elapsed > 0 && r.servers > 0 ? r.allBusyUs / (r.servers * tUs) : 0,
+        throughput: elapsed > 0 ? r.allCompleted / elapsed : 0,
+        lambda_now: window > 0 ? dArr / window : (prev?.lambda_now ?? 0),
+        rho_now:
+          window > 0 && r.servers > 0
+            ? dBusy / (r.servers * windowUs)
+            : r.servers > 0
+              ? r.busy / r.servers
+              : 0,
+        throughput_now: window > 0 ? dDone / window : (prev?.throughput_now ?? 0),
+        Lq: r.queue.length,
+        p99: r.waitHist.percentileMs(0.99),
+        waitUnknown: serviceMs <= 0,
+      }
+      lastArrived[i] = r.allArrived
+      lastCompleted[i] = r.allCompleted
+      lastBusyUs[i] = r.allBusyUs
+    }
+    const edgeOut: SimTick['edges'] = {}
+    for (const edge of edges) {
+      const flow: Record<string, number> = {}
+      const flowNow: Record<string, number> = {}
+      for (const classId of Object.keys(edge.perClass)) {
+        const hits = edgeHits[edge.id]?.[classId] ?? 0
+        const prevHits = lastHits[edge.id]?.[classId] ?? 0
+        const prevNowRate = prevNow?.edges[edge.id]?.flow_rps_now[classId] ?? 0
+        flow[classId] = elapsed > 0 ? hits / elapsed : 0
+        flowNow[classId] = window > 0 ? (hits - prevHits) / window : prevNowRate
+        lastHits[edge.id]![classId] = hits
+      }
+      edgeOut[edge.id] = { flow_rps: flow, flow_rps_now: flowNow }
+    }
+    lastSnapUs = tUs
+    const tick = { t_s: elapsed, nodes: nodeOut, edges: edgeOut }
+    prevNow = tick
+    return tick
+  }
+
+  const maybeTick = (tUs: number) => {
+    if (tUs + 1 < nextTickUs) return
+    const tick = snapshot(tUs)
+    series.push(tick)
+    hooks?.onProgress?.({
+      events,
+      t_s: tick.t_s,
+      fraction: Math.min(1, tick.t_s / Math.max(scenario.run.duration_s, 1e-9)),
+      tick,
+    })
+    while (nextTickUs <= tUs) nextTickUs += tickStepUs
+  }
+
+  maybeTick(0)
 
   const startService = (ni: number, reqIndex: number, t: number) => {
     const node = nodes[ni]!
@@ -223,6 +336,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
     const rtN = rt[ni]!
     const req = reqs[reqIndex]!
     stampBusy(ni, t)
+    rtN.allArrived++
     if (record(t)) rtN.arrived++
     req.arrived = t
     if (node.kind === 'client') {
@@ -266,6 +380,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
   const finishAt = (ni: number, reqIndex: number, t: number) => {
     const rtN = rt[ni]!
     const req = reqs[reqIndex]!
+    rtN.allCompleted++
     if (record(t)) {
       rtN.completed++
       const start = req.arrived || req.birth
@@ -292,6 +407,11 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       return
     }
     for (const target of targets) {
+      const toId = nodes[target.to]?.id
+      if (toId) {
+        const id = edgeIdByHop.get(hopKey(from, toId, req.classId))
+        if (id) edgeHits[id]![req.classId] = (edgeHits[id]![req.classId] ?? 0) + 1
+      }
       const child: Req = {
         classId: req.classId,
         birth: req.birth,
@@ -335,9 +455,16 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       const node = nodes[ni]
       if (!classId || !node) return 'ok'
       const row = scenario.workload.find((w) => w.clientId === node.id && w.classId === classId)
-      if (row) {
+      if (row && row.rate_rps > 0) {
         const ia = sampleExponential(stream(node.id, 'arrivals'), 1 / row.rate_rps) * US
         schedule(ev.t + Math.max(1, Math.round(ia)), EventKind.generate, ni, ci)
+        if (row.profile === 'ramp') {
+          const accept = offeredAt(row, ev.t) / row.rate_rps
+          if (stream(node.id, 'thin').next() > accept) {
+            maybeTick(ev.t)
+            return 'ok'
+          }
+        }
       }
       const req: Req = {
         classId,
@@ -362,6 +489,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       const next = rtN.queue.shift()
       if (next !== undefined) startService(ni, next, ev.t)
     }
+    maybeTick(ev.t)
     return 'ok'
   }
 
@@ -443,11 +571,12 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
   const invalid = checks.conservation.ok ? undefined : `self-check failed: ${checks.conservation.detail}`
 
   const edgesOut: EngineResult['edges'] = {}
+  const elapsed = durationUs / US
   for (const edge of edges) {
     const flow: Record<string, number> = {}
     for (const classId of Object.keys(edge.perClass)) {
-      const src = nodeResults[edge.from]
-      flow[classId] = src?.throughput ?? 0
+      const hits = edgeHits[edge.id]?.[classId] ?? 0
+      flow[classId] = elapsed > 0 ? hits / elapsed : 0
     }
     edgesOut[edge.id] = { flow_rps: flow }
   }
@@ -484,6 +613,10 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
     },
     checks,
     invalid,
+    ticks:
+      series.length === 0 || series.at(-1)!.t_s < durationUs / US - 1e-9
+        ? [...series, snapshot(durationUs)]
+        : series,
   }
   }
 

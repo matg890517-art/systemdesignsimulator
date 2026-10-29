@@ -57,6 +57,40 @@ function routingMatrix(nodes: ScenarioNode[], edges: ScenarioEdge[], classId: st
   return P
 }
 
+/**
+ * Two or more non-broadcast hops from a load balancer share the class by weight.
+ * Single hops become equal weights. Broadcast still copies. One backend stays 100%.
+ */
+function splitLoadBalancerHops(nodes: ScenarioNode[], edges: ScenarioEdge[]): ScenarioEdge[] {
+  const lbs = new Set(nodes.filter((node) => node.kind === 'load_balancer').map((node) => node.id))
+  if (lbs.size === 0) return edges
+  const rewrite = new Set<string>()
+  const byFromClass = new Map<string, number>()
+  const broadcast = new Set<string>()
+  for (const edge of edges) {
+    if (!lbs.has(edge.from)) continue
+    for (const [classId, hop] of Object.entries(edge.perClass)) {
+      const key = `${edge.from}\0${classId}`
+      byFromClass.set(key, (byFromClass.get(key) ?? 0) + 1)
+      if (hop.routing === 'broadcast') broadcast.add(key)
+    }
+  }
+  for (const [key, count] of byFromClass) {
+    if (count > 1 && !broadcast.has(key)) rewrite.add(key)
+  }
+  if (rewrite.size === 0) return edges
+  return edges.map((edge) => {
+    let changed = false
+    const perClass = { ...edge.perClass }
+    for (const [classId, hop] of Object.entries(perClass)) {
+      if (!rewrite.has(`${edge.from}\0${classId}`) || hop.routing === 'weighted') continue
+      perClass[classId] = { ...hop, routing: 'weighted', weight: hop.weight > 0 ? hop.weight : 1 }
+      changed = true
+    }
+    return changed ? { ...edge, perClass } : edge
+  })
+}
+
 export function compileScenario(input: Scenario): CompiledModel {
   const warnings: CompileWarning[] = []
   if (input.schemaVersion !== SCHEMA_VERSION) {
@@ -108,9 +142,11 @@ export function compileScenario(input: Scenario): CompiledModel {
     edges.push(next)
   }
 
+  const splitEdges = splitLoadBalancerHops(nodes, edges)
+
   const hasIncoming = new Set<string>()
   const hasOutgoing = new Set<string>()
-  for (const edge of edges) {
+  for (const edge of splitEdges) {
     hasIncoming.add(edge.to)
     hasOutgoing.add(edge.from)
   }
@@ -135,14 +171,14 @@ export function compileScenario(input: Scenario): CompiledModel {
 
   const classIds = [...new Set(input.workload.map((row) => row.classId))]
   for (const classId of classIds) {
-    const P = routingMatrix(nodes, edges, classId)
+    const P = routingMatrix(nodes, splitEdges, classId)
     applyCacheToP(P, nodes, hitRatio)
     const rho = spectralRadius(P)
     if (rho >= 1 - 1e-9) {
       return {
         scenario: input,
         nodes,
-        edges,
+        edges: splitEdges,
         index: new Map(nodes.map((node, i) => [node.id, i])),
         notWired,
         hitRatio,
@@ -156,7 +192,7 @@ export function compileScenario(input: Scenario): CompiledModel {
     return {
       scenario: input,
       nodes,
-      edges,
+      edges: splitEdges,
       index: new Map(),
       notWired,
       hitRatio,
@@ -168,7 +204,7 @@ export function compileScenario(input: Scenario): CompiledModel {
   return {
     scenario: input,
     nodes,
-    edges,
+    edges: splitEdges,
     index: new Map(nodes.map((node, i) => [node.id, i])),
     notWired,
     hitRatio,

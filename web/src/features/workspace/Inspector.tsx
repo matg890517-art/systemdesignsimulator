@@ -21,6 +21,7 @@ import { profileForNode, upsertProfile, useLibrary } from '../calibration/librar
 import { catalogForNode } from '../catalog/catalog.ts'
 import { classesForEdge, REQUEST_CLASSES } from './compile.ts'
 import {
+  applyHopNoteLabel,
   defaultEdgeData,
   hasExplicitClasses,
   readEdgeData,
@@ -385,10 +386,14 @@ function EdgePanel({
   edge,
   onChange,
   onDelete,
+  loadBalancerSource,
+  backendCount = 0,
 }: {
   edge?: RfEdge
   onChange: (edge: RfEdge) => void
   onDelete?: () => void
+  loadBalancerSource?: boolean
+  backendCount?: number
 }) {
   if (!edge) {
     return (
@@ -401,7 +406,10 @@ function EdgePanel({
   const data = dataForEdit(selected)
   function patch(next: WorkspaceEdgeData) {
     const previous = String(selected.label ?? '')
-    const classLabel = relabelClassEdge(previous, next.classes)
+    const classLabel = relabelClassEdge(
+      applyHopNoteLabel(previous, next.note === 'miss'),
+      next.classes,
+    )
     onChange({
       ...selected,
       data: next,
@@ -449,6 +457,24 @@ function EdgePanel({
           Delete connection
         </Button>
       ) : null}
+      <FormControlLabel
+        sx={{ ml: 0, mr: 0, width: '100%', justifyContent: 'space-between' }}
+        labelPlacement="start"
+        control={
+          <Switch
+            size="small"
+            checked={data.note === 'miss'}
+            onChange={(_, checked) => patch({ ...data, note: checked ? 'miss' : undefined })}
+            slotProps={{ input: { 'aria-label': 'Cache miss hop' } }}
+          />
+        }
+        label={<Typography sx={{ fontSize: 12, fontWeight: 600 }}>Cache miss hop</Typography>}
+      />
+      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+        Label only: this hop is origin fill after a cache/CDN miss. The miss fraction is 1 − hit
+        rate on that card (Config). Same on a blank canvas as on Generic / AWS / Azure / GCP /
+        YouTube.
+      </Typography>
       {data.crossProvider ? (
         <Typography sx={{ fontSize: 11, color: 'warning.dark' }}>
           Leaves a provider. Latency and capacity stay Estimated until measured (F29).
@@ -476,6 +502,13 @@ function EdgePanel({
         <MenuItem value="weighted">Weighted</MenuItem>
         <MenuItem value="broadcast">Broadcast</MenuItem>
       </TextField>
+      {loadBalancerSource ? (
+        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+          {backendCount > 1
+            ? 'This load balancer splits the class across its hops by weight. Equal weights share equally. Broadcast copies instead of splitting.'
+            : 'A second hop from this load balancer splits the class by weight, like backends behind an LB.'}
+        </Typography>
+      ) : null}
       {data.routing.mode === 'weighted' ? (
         <TextField
           size="small"
@@ -581,6 +614,8 @@ export function Inspector({
   fieldFocus,
   onFocusBottleneck,
   onNotice,
+  loadBalancerSource,
+  lbBackendCount = 0,
 }: {
   bottlenecks: Bottleneck[]
   selected?: CanvasSelection
@@ -603,6 +638,8 @@ export function Inspector({
   fieldFocus?: FieldFocusRequest
   onFocusBottleneck?: (id: string) => void
   onNotice?: (message: string, severity: NoticeSeverity) => void
+  loadBalancerSource?: boolean
+  lbBackendCount?: number
 }) {
   const [runTab, setRunTab] = useState<InspectorRunTab>('focus')
   const hasSelectedEdge = Boolean(selectedEdge)
@@ -667,7 +704,13 @@ export function Inspector({
           />
         ))}
       {pane === 'edge' && (
-        <EdgePanel edge={selectedEdge} onChange={onEdgeChange} onDelete={selectedEdge ? onDeleteEdge : undefined} />
+        <EdgePanel
+          edge={selectedEdge}
+          onChange={onEdgeChange}
+          onDelete={selectedEdge ? onDeleteEdge : undefined}
+          loadBalancerSource={loadBalancerSource}
+          backendCount={lbBackendCount}
+        />
       )}
       {pane === 'bottlenecks' && (
         <>

@@ -97,11 +97,13 @@ export function scenarioFromLegacy(topology: Topology, workload: Workload): Scen
   for (const [clientId, rates] of Object.entries(workload.offered)) {
     for (const [classId, rate] of Object.entries(rates)) {
       classIds.add(classId)
+      const ramp = workload.shape?.kind === 'ramp'
       workloadRows.push({
         clientId,
         classId,
-        profile: 'constant' as const,
+        profile: ramp ? 'ramp' : 'constant',
         rate_rps: rate,
+        ramp_s: ramp ? workload.shape.durationSec : undefined,
       })
     }
   }
@@ -117,7 +119,7 @@ export function scenarioFromLegacy(topology: Topology, workload: Workload): Scen
   return {
     schemaVersion: SCHEMA_VERSION,
     seed: workload.seed,
-    run: defaultRun(workload.seed, workload.durationSec),
+    run: { ...defaultRun(workload.seed, workload.durationSec), dt_s: workload.dtSec },
     classes: [...classIds].map((id) => ({ id, name: names[id] ?? id })),
     nodes: topology.components.map(toNode),
     edges: topology.edges.map(toEdge),

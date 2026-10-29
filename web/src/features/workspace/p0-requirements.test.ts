@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PALETTE_PROVIDERS } from '../catalog/catalog.ts'
 import { compileCanvas } from './compile.ts'
 import {
+  applyHopNoteLabel,
   classSummaryLabel,
   defaultEdgeData,
   hopLabelWithRate,
@@ -91,6 +92,17 @@ describe('remaining P0 requirements', () => {
     )
     expect(hopLabelWithRate('R/W', 50_000)).toBe('R/W · 50,000 /s')
     expect(hopLabelWithRate('miss · R/W', 20)).toBe('miss · R/W · 20.0 /s')
+    expect(applyHopNoteLabel('R/W', true)).toBe('miss · R/W')
+    expect(applyHopNoteLabel('miss · R/W', true)).toBe('miss · R/W')
+    expect(applyHopNoteLabel('miss · R/W', false)).toBe('R/W')
+    expect(
+      hopTypeLabel({
+        id: 'origin',
+        source: 'cdn',
+        target: 'lb',
+        data: { ...defaultEdgeData(), note: 'miss', classes: defaultEdgeData().classes },
+      }),
+    ).toBe('miss · R/W')
     expect(hopLabelWithRate('B · cross · Estimated', 2)).toBe('B · 2.0 /s · cross · Estimated')
   })
 

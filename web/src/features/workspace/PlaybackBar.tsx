@@ -1,61 +1,95 @@
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import { Box, IconButton, Slider, Stack, Typography } from '@mui/material'
+import { Box, IconButton, Slider, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material'
+import type { ShowMode } from './display-mode.ts'
 
+export const PLAYBACK_SPEEDS = [0.5, 1, 2] as const
+export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
+
+/** Simulated-only scrubber. Analytic has no time series. KPI strip stays the post-warm-up summary. */
 export function PlaybackBar({
   t,
   durationSec,
   playing,
+  speed,
+  showMode,
+  onToggle,
   onScrub,
-  onTogglePlay,
+  onSpeed,
 }: {
   t: number
   durationSec: number
   playing: boolean
-  onScrub: (next: number) => void
-  onTogglePlay: () => void
+  speed: PlaybackSpeed
+  showMode: ShowMode
+  onToggle: () => void
+  onScrub: (t: number) => void
+  onSpeed: (speed: PlaybackSpeed) => void
 }) {
-  const max = Math.max(0.1, durationSec)
-  const now = Math.min(max, Math.max(0, t))
+  const max = Math.max(durationSec, 1e-9)
+  const value = Math.min(Math.max(0, t), max)
   return (
-    <Stack
-      direction="row"
-      spacing={1}
+    <Box
       sx={{
-        alignItems: 'center',
         pointerEvents: 'auto',
+        width: '100%',
         bgcolor: 'rgba(255, 255, 255, 0.94)',
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 2,
-        px: 1,
-        py: 0.25,
         boxShadow: 1,
-        minWidth: 280,
-        maxWidth: 420,
+        px: 1,
+        py: 0.5,
       }}
     >
-      <IconButton
-        size="small"
-        onClick={onTogglePlay}
-        aria-label={playing ? 'Pause playback' : 'Play playback'}
-      >
-        {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayArrowIcon sx={{ fontSize: 18 }} />}
-      </IconButton>
-      <Box sx={{ flex: 1, minWidth: 120, px: 0.5 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
+        <IconButton size="small" onClick={onToggle} aria-label={playing ? 'Pause replay' : 'Play replay'}>
+          {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+        </IconButton>
+        <Typography sx={{ fontSize: 11, minWidth: 84, color: 'text.secondary', flexShrink: 0 }}>
+          {value.toFixed(1)}s / {max.toFixed(0)}s
+        </Typography>
         <Slider
           size="small"
           min={0}
           max={max}
-          step={0.1}
-          value={now}
-          onChange={(_, value) => onScrub(Array.isArray(value) ? value[0]! : value)}
+          step={Math.max(0.01, max / 200)}
+          value={value}
+          onChange={(_, next) => onScrub(Array.isArray(next) ? next[0]! : next)}
           aria-label="Simulated time"
+          sx={{ flex: 1, minWidth: 80, py: 0.5 }}
         />
-      </Box>
-      <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, minWidth: 88 }}>
-        t {now.toFixed(1)}s / {max.toFixed(0)}s
-      </Typography>
-    </Stack>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={speed}
+          onChange={(_, next: PlaybackSpeed | null) => {
+            if (next) onSpeed(next)
+          }}
+          aria-label="Replay speed"
+          sx={{
+            flexShrink: 0,
+            '& .MuiToggleButton-root': { px: 0.75, py: 0.25, fontSize: 10, minWidth: 36, minHeight: 24 },
+          }}
+        >
+          {PLAYBACK_SPEEDS.map((item) => (
+            <ToggleButton key={item} value={item} aria-label={`${item} times speed`}>
+              {item}×
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <Tooltip
+          title={
+            showMode === 'instant'
+              ? 'Instantaneous: ρ is % of limit in this sample. Hop /s is arrivals in the sample. Queue depth is live.'
+              : 'Average: ρ and hop /s from t=0 to this time. Queue depth is live. KPI stays post-warm-up.'
+          }
+        >
+          <Typography sx={{ fontSize: 11, color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {showMode === 'instant' ? 'Instant' : 'Average'}
+          </Typography>
+        </Tooltip>
+      </Stack>
+    </Box>
   )
 }

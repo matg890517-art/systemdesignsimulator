@@ -9,6 +9,13 @@ describe('load shapes', () => {
     expect(shapeFactor({ kind: 'poisson' }, 10)).toBe(1)
   })
 
+  it('ramps from 0 to 1 over durationSec', () => {
+    expect(shapeFactor({ kind: 'ramp', durationSec: 10 }, 0)).toBe(0)
+    expect(shapeFactor({ kind: 'ramp', durationSec: 10 }, 5)).toBeCloseTo(0.5, 9)
+    expect(shapeFactor({ kind: 'ramp', durationSec: 10 }, 10)).toBe(1)
+    expect(shapeFactor({ kind: 'ramp', durationSec: 10 }, 12)).toBe(1)
+  })
+
   it('steps the offered rate after atSec', () => {
     const workload = {
       ...workloadAt(100),

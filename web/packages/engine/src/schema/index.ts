@@ -31,6 +31,7 @@ export type {
   EngineMode,
   EngineResult,
   NodeResult,
+  SimTick,
   NodeStatus,
   SystemStability,
 } from './result.ts'

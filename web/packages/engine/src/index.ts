@@ -70,7 +70,7 @@ export {
   SCHEMA_VERSION,
   DEFAULT_EVENT_BUDGET,
 } from './schema/index.ts'
-export type { Scenario, EngineResult, EngineMode, Evidence } from './schema/index.ts'
+export type { Scenario, EngineResult, EngineMode, Evidence, SimTick } from './schema/index.ts'
 export { baselineRps, expectedArrivals, offeredAt, peakFactor, shapeFactor } from './workload.ts'
 export {
   aksInputsFromProfiles,

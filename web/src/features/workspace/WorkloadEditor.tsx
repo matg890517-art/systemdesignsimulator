@@ -29,6 +29,11 @@ import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 
 const SHAPES = [
   { id: 'constant', label: 'Constant', body: 'Phase 1. Offered rate stays at the baseline. Analytic reads this as λ.' },
+  {
+    id: 'ramp',
+    label: 'Ramp',
+    body: 'Simulated only. Offered load starts at 0 and rises to the target, then holds. Analytic still solves the target rate.',
+  },
   { id: 'poisson', label: 'Poisson', body: 'Engine slice E2. Same mean as constant. Simulated draws exponential gaps.' },
   { id: 'step', label: 'Step', body: 'Engine slice E2. Baseline, then multiply from a given second.' },
   { id: 'spike', label: 'Spike', body: 'Engine slice E2. Baseline, a short burst, then back to baseline.' },
@@ -109,8 +114,8 @@ export function WorkloadEditor({
       <Typography sx={{ mt: 1, color: 'text.secondary' }}>
         One rate block per Clients card on the canvas. Every card has Read, Write, Async and Bulk,
         same as the Class chips. A class with no outgoing hop stays 0 until you turn it on. Phase 1
-        Analytic uses the constant profile (this is λ). Poisson, step and spike wait for discrete
-        verifier and bursts. Unknown capacity does not cap the engine.
+        Analytic uses the target rate (this is λ). Ramp plays in Simulated. Poisson, step and spike
+        wait for discrete verifier and bursts. Unknown capacity does not cap the engine.
       </Typography>
 
       {generators.length === 0 ? (
@@ -185,6 +190,26 @@ export function WorkloadEditor({
           />
         ))}
       </RadioGroup>
+
+      {draft.shapeKind === 'ramp' ? (
+        <Stack spacing={0.75} sx={{ mt: 1 }}>
+          <TextField
+            size="small"
+            type="number"
+            label="Ramp (s)"
+            value={draft.rampSec}
+            onChange={(event) => {
+              const next = Number(event.target.value)
+              if (!Number.isFinite(next) || next <= 0) return
+              patchWorkloadDraft({ rampSec: next })
+            }}
+            sx={{ width: 140 }}
+          />
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            Analytic uses the target rate. Ramp plays in Simulated.
+          </Typography>
+        </Stack>
+      ) : null}
 
       {draft.shapeKind === 'step' ? (
         <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>

@@ -4,9 +4,10 @@ import { md1WaitMs, mm1kBlocking, erlangCWaitMs } from './analytic/queue.ts'
 import { zipfHitRatio } from './analytic/zipf.ts'
 import { solveAnalytic, runAnalyticScenario } from './analytic/solve.ts'
 import { simulateOnce, simulateWithSlices } from './des/simulate.ts'
+import { tickEveryUs } from './des/ticks.ts'
 import { createStreamRng } from './des/rng.ts'
 import { SCHEMA_VERSION, defaultRun, defaultTargets } from './schema/index.ts'
-import type { Scenario, ScenarioNode } from './schema/scenario.ts'
+import type { ClassHop, Scenario, ScenarioNode } from './schema/scenario.ts'
 import { hockeyStickRow, runAnalytic } from './analytic.ts'
 import { hockeyStickTopology, workloadAt } from './fixtures.ts'
 
@@ -222,5 +223,111 @@ describe('E1.8 cancel and slices', () => {
     })
     expect(result.warnings).toContain('cancelled')
     expect(result.mode).toBe('simulated')
+  })
+})
+
+const hop = (
+  routing: ClassHop['routing'] = 'single',
+  weight = 1,
+): ClassHop => ({
+  routing,
+  weight,
+  calls: 1,
+  kind: 'sync',
+  parallel: false,
+  latency: { dist: 'det', mean_ms: 0, evidence: 'estimated' },
+})
+
+function lbSplitScenario(
+  left: ClassHop,
+  right: ClassHop,
+): Scenario {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    seed: 4821,
+    run: defaultRun(4821, 2),
+    classes: [{ id: 'read', name: 'Read' }],
+    nodes: [
+      client('clients'),
+      {
+        id: 'lb',
+        kind: 'load_balancer',
+        servers: { instances: 4, concurrencyPerInstance: 1 },
+        service: { dist: 'exp', mean_ms: 1, scv: 1, evidence: 'estimated' },
+        limits: [],
+        buffer: { K: null },
+        evidence: 'estimated',
+      },
+      pool('a', 8, 5),
+      pool('b', 8, 5),
+    ],
+    edges: [
+      { id: 'c-lb', from: 'clients', to: 'lb', perClass: { read: hop() } },
+      { id: 'lb-a', from: 'lb', to: 'a', perClass: { read: left } },
+      { id: 'lb-b', from: 'lb', to: 'b', perClass: { read: right } },
+    ],
+    workload: [{ clientId: 'clients', classId: 'read', profile: 'constant', rate_rps: 100 }],
+    targets: defaultTargets(),
+  }
+}
+
+describe('load balancer split', () => {
+  it('splits two Single backends equally', () => {
+    const result = solveAnalytic(compileScenario(lbSplitScenario(hop(), hop())))
+    expect(result.nodes.a?.lambda).toBeCloseTo(50, 6)
+    expect(result.nodes.b?.lambda).toBeCloseTo(50, 6)
+    expect(result.edges['lb-a']?.flow_rps.read).toBeCloseTo(50, 6)
+    expect(result.edges['lb-b']?.flow_rps.read).toBeCloseTo(50, 6)
+  })
+
+  it('keeps explicit 1:3 weights', () => {
+    const result = solveAnalytic(
+      compileScenario(lbSplitScenario(hop('weighted', 1), hop('weighted', 3))),
+    )
+    expect(result.nodes.a?.lambda).toBeCloseTo(25, 6)
+    expect(result.nodes.b?.lambda).toBeCloseTo(75, 6)
+  })
+
+  it('copies when both hops are broadcast', () => {
+    const result = solveAnalytic(
+      compileScenario(lbSplitScenario(hop('broadcast'), hop('broadcast'))),
+    )
+    expect(result.nodes.a?.lambda).toBeCloseTo(100, 6)
+    expect(result.nodes.b?.lambda).toBeCloseTo(100, 6)
+  })
+})
+
+describe('Simulated time series', () => {
+  it('emits decimated ticks including t=0 while N7 numbers stay post-warm-up', () => {
+    const result = simulateOnce(compileScenario(mmcScenario(40, 1, 20)))
+    expect(result.ticks?.length).toBeGreaterThan(1)
+    expect(result.ticks?.[0]?.t_s).toBeCloseTo(0, 6)
+    expect(result.ticks?.[0]?.nodes.pool?.lambda).toBe(0)
+    expect(result.ticks?.at(-1)?.nodes.pool?.lambda).toBeGreaterThan(0)
+    expect(Math.abs((result.ticks?.at(-1)?.nodes.pool?.lambda ?? 0) - 40) / 40).toBeLessThan(0.2)
+    expect(Math.abs((result.ticks?.at(-1)?.nodes.pool?.rho ?? 0) - 0.8) / 0.8).toBeLessThan(0.25)
+    expect(result.ticks?.at(-1)?.nodes.pool?.lambda_now ?? 0).toBeGreaterThan(0)
+    expect(Math.abs((result.nodes.pool?.lambda ?? 0) - 40) / 40).toBeLessThan(0.08)
+  })
+
+  it('samples Instantaneous on dt and caps a 60 s run near 10 dt', () => {
+    expect(tickEveryUs(2_000_000, 100_000)).toBe(100_000)
+    expect(tickEveryUs(60_000_000, 100_000)).toBe(1_250_000)
+    expect(tickEveryUs(60_000_000)).toBe(1_250_000)
+  })
+
+  it('ramps offered load from 0 to the target in Simulated only', () => {
+    const scenario = mmcScenario(80, 4, 10)
+    scenario.workload = [
+      { clientId: 'clients', classId: 'read', profile: 'ramp', rate_rps: 80, ramp_s: 1 },
+    ]
+    const simulated = simulateOnce(compileScenario(scenario))
+    const firstLive = simulated.ticks?.find((tick) => tick.t_s > 0 && tick.t_s < 0.25)
+    const late = simulated.ticks?.find((tick) => tick.t_s >= 1.2)
+    expect(firstLive?.nodes.clients?.lambda ?? 0).toBeLessThan(40)
+    expect(late?.nodes.clients?.lambda ?? 0).toBeGreaterThan(40)
+    const analytic = solveAnalytic(compileScenario(scenario))
+    expect(analytic.nodes.pool?.lambda).toBeCloseTo(80, 6)
+    expect(analytic.ticks).toBeUndefined()
   })
 })

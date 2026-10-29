@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { connectComponents, deleteSelection, patchServiceTitle } from './canvas-edit.ts'
+import { readEdgeData } from './edge-data.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 
 describe('canvas edit', () => {
@@ -32,6 +33,9 @@ describe('canvas edit', () => {
     expect(added?.sourceHandle).toBeTruthy()
     expect(added?.targetHandle).toBeTruthy()
     expect(String(added?.label)).toMatch(/cross · Estimated/)
+    expect(readEdgeData(added!).routing).toEqual({ mode: 'weighted', weight: 1 })
+    const ecsHop = same.edges.find((edge) => edge.id === 'alb-ecs')
+    expect(ecsHop && readEdgeData(ecsHop).routing).toEqual({ mode: 'weighted', weight: 1 })
     expect(connectComponents(initialNodes, initialEdges, 'alb', 'ecs')).toMatchObject({
       error: 'Already connected. One hop per pair; extra classes go on that edge.',
     })

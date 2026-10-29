@@ -16,7 +16,8 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  SmoothStepEdge,
+  BaseEdge,
+  getSmoothStepPath,
   useReactFlow,
   type Connection,
   type Edge,
@@ -32,7 +33,7 @@ import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-f
 import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges, type WorkspaceEdgeData } from './edge-data.ts'
-import { flowPeriodSec } from './playback.ts'
+import { flowPacketCount, flowPeriodSec } from './playback.ts'
 import { connectComponents } from './canvas-edit.ts'
 import {
   absolutePosition,
@@ -53,6 +54,11 @@ const nodeTypes = {
   zone: ZoneNodeView,
 }
 
+function packetFill(stroke: string): string {
+  if (stroke === '#7B8794' || stroke === '#D5DBE3') return '#2744C7'
+  return stroke
+}
+
 function ClassAwareEdge(props: EdgeProps) {
   const { filter } = useClassFilter()
   const visible =
@@ -64,23 +70,58 @@ function ClassAwareEdge(props: EdgeProps) {
     })
   const flowRps = (props.data as WorkspaceEdgeData | undefined)?.flowRps ?? 0
   const flowing = visible && flowRps > 0
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX: props.sourceX,
+    sourceY: props.sourceY,
+    targetX: props.targetX,
+    targetY: props.targetY,
+    sourcePosition: props.sourcePosition,
+    targetPosition: props.targetPosition,
+  })
+  const stroke = visible
+    ? typeof props.style?.stroke === 'string'
+      ? props.style.stroke
+      : '#7B8794'
+    : '#D5DBE3'
+  const period = flowPeriodSec(flowRps)
+  const packets = flowing ? flowPacketCount(flowRps) : 0
+  const fill = packetFill(stroke)
   return (
-    <SmoothStepEdge
-      {...props}
-      interactionWidth={32}
-      animated={flowing}
-      style={{
-        ...props.style,
-        stroke: visible
-          ? typeof props.style?.stroke === 'string'
-            ? props.style.stroke
-            : '#7B8794'
-          : '#D5DBE3',
-        opacity: visible ? 1 : 0.14,
-        ['--sds-flow' as string]: `${flowPeriodSec(flowRps)}s`,
-      }}
-      label={visible ? props.label : undefined}
-    />
+    <>
+      <BaseEdge
+        path={path}
+        labelX={labelX}
+        labelY={labelY}
+        label={visible ? props.label : undefined}
+        labelStyle={props.labelStyle}
+        labelShowBg={props.labelShowBg}
+        labelBgStyle={props.labelBgStyle}
+        labelBgPadding={props.labelBgPadding}
+        labelBgBorderRadius={props.labelBgBorderRadius}
+        markerEnd={props.markerEnd}
+        markerStart={props.markerStart}
+        interactionWidth={32}
+        style={{ ...props.style, stroke, opacity: visible ? 1 : 0.14 }}
+      />
+      {packets > 0 ? (
+        <g
+          className="sds-flow-packets"
+          pointerEvents="none"
+          key={`${props.id}-${Math.round(props.sourceX)}-${Math.round(props.targetX)}-${packets}`}
+        >
+          {Array.from({ length: packets }, (_, i) => (
+            <circle key={i} r={4} fill={fill} stroke="#FFFFFF" strokeWidth={1.25}>
+              <animateMotion
+                dur={`${period}s`}
+                repeatCount="indefinite"
+                begin={`${-(i / packets) * period}s`}
+                path={path}
+              />
+            </circle>
+          ))}
+        </g>
+      ) : null}
+    </>
   )
 }
 
@@ -104,6 +145,7 @@ function CanvasInner({
   onConnectFrom,
   onConnectError,
   focusRequest,
+  fitNonce,
   onLoadReference,
 }: {
   nodes: WorkspaceNode[]
@@ -121,9 +163,10 @@ function CanvasInner({
   onConnectFrom: (id?: string) => void
   onConnectError: (message?: string) => void
   focusRequest?: CanvasFocusRequest
+  fitNonce?: number
   onLoadReference?: () => void
 }) {
-  const { screenToFlowPosition, getInternalNode, setCenter, getZoom } = useReactFlow()
+  const { screenToFlowPosition, getInternalNode, setCenter, getZoom, fitView } = useReactFlow()
   const selectionKey = useRef('')
   const displayEdges = useMemo(() => decorateEdges(nodes, edges), [nodes, edges])
   const serviceCount = useMemo(() => nodes.filter((node) => node.type === 'service').length, [nodes])
@@ -141,6 +184,14 @@ function CanvasInner({
       duration: 300,
     })
   }, [focusRequest, getInternalNode, getZoom, setCenter])
+
+  useEffect(() => {
+    if (!fitNonce) return
+    const handle = window.setTimeout(() => {
+      void fitView({ padding: 0.12, duration: 200 })
+    }, 50)
+    return () => window.clearTimeout(handle)
+  }, [fitNonce, fitView])
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: WorkspaceNode[]; edges: Edge[] }) => {
@@ -286,13 +337,7 @@ function CanvasInner({
         bgcolor: 'background.paper',
         borderRadius: 3,
         overflow: 'hidden',
-        '@keyframes sdsDash': {
-          to: { strokeDashoffset: -28 },
-        },
-        '& .react-flow__edge.animated path': {
-          strokeDasharray: '10 8',
-          animation: 'sdsDash var(--sds-flow, 0.7s) linear infinite',
-        },
+        '& .sds-flow-packets': { pointerEvents: 'none' },
         '& .react-flow__handle': {
           width: 10,
           height: 10,
@@ -344,7 +389,7 @@ function CanvasInner({
         onInit={(instance) => {
           void instance.fitView({ padding: 0.08 })
         }}
-        minZoom={0.4}
+        minZoom={0.2}
         snapToGrid
         snapGrid={[16, 16]}
         deleteKeyCode={null}
@@ -441,6 +486,7 @@ export function ArchitectureCanvas(props: {
   onConnectFrom: (id?: string) => void
   onConnectError: (message?: string) => void
   focusRequest?: CanvasFocusRequest
+  fitNonce?: number
   onLoadReference?: () => void
 }) {
   const filterValue = useMemo(
@@ -466,6 +512,7 @@ export function ArchitectureCanvas(props: {
           onConnectFrom={props.onConnectFrom}
           onConnectError={props.onConnectError}
           focusRequest={props.focusRequest}
+          fitNonce={props.fitNonce}
           onLoadReference={props.onLoadReference}
         />
       </ClassFilterProvider>

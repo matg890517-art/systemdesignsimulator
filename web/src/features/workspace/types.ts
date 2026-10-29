@@ -118,13 +118,18 @@ export type NodeRunStat = {
   serviceMs?: number
 }
 
-/** One sampled engine tick. Playback and edge motion read this; they do not re-run the math. */
-export type RunTick = {
-  t: number
+export type TickRates = {
   nodeStats: Record<string, NodeRunStat>
   classStats: Record<string, Record<string, NodeRunStat>>
   edgeOffered: Record<string, number>
   edgeClassOffered: Record<string, Record<string, number>>
+}
+
+/** One sampled engine tick. Playback and edge motion read this; they do not re-run the math. */
+export type RunTick = TickRates & {
+  t: number
+  /** Instantaneous window (this sample). Average fields on the tick are 0→t. */
+  instant?: TickRates
 }
 
 export type HockeyStickSeries = {

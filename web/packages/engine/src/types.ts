@@ -144,6 +144,7 @@ export type DiscreteFault =
 export type LoadShape =
   | { kind: 'constant' }
   | { kind: 'poisson' }
+  | { kind: 'ramp'; durationSec: number }
   | { kind: 'step'; atSec: number; factor: number }
   | { kind: 'spike'; atSec: number; durationSec: number; factor: number }
 

@@ -8,11 +8,13 @@ import {
   DISCRETE_EVENT_GUARD,
   edgeCarriesClass,
   kindForNode,
+  loadShapeFromDraft,
   nodeCarriesClass,
   visibleClassRate,
   withGeneratorClassRate,
   WORKLOAD_RUN_CLOCK,
 } from './compile.ts'
+import { connectComponents } from './canvas-edit.ts'
 import { initialEdges, initialNodes } from './graph.ts'
 import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
 import { readEdgeData, setEdgeClassActive } from './edge-data.ts'
@@ -24,6 +26,15 @@ import {
 import { runWorkspace } from './simulate.ts'
 import type { ServiceNodeData } from './types.ts'
 import type { Node } from '@xyflow/react'
+
+describe('loadShapeFromDraft', () => {
+  it('maps Simulated Ramp and keeps Constant as the Analytic default', () => {
+    expect(loadShapeFromDraft(defaultWorkloadDraft())).toEqual({ kind: 'constant' })
+    expect(
+      loadShapeFromDraft({ ...defaultWorkloadDraft(), shapeKind: 'ramp', rampSec: 12 }),
+    ).toEqual({ kind: 'ramp', durationSec: 12 })
+  })
+})
 
 describe('compileCanvas', () => {
   it('maps the example graph, including AKS calibration and unknown copy-link bandwidth', () => {
@@ -60,6 +71,22 @@ describe('compileCanvas', () => {
       title: 'Uploaders',
     })
     expect(expectedArrivals(workload)).toBeGreaterThan(DISCRETE_EVENT_GUARD)
+  })
+
+  it('splits two Application LB backends by equal weight', () => {
+    const next = connectComponents(initialNodes, initialEdges, 'alb', 'blob')
+    if ('error' in next) throw new Error(next.error)
+    const { topology } = compileCanvas(
+      initialNodes,
+      next.edges,
+      { ...defaultWorkloadDraft(), classes: { read: 100, write: 0, async: 0, bulk: 0 } },
+      getProfiles(),
+      'none',
+    )
+    const ecs = topology.edges.find((edge) => edge.id === 'alb-ecs')
+    const blob = topology.edges.find((edge) => edge.from === 'alb' && edge.to === 'blob')
+    expect(ecs?.routing).toEqual({ mode: 'weighted', weight: 1 })
+    expect(blob?.routing).toEqual({ mode: 'weighted', weight: 1 })
   })
 
   it('lists one workload generator per Clients card', () => {
@@ -246,6 +273,41 @@ describe('compileCanvas', () => {
     if (!simulated.ok) return
     expect(simulated.run.nodeStats.clients.loss).toBe(0)
     expect(simulated.run.mode).toBe('simulated')
+    expect(analytic.run.ticks).toHaveLength(1)
+    expect(simulated.run.ticks.length).toBeGreaterThan(1)
+    expect(simulated.run.ticks[0]?.t).toBeCloseTo(0, 6)
+    expect(simulated.run.ticks.at(-1)?.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan(150)
+  })
+
+  it('ramps Simulated hop rates from ~0 while Analytic still solves the target', () => {
+    const graph = referenceStackGraph('generic')
+    const draft = {
+      ...referenceWorkloadDraft(),
+      shapeKind: 'ramp' as const,
+      rampSec: 1,
+      durationSec: 2,
+    }
+    const analytic = runWorkspace(graph.nodes, graph.edges, { ...draft, mode: 'analytic' }, referenceStackProfiles, 'none')
+    expect(analytic.ok).toBe(true)
+    if (!analytic.ok) return
+    expect(analytic.run.ticks).toHaveLength(1)
+    expect(analytic.run.nodeStats.cdn.offered).toBeCloseTo(240, 0)
+    expect(analytic.run.hockeyStick?.rps.length).toBeGreaterThan(0)
+
+    const simulated = runWorkspace(
+      graph.nodes,
+      graph.edges,
+      { ...draft, mode: 'simulated' },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(simulated.ok).toBe(true)
+    if (!simulated.ok) return
+    const first = simulated.run.ticks.find((tick) => tick.t > 0 && tick.t < 0.25)
+    const late = simulated.run.ticks.find((tick) => tick.t >= 1.2)
+    expect(first?.edgeOffered['c-cdn'] ?? 0).toBeLessThan(80)
+    expect(late?.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan(80)
+    expect(simulated.run.nodeStats.cdn.offered).toBeGreaterThan(80)
   })
 
   it('trips the upload breaker and lists the AKS blast radius after a crash', () => {

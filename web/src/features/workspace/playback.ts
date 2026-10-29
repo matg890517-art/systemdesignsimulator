@@ -1,4 +1,10 @@
-import type { RunTick, WorkspaceRun } from './types.ts'
+import { normalizeShowMode, type ShowMode } from './display-mode.ts'
+import { isSimulatedMode } from './run-mode.ts'
+import type { RunTick, TickRates, WorkspaceRun } from './types.ts'
+
+export function canPlayback(run: WorkspaceRun | undefined): boolean {
+  return Boolean(run && isSimulatedMode(run.mode) && run.ticks.length > 1)
+}
 
 /** Sample this many fluid steps (plus first and last) so playback has a curve, not every Δt. */
 export const TICK_BUDGET = 48
@@ -17,10 +23,16 @@ export function playbackWallMs(durationSec: number): number {
   return Math.round(Math.min(12_000, Math.max(4_000, durationSec * 160)))
 }
 
-/** Dash cycle: busier hops move faster. View of offered rate, not a second engine. */
+/** One trip along the hop. Busier hops move faster. View of offered rate, not a second engine. */
 export function flowPeriodSec(rps: number): number {
-  if (rps <= 0) return 1.4
-  return Math.max(0.18, Math.min(1.2, 1.05 - Math.log10(1 + rps) / 5))
+  if (rps <= 0) return 2.4
+  return Math.max(0.7, Math.min(2.4, 2.15 - Math.log10(1 + rps) / 2.4))
+}
+
+/** Traveling dots on a hop. A view of rate, not one circle per request. */
+export function flowPacketCount(rps: number): number {
+  if (rps <= 0) return 0
+  return Math.min(5, Math.max(2, Math.round(1.5 + Math.log10(1 + rps))))
 }
 
 export function pickTick(ticks: RunTick[] | undefined, t: number): RunTick | undefined {
@@ -33,15 +45,26 @@ export function pickTick(ticks: RunTick[] | undefined, t: number): RunTick | und
   return chosen
 }
 
-/** Cards and hop labels at simulated time t. Last-tick fields stay on the run for summaries. */
-export function viewRunAt(run: WorkspaceRun, t: number): WorkspaceRun {
-  const tick = pickTick(run.ticks, t)
-  if (!tick) return run
+function ratesOf(tick: RunTick, show: ShowMode): TickRates {
+  if (show === 'instant' && tick.instant) return tick.instant
   return {
-    ...run,
     nodeStats: tick.nodeStats,
     classStats: tick.classStats,
     edgeOffered: tick.edgeOffered,
     edgeClassOffered: tick.edgeClassOffered,
+  }
+}
+
+/** Instantaneous = this sample. Average = t=0 to playhead. Queue depth is always the live snapshot. */
+export function viewRunAt(run: WorkspaceRun, t: number, showMode: ShowMode = 'average'): WorkspaceRun {
+  const tick = pickTick(run.ticks, t)
+  if (!tick) return run
+  const rates = ratesOf(tick, normalizeShowMode(showMode))
+  return {
+    ...run,
+    nodeStats: rates.nodeStats,
+    classStats: rates.classStats,
+    edgeOffered: rates.edgeOffered,
+    edgeClassOffered: rates.edgeClassOffered,
   }
 }

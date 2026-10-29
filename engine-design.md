@@ -11,7 +11,7 @@ Scope of this document: the engine only (model, solvers, simulator, outputs, tes
 | D20 | Engine is plain TypeScript in a Web Worker, independent of React. Rust/WASM only if a benchmark shows TypeScript cannot meet the targets in section 9. | Discrete-event cap of 20,000 arrivals (Decision 8). Replaced by an event budget. |
 | D21 | Own PRNG (xoshiro128**) with one stream per (stable node id, purpose). No library randomness, no `Math.random`. | none |
 | D22 | A result's evidence label is the weakest label among its inputs (Estimated < Vendor figure < Measured). Only calibrated, imported load-test data can produce Measured. | none |
-| D23 | First delivery is **steady state only**: constant load, no faults. Bursts, faults and Monte Carlo come later (section 10). | none |
+| D23 | Analytic E1 is **steady state only**: constant load, no faults. Simulated may show the empty-system transient and a Ramp (0→target); N7 still compares the post-warm-up window. Step, spike, faults and Monte Carlo come later (section 10). | none |
 
 ## 2. Goals and non-goals
 
@@ -49,7 +49,8 @@ Scenario {
   classes: [{ id, name }],                 // Read, Write, Async, Bulk + custom
   nodes:   [Node],
   edges:   [Edge],
-  workload:[{ clientId, classId, profile: 'constant', rate_rps }]   // E1: constant only
+  workload:[{ clientId, classId, profile: 'constant'|'ramp', rate_rps, ramp_s? }]
+      // Analytic always uses rate_rps. Simulated Ramp: λ(t)=rate_rps*min(1, t/ramp_s)
   targets: { sloP99_ms?, utilizationCeiling }                       // default ceiling 0.70
 }
 
@@ -113,7 +114,7 @@ For each class: lambda = gamma + P^T lambda, where `P[j][i]` = routing probabili
 | Kind | Model |
 |---|---|
 | Server pool / service | M/G/c as above |
-| Load balancer | Splits by weights; `imbalance` d makes the hottest member see (1 + d) * lambda / n |
+| Load balancer | Two or more non-broadcast hops split by weight (Single backends share equally). `imbalance` d makes the hottest member see (1 + d) * lambda / n |
 | Cache | All requests visit the cache; hit ratio h = H(C, s) / H(N, s) with H(n, s) = sum_{i=1..n} i^(-s) (Zipf, static popularity, ideal policy). Misses continue downstream; writes follow their class edges |
 | Database | M/G/c with c = connection pool (or hard limit); read and write classes may have different service times |
 | Queue / broker | Producer rate versus consumer capacity. Reports steady lag (M/M/c wait of consumers) or backlog growth if rho >= 1 |
@@ -231,7 +232,7 @@ Benchmark (recorded, not claimed)
 | E1.11 | Agreement test + benchmark | Tolerances recorded |
 
 Later phases
-- **E2** Workload dynamics: Poisson, step, spike, ramp profiles (transient results, warm-up per phase).
+- **E2** Workload dynamics: Poisson, step, spike (Ramp pulled forward for Simulated; Analytic still constant).
 - **E3** Faults and control loops: crash, latency injection, link cut, packet drop, partitions, retries with budgets, circuit breakers, autoscale lag, request cancellation.
 - **E4** Monte Carlo ranges (e.g. "p99 under 300 ms in 94 percent of runs"), sensitivity sweeps, 2x/5x/10x scenario runs.
 - Cost: separate decision; prices read from the catalog with a source link and read date.
@@ -239,10 +240,10 @@ Later phases
 ## 11. UI mapping
 
 - Run bar: **Analytic | Simulated** replaces Fluid | Discrete.
-- Workload tab: constant profile only in E1 (rate per class per Clients card, one run clock: duration, warm-up, seed). Poisson/step/spike appear when E2 lands.
+- Workload tab: constant is the Analytic λ. Simulated may Ramp 0→target over ramp seconds (default = warm-up). Poisson/step/spike stay later E2.
 - Fault section: visible but disabled, labeled "Phase E3".
 - Results: per-node card with utilization gauge and p50/p95/p99; hockey-stick chart (latency versus load per component); bottleneck and headroom banner; stability chip; evidence badge.
-- F30 playback and edge motion read the decimated time series (Simulated) or animate steady flow (Analytic). They are visual only and carry no accuracy claim.
+- F30: Analytic hockey-stick is the proof. Simulated playback reads the decimated DES series (including warm-up ticks). Show mode Instantaneous = sample window (~dt, 48-frame cap); Average = 0→playhead. Queue depth is live; traveling dots follow the painted hop rate. Visual only; no accuracy claim. Analytic has no timeline.
 
 ## 12. Known limits and risks
 
@@ -257,9 +258,9 @@ Later phases
 - Decision 18: replace with D19 to D23; mark Decision 18 superseded on Oct 28, 2026.
 - Decision 8 (Discrete cap of 20,000 arrivals) and N6: replace with the event budget.
 - N4: remove "60 FPS canvas"; state that no frame-rate or speed claim is made.
-- F5: constant profile in E1; other profiles move to E2.
+- F5: constant profile for Analytic; Simulated may Ramp 0→target. Other profiles stay later E2.
 - F8: moves to E3; Fault section disabled until then.
-- F30: playback reads the decimated series.
+- F30: Analytic hockey-stick; Simulated playback reads the decimated series.
 - Architecture and stack table: align with the tech stack file (TanStack Start, Store/Charts marked Evaluate, Drizzle Evaluate); remove Zustand and Redis rows unless re-decided.
 - Roadmap: insert E1.1 to E1.11, then E2 to E4.
 - Changelog: Oct 28, 2026 row for the engine redesign.
