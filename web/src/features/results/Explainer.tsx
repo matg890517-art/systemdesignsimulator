@@ -88,7 +88,8 @@ export function Explainer({ bottlenecks }: { bottlenecks: Bottleneck[] }) {
           samples check them. The fluid rate stepper is the overload branch when ρ ≥ 1.
         </Typography>
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          Cost sums typed $/hr on nodes. Catalog has no SKU prices. Unknown if none are typed.
+          Cost sums typed $/hr. Day is ×24, month is ×730 h. Not Simulated duration. Catalog has
+          no SKU prices. Unknown if none are typed.
         </Typography>
       </Stack>
     </Box>

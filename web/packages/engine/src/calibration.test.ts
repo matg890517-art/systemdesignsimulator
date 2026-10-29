@@ -122,11 +122,15 @@ aks-transcode,AKS transcode,aks,Example,servers,Slots,count,servers,set,84,vendo
 
 describe('F11 typed cost', () => {
   it('stays unknown until a node has $/hr, then sums Estimated values', () => {
-    expect(costFromProfiles(parseCalibrationCsv(sample)).value).toBe('unknown')
+    const empty = costFromProfiles(parseCalibrationCsv(sample))
+    expect(empty.value).toBe('unknown')
+    expect(empty.priced).toBe(0)
+    expect(empty.eligible).toBe(0)
     const priced: CalibrationProfile[] = [
       {
         id: 'ecs',
         name: 'ECS',
+        bindsTo: 'ecs',
         notes: 'Hand-typed. Not a catalog SKU.',
         fields: [
           {
@@ -141,6 +145,7 @@ describe('F11 typed cost', () => {
       {
         id: 'aks',
         name: 'AKS',
+        bindsTo: 'aks',
         notes: 'Hand-typed. Not a catalog SKU.',
         fields: [
           {
@@ -152,10 +157,33 @@ describe('F11 typed cost', () => {
           },
         ],
       },
+      {
+        id: 'cdn',
+        name: 'CDN',
+        bindsTo: 'cdn',
+        notes: 'Empty stays unknown.',
+        fields: [
+          {
+            id: 'costUsdPerHour',
+            label: 'Hourly cost',
+            unit: 'USD/hr',
+            role: 'costUsdPerHour',
+            value: { state: 'unknown' },
+          },
+        ],
+      },
     ]
     const cost = costFromProfiles(priced)
     expect(cost.usdPerHour).toBe(52.5)
+    expect(cost.usdPerDay).toBe(52.5 * 24)
+    expect(cost.usdPerMonth).toBe(52.5 * 730)
+    expect(cost.priced).toBe(2)
+    expect(cost.eligible).toBe(3)
+    expect(cost.value).toBe('$52.50/hr')
+    expect(cost.hint).toMatch(/2 of 3 nodes/)
+    expect(cost.hint).toMatch(/\$1,260\/d/)
     expect(cost.hint).toMatch(/Estimated/)
     expect(cost.hint).toMatch(/not catalog SKUs/)
+    expect(cost.rows.map((row) => row.bindsTo)).toEqual(['ecs', 'aks'])
   })
 })

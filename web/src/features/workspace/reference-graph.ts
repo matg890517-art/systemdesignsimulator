@@ -91,6 +91,7 @@ function capacity(
       field('serviceMs', 'Service time (mean)', 'ms', 'serviceMs', estimated(serviceMs)),
       field('queue', 'Queue capacity', 'jobs', 'queue', unknown()),
       field('p95Ms', 'Service time P95', 'ms', 'latencyP95Ms', unknown()),
+      field('costUsdPerHour', 'Hourly cost', 'USD/hr', 'costUsdPerHour', unknown()),
       ...extra,
     ],
   }

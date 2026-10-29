@@ -1,6 +1,6 @@
 import { useState, type Ref } from 'react'
 import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
-import type { CalibrationField } from '@sds/engine'
+import { formatUsd, HOURS_PER_DAY, HOURS_PER_MONTH, type CalibrationField } from '@sds/engine'
 import { applyFieldConfidence, applyFieldNumber } from './field-edit.ts'
 
 export function FieldEditor({
@@ -91,8 +91,9 @@ export function FieldEditor({
       ) : null}
       {field.role === 'costUsdPerHour' ? (
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-          Typed $/hr is Estimated. Catalog has no SKU prices. Empty stays unknown and is not
-          summed.
+          {current
+            ? `≈ ${formatUsd(current.value * HOURS_PER_DAY, '/d')} · ${formatUsd(current.value * HOURS_PER_MONTH, '/mo')} (24 h and 730 h, not Simulated time). Catalog has no SKU prices.`
+            : 'Typed $/hr is Estimated. Catalog has no SKU prices. Empty stays unknown and is not summed.'}
         </Typography>
       ) : null}
     </Box>

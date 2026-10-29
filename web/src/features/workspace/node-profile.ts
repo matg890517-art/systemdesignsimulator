@@ -1,6 +1,12 @@
-import type { CalibrationField, CalibrationProfile, CanonicalKind } from '@sds/engine'
+import {
+  costFromProfiles,
+  type CalibrationField,
+  type CalibrationProfile,
+  type CanonicalKind,
+  type CostReport,
+} from '@sds/engine'
 import { kindForNode } from './compile.ts'
-import type { ServiceNodeData } from './types.ts'
+import type { ServiceNodeData, ZoneNodeData } from './types.ts'
 import type { Node } from '@xyflow/react'
 
 function unknownField(
@@ -86,4 +92,19 @@ export function configProfileForNode(
     ...mergeConfigProfile(bound, blankProfileForNode(nodeId, title, catalogId)),
     name: title,
   }
+}
+
+/** Typed $/hr across canvas services. Generators are not eligible. Catalog never fills this. */
+export function costFromCanvas(
+  nodes: Node<ServiceNodeData | ZoneNodeData>[],
+  profiles: CalibrationProfile[],
+): CostReport {
+  const merged = nodes
+    .filter((node) => node.type !== 'zone')
+    .map((node) => {
+      const data = node.data as ServiceNodeData
+      const bound = profiles.find((profile) => profile.bindsTo === node.id)
+      return configProfileForNode(bound, node.id, data.title, data.catalogId)
+    })
+  return costFromProfiles(merged)
 }

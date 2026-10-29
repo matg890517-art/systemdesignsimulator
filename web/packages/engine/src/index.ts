@@ -76,11 +76,16 @@ export {
   aksInputsFromProfiles,
   costFromProfiles,
   fieldByRole,
+  formatUsd,
+  HOURS_PER_DAY,
+  HOURS_PER_MONTH,
+  hourlyByBindsTo,
   mergeProfiles,
   numericIfSet,
   parseCalibrationCsv,
   serializeCalibrationCsv,
 } from './calibration.ts'
+export type { CostReport, NodeCost } from './calibration.ts'
 export { applyCatalogCeilings, usableAsCeiling } from './catalog-value.ts'
 export {
   B_TOLERANCE_RPS,

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Node } from '@xyflow/react'
+import { costFromProfiles, hourlyByBindsTo, type CalibrationProfile } from '@sds/engine'
 import type { RankRow, ServiceNodeData, WorkspaceRun, ZoneNodeData } from './types.ts'
 
 export const RUN_HISTORY_LIMIT = 12
@@ -42,7 +43,9 @@ export function runMenuLabel(record: RunRecord): string {
 export function rankingFromNodes(
   nodes: Node<ServiceNodeData | ZoneNodeData>[],
   run: WorkspaceRun,
+  profiles: CalibrationProfile[] = [],
 ): RankRow[] {
+  const hourly = hourlyByBindsTo(costFromProfiles(profiles))
   const rows: RankRow[] = []
   for (const node of nodes) {
     if (node.type === 'zone') continue
@@ -57,6 +60,7 @@ export function rankingFromNodes(
       p99: stat.p99,
       source: 'engine',
       citation: stat.citation,
+      usdPerHour: hourly[node.id],
     })
   }
   return rows.sort((a, b) => b.util - a.util || a.title.localeCompare(b.title))

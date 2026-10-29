@@ -16,7 +16,7 @@ import {
 } from './compile.ts'
 import { connectComponents } from './canvas-edit.ts'
 import { initialEdges, initialNodes } from './graph.ts'
-import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import { blankProfileForNode, configProfileForNode, costFromCanvas } from './node-profile.ts'
 import { readEdgeData, setEdgeClassActive } from './edge-data.ts'
 import {
   referenceStackGraph,
@@ -387,6 +387,32 @@ describe('F3 config profiles', () => {
     })
     const clients = blankProfileForNode('clients', 'Clients', 'generic-clients')
     expect(clients.fields).toEqual([])
+  })
+
+  it('C0 cost is 0 of 8 until a node has typed $/hr, then rolls day and month', () => {
+    const graph = referenceStackGraph('generic')
+    const empty = costFromCanvas(graph.nodes, referenceStackProfiles)
+    expect(empty.value).toBe('unknown')
+    expect(empty.priced).toBe(0)
+    expect(empty.eligible).toBe(8)
+    const priced = referenceStackProfiles.map((profile) =>
+      profile.bindsTo === 'worker'
+        ? {
+            ...profile,
+            fields: profile.fields.map((field) =>
+              field.role === 'costUsdPerHour'
+                ? { ...field, value: { state: 'set' as const, value: 12.5, confidence: 'estimated' as const } }
+                : field,
+            ),
+          }
+        : profile,
+    )
+    const cost = costFromCanvas(graph.nodes, priced)
+    expect(cost.value).toBe('$12.50/hr')
+    expect(cost.priced).toBe(1)
+    expect(cost.eligible).toBe(8)
+    expect(cost.usdPerDay).toBe(12.5 * 24)
+    expect(cost.hint).toMatch(/1 of 8 nodes/)
   })
 
   it('keeps bound AKS numbers and fills missing CloudFront capacity as unknown', () => {

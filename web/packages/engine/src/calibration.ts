@@ -18,30 +18,95 @@ export function numericIfSet(value: Value<number>): number | undefined {
   return undefined
 }
 
-/** Sum typed $/hr. Empty stays unknown. Catalog never supplies this number. */
-export function costFromProfiles(profiles: CalibrationProfile[]): {
+/** Accounting windows for typed $/hr. Not Simulated duration. */
+export const HOURS_PER_DAY = 24
+export const HOURS_PER_MONTH = 730
+
+export type NodeCost = {
+  profileId: string
+  bindsTo?: string
+  name: string
+  usdPerHour: number
+  confidence: Confidence
+}
+
+export type CostReport = {
   value: string
   hint: string
   usdPerHour?: number
+  usdPerDay?: number
+  usdPerMonth?: number
+  priced: number
+  eligible: number
+  /** @deprecated use priced */
   counted: number
-} {
-  const set = profiles.flatMap((profile) =>
-    profile.fields.filter((field) => field.role === 'costUsdPerHour' && field.value.state === 'set'),
+  rows: NodeCost[]
+}
+
+/** Always-on rollup. 730 h/mo is the labeled convention, not a DES month. */
+export function formatUsd(amount: number, suffix = ''): string {
+  const digits = Math.abs(amount - Math.round(amount)) < 1e-9 ? 0 : 2
+  return `$${amount.toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: 2,
+  })}${suffix}`
+}
+
+export function hourlyByBindsTo(report: CostReport): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const row of report.rows) {
+    if (row.bindsTo) out[row.bindsTo] = row.usdPerHour
+  }
+  return out
+}
+
+/** Sum typed $/hr. Empty stays unknown. Catalog never supplies this number. */
+export function costFromProfiles(profiles: CalibrationProfile[]): CostReport {
+  const eligibleProfiles = profiles.filter((profile) =>
+    profile.fields.some((field) => field.role === 'costUsdPerHour'),
   )
-  if (set.length === 0) {
+  const rows: NodeCost[] = []
+  for (const profile of eligibleProfiles) {
+    const field = profile.fields.find((item) => item.role === 'costUsdPerHour')
+    if (field?.value.state !== 'set') continue
+    rows.push({
+      profileId: profile.id,
+      bindsTo: profile.bindsTo,
+      name: profile.name,
+      usdPerHour: field.value.value,
+      confidence: field.value.confidence,
+    })
+  }
+  const eligible = eligibleProfiles.length
+  const priced = rows.length
+  if (priced === 0) {
     return {
       value: 'unknown',
-      hint: 'Type $/hr on a node. Catalog has no SKU prices.',
+      hint:
+        eligible > 0
+          ? `0 of ${eligible} nodes · type $/hr. Catalog has no SKU prices.`
+          : 'Type $/hr on a node. Catalog has no SKU prices.',
+      priced: 0,
+      eligible,
       counted: 0,
+      rows: [],
     }
   }
-  const usdPerHour = set.reduce((sum, field) => sum + (field.value.state === 'set' ? field.value.value : 0), 0)
-  const allVendor = set.every((field) => field.value.state === 'set' && field.value.confidence === 'vendor')
+  const usdPerHour = rows.reduce((sum, row) => sum + row.usdPerHour, 0)
+  const usdPerDay = usdPerHour * HOURS_PER_DAY
+  const usdPerMonth = usdPerHour * HOURS_PER_MONTH
+  const allVendor = rows.every((row) => row.confidence === 'vendor')
+  const evidence = allVendor ? 'Vendor' : 'Estimated'
   return {
-    value: `$${usdPerHour.toLocaleString('en-US', { maximumFractionDigits: 0 })}/hr`,
-    hint: `${set.length} node${set.length === 1 ? '' : 's'} · ${allVendor ? 'Vendor' : 'Estimated'} · not catalog SKUs`,
+    value: formatUsd(usdPerHour, '/hr'),
+    hint: `${priced} of ${eligible} nodes · ${formatUsd(usdPerDay, '/d')} · ${formatUsd(usdPerMonth, '/mo')} · ${evidence} · not catalog SKUs`,
     usdPerHour,
-    counted: set.length,
+    usdPerDay,
+    usdPerMonth,
+    priced,
+    eligible,
+    counted: priced,
+    rows,
   }
 }
 

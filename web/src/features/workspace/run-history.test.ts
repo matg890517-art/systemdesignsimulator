@@ -97,5 +97,41 @@ describe('run history', () => {
     }))
     expect(rows.map((row) => row.id)).toEqual(['aks', 'alb'])
     expect(rows[0]).toMatchObject({ provider: 'Azure', source: 'engine', citation: 'Estimated · AKS' })
+    expect(rows[0]?.usdPerHour).toBeUndefined()
+  })
+
+  it('attaches typed $/hr and leaves unpriced nodes unknown', () => {
+    const nodes: Node<ServiceNodeData | ZoneNodeData>[] = [
+      service('aks', 'AKS', 'azure'),
+      service('alb', 'ALB', 'aws'),
+    ]
+    const rows = rankingFromNodes(
+      nodes,
+      run({
+        nodeStats: {
+          aks: { util: 0.9, completed: 2, rejected: 0, offered: 2, mu: 2, capped: true, p99: '', meta: 'analytic', backlog: 0, loss: 0 },
+          alb: { util: 0.2, completed: 1, rejected: 0, offered: 1, mu: 5, capped: true, p99: '', meta: 'analytic', backlog: 0, loss: 0 },
+        },
+      }),
+      [
+        {
+          id: 'aks',
+          name: 'AKS',
+          bindsTo: 'aks',
+          notes: '',
+          fields: [
+            {
+              id: 'costUsdPerHour',
+              label: 'Hourly cost',
+              unit: 'USD/hr',
+              role: 'costUsdPerHour',
+              value: { state: 'set', value: 40, confidence: 'estimated' },
+            },
+          ],
+        },
+      ],
+    )
+    expect(rows.find((row) => row.id === 'aks')?.usdPerHour).toBe(40)
+    expect(rows.find((row) => row.id === 'alb')?.usdPerHour).toBeUndefined()
   })
 })

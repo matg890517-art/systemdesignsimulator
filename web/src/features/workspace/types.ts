@@ -70,6 +70,8 @@ export type RankRow = {
   p99: string
   source: RankSource
   citation?: string
+  /** Typed $/hr on this node. Absent means unknown, not $0. */
+  usdPerHour?: number
 }
 
 export type FluidPoint = {

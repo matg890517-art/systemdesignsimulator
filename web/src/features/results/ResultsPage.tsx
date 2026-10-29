@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Box, MenuItem, Select, Stack, Typography } from '@mui/material'
+import { costFromProfiles, hourlyByBindsTo } from '@sds/engine'
 import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
+import { useLibrary } from '../calibration/library.ts'
 import { idleKpis } from '../workspace/simulate.ts'
 import {
   activeRecord,
@@ -10,6 +12,8 @@ import {
   useRunHistory,
 } from '../workspace/run-history.ts'
 import type { KpiState } from '../workspace/types.ts'
+import { configProfileForNode } from '../workspace/node-profile.ts'
+import { CostPanel } from './CostPanel.tsx'
 import { Explainer } from './Explainer.tsx'
 import { FidelityPanel } from './FidelityPanel.tsx'
 import { LineChart } from './LineChart.tsx'
@@ -20,9 +24,31 @@ import { scoreReferenceFidelity } from './score-reference.ts'
 export function ResultsPage() {
   const history = useRunHistory()
   const record = activeRecord(history)
+  const library = useLibrary()
+  const ranked = record?.ranking ?? []
+  const cost = costFromProfiles(
+    ranked.length > 0
+      ? ranked.map((row) =>
+          configProfileForNode(
+            library.profiles.find((profile) => profile.bindsTo === row.id),
+            row.id,
+            row.title,
+          ),
+        )
+      : library.profiles,
+  )
   const [recorded, setRecorded] = useState(absentRecordedTest)
   const fidelity = useMemo(() => scoreReferenceFidelity(recorded), [recorded])
-  const kpis: KpiState = record?.run.kpis ?? idleKpis
+  const kpis: KpiState = {
+    ...(record?.run.kpis ?? idleKpis),
+    cost: cost.value,
+    costHint: cost.hint,
+  }
+  const hourly = hourlyByBindsTo(cost)
+  const ranking = ranked.map((row) => ({
+    ...row,
+    usdPerHour: hourly[row.id],
+  }))
 
   return (
     <Box
@@ -81,7 +107,9 @@ export function ResultsPage() {
       <Box sx={{ flex: 1, display: 'flex', gap: 1.5, p: 1.5, minHeight: 0 }}>
         {record ? (
           <>
-            <RankingTable rows={record.ranking} />
+            <Stack spacing={1.5} sx={{ width: 360, flexShrink: 0, minHeight: 0, overflow: 'auto' }}>
+              <RankingTable rows={ranking} />
+            </Stack>
             <Stack spacing={1.5} sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
               {record.run.hockeyStick ? (
                 <LineChart
@@ -127,12 +155,13 @@ export function ResultsPage() {
               Run the canvas on Workspace. Phase 1 Results is steady-state queueing: Stable /
               Saturating / Unstable, ρ, wait, Analytic p50/p95/p99 (never Measured), headroom, and
               a hockey-stick of latency vs load. J12 A/B stay blocked. Cost stays unknown until you
-              type $/hr.
+              type $/hr; day and month are 24× and 730× those hours, not Simulated time.
               Catalog has no SKU prices.
             </Typography>
           </Box>
         )}
         <Stack spacing={1.5} sx={{ width: 320, flexShrink: 0, minHeight: 0, overflow: 'auto' }}>
+          <CostPanel report={cost} />
           <FidelityPanel
             report={fidelity}
             onLoadFile={(text) => {

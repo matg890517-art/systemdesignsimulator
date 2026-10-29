@@ -4,6 +4,7 @@ import {
   tableFeatures,
   useTable,
 } from '@tanstack/react-table'
+import { formatUsd } from '@sds/engine'
 import { formatPct } from '../workspace/simulate.ts'
 import type { RankRow } from '../workspace/types.ts'
 
@@ -72,6 +73,17 @@ const columns = helper.columns([
       )
     },
   }),
+  helper.accessor('usdPerHour', {
+    header: '$/hr',
+    cell: (info) => {
+      const usd = info.getValue()
+      return (
+        <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12 }}>
+          {usd === undefined ? '—' : formatUsd(usd)}
+        </Typography>
+      )
+    },
+  }),
   helper.accessor('source', {
     header: 'Source',
     cell: (info) => {
@@ -103,7 +115,7 @@ export function RankingTable({ rows }: { rows: RankRow[] }) {
   return (
     <Box
       sx={{
-        width: 300,
+        width: '100%',
         flexShrink: 0,
         bgcolor: 'background.paper',
         borderRadius: 3,
@@ -115,8 +127,8 @@ export function RankingTable({ rows }: { rows: RankRow[] }) {
         Utilization ranking
       </Typography>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 1.5 }}>
-        From the Workspace run. Utilization is Analytic ρ against each bound
-        profile. Unknown capacity is not a measurement.
+        From the Workspace run. Utilization is Analytic ρ. Cost is typed $/hr,
+        not a catalog SKU. Empty is unknown, not $0.
       </Typography>
       <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
         <Box component="thead">

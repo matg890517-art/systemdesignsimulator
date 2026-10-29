@@ -235,7 +235,7 @@ Later phases
 - **E2** Workload dynamics: Poisson, step, spike (Ramp pulled forward for Simulated; Analytic still constant).
 - **E3** Faults and control loops: crash, latency injection, link cut, packet drop, partitions, retries with budgets, circuit breakers, autoscale lag, request cancellation.
 - **E4** Monte Carlo ranges (e.g. "p99 under 300 ms in 94 percent of runs"), sensitivity sweeps, 2x/5x/10x scenario runs.
-- Cost: separate decision; prices read from the catalog with a source link and read date.
+- Cost: C0 is typed `$/hr` (day ×24, month ×730 h) in calibration; catalog has no SKU prices. C1+ reads sourced pages with URL and date (Decision 2). Engine does not use cost.
 
 ## 11. UI mapping
 

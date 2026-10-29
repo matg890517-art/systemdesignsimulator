@@ -48,7 +48,7 @@ import {
 import { WORKSPACE_HOTKEYS, withHotkey } from './hotkeys.ts'
 import { WorkloadEditor } from './WorkloadEditor.tsx'
 import { initialEdges, initialNodes } from './graph.ts'
-import { costFromProfiles, expectedArrivals } from '@sds/engine'
+import { expectedArrivals } from '@sds/engine'
 import {
   getFault,
   getProfiles,
@@ -106,6 +106,7 @@ import { canPlayback, playbackWallMs, PLAY_PAINT_MS, viewRunAt } from './playbac
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
+import { costFromCanvas } from './node-profile.ts'
 import { AKS_HEADROOM_CHALLENGE, scoreAksHeadroom } from '../challenge/challenge.ts'
 import {
   patchZone,
@@ -310,7 +311,7 @@ export function WorkspacePage() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const liveCost = costFromProfiles(library.profiles)
+  const liveCost = costFromCanvas(nodes, library.profiles)
   const kpisToShow = ran
     ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
     : kpisFromDraft(draft, library.profiles, nodes, edges)
@@ -762,7 +763,7 @@ export function WorkspacePage() {
         projectName,
         hint: result.run.hint,
         run: result.run,
-        ranking: rankingFromNodes(nodes, result.run),
+        ranking: rankingFromNodes(nodes, result.run, getProfiles()),
       })
       if (canPlayback(result.run)) startPlayback(result.run)
       else showLastRun(result.run, false)
