@@ -412,7 +412,7 @@ export function WorkspacePage() {
           ...edge,
           animated: false,
           data: { ...extra, flowRps: offered },
-          label: hopLabelWithRate(hopTypeLabel(edge), offered > 0 ? offered : undefined),
+          label: hopLabelWithRate(hopTypeLabel(edge), offered),
           style: {
             ...edge.style,
             stroke: hit ? '#B3261E' : '#7B8794',

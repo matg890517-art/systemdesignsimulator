@@ -15,7 +15,7 @@ export const CLASS_SHORT: Record<WorkspaceClassId, string> = {
 
 const CLASS_LABEL_RE = /^(none|[RWAB](\/[RWAB])*)$/
 const MISS_PREFIX = /^miss(?: · )?/
-const HOP_RATE_RE = / · [\d,.]+(?:k)? \/s/g
+const HOP_RATE_RE = / · [\d,.]+(?:k)? (?:\/s|rps)/g
 
 export type WorkspaceEdgeData = {
   routing: Routing
@@ -69,6 +69,7 @@ export function activeClassMap(active: readonly WorkspaceClassId[]): WorkspaceEd
 }
 
 export function formatHopRate(n: number): string {
+  if (!(n > 0.05)) return '0 rps'
   if (n >= 1000) return `${Math.round(n).toLocaleString('en-US')} /s`
   return `${n.toFixed(1)} /s`
 }
@@ -107,7 +108,7 @@ export function hopTypeLabel(edge: RfEdge): string {
 }
 
 export function hopLabelWithRate(typeLabel: string, offered?: number): string {
-  if (offered === undefined || offered < 0.05) return typeLabel
+  if (offered === undefined) return typeLabel
   const rate = formatHopRate(offered)
   if (typeLabel.includes(' · cross ·')) {
     return typeLabel.replace(' · cross ·', ` · ${rate} · cross ·`)

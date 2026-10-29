@@ -80,6 +80,7 @@ export type RunProgress = RunTick & {
 }
 
 function formatRps(n: number): string {
+  if (!(n > 0)) return '0 rps'
   if (n >= 1000) return `${Math.round(n).toLocaleString('en-US')} rps`
   if (n >= 10) return `${n.toFixed(1)} rps`
   return `${n.toFixed(2)} /s`

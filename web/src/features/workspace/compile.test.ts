@@ -332,6 +332,7 @@ describe('compileCanvas', () => {
     expect(formatCardWait({ generator: false, rps: 10, p99: 12, instantaneous: true })).toBe('')
     expect(formatCardWait({ generator: false, rps: 10, p99: 12 })).toBe('12 ms p99')
     expect(formatCardWait({ generator: true, rps: 210.5, p99: 0 })).toMatch(/rps/)
+    expect(formatCardWait({ generator: true, rps: 0, p99: 0 })).toBe('0 rps')
   })
 
   it('ramps Simulated hop rates from ~0 while Analytic still solves the target', () => {
