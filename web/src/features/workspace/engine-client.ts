@@ -1,4 +1,9 @@
-import { liveDelayMs, liveHoldMs } from './live-pace.ts'
+import {
+  createLiveClock,
+  liveDelayMs,
+  reanchorOriginMs,
+  type LiveClock,
+} from './live-pace.ts'
 import { runWorkspace, type RunProgress } from './run-workspace.ts'
 import type { EngineJobMessage, EngineJobRequest, EngineJobResult } from './engine-job.ts'
 
@@ -8,6 +13,8 @@ let worker: Worker | undefined
 let nextId = 1
 let liveGen = 0
 const pending = new Map<number, (error: Error) => void>()
+let liveClock: LiveClock | undefined
+let pauseWaiters: Array<() => void> = []
 
 /** Thrown to a caller whose run was stopped from the toolbar. Not an engine failure. */
 export class RunStoppedError extends Error {
@@ -30,12 +37,61 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
+function wakePauseWaiters() {
+  const waiters = pauseWaiters
+  pauseWaiters = []
+  for (const waiter of waiters) waiter()
+}
+
+function waitWhilePaused(gen: number): Promise<void> {
+  if (!liveClock?.paused || gen !== liveGen) return Promise.resolve()
+  return new Promise((resolve) => {
+    pauseWaiters.push(resolve)
+  })
+}
+
+async function waitUntilDue(tSim: number, gen: number) {
+  if (liveClock) liveClock.tSim = tSim
+  while (gen === liveGen) {
+    if (liveClock?.paused) {
+      await waitWhilePaused(gen)
+      continue
+    }
+    if (!liveClock || !(liveClock.pace > 0)) return
+    const wait = liveDelayMs(liveClock.originMs, tSim, liveClock.pace, performance.now())
+    if (wait <= 1) return
+    await sleep(Math.min(wait, 80))
+  }
+}
+
+/** Change 1×–10× mid-run. Pause is separate; Stop still aborts. */
+export function setWorkspaceLivePace(pace: number) {
+  if (!liveClock || !(pace > 0)) return
+  liveClock.pace = pace
+  if (!liveClock.paused) {
+    liveClock.originMs = reanchorOriginMs(performance.now(), liveClock.tSim, pace)
+  }
+}
+
+/** Hold the canvas clock. The worker keeps computing; Stop is the abort. */
+export function setWorkspaceLivePaused(paused: boolean) {
+  if (!liveClock) return
+  if (liveClock.paused === paused) return
+  liveClock.paused = paused
+  if (!paused) {
+    liveClock.originMs = reanchorOriginMs(performance.now(), liveClock.tSim, liveClock.pace)
+    wakePauseWaiters()
+  }
+}
+
 /**
  * Cooperative cancel posts first so a yielding Simulated run can stop. Terminate still
  * unfreezes the tab if the job is in a blocking slice.
  */
 export function stopWorkspaceRun(): boolean {
   liveGen += 1
+  liveClock = undefined
+  wakePauseWaiters()
   if (!worker || pending.size === 0) return false
   try {
     worker.postMessage({ type: 'cancel' })
@@ -64,8 +120,8 @@ export function runWorkspaceAsync(
   nextId += 1
   const target = getWorker()
   const pace = input.pace ?? 0
-  const origin = performance.now()
   const gen = liveGen
+  liveClock = pace > 0 ? createLiveClock(performance.now(), pace) : undefined
   let paint = Promise.resolve()
 
   const deliver = (progress: RunProgress) => {
@@ -76,8 +132,7 @@ export function runWorkspaceAsync(
     }
     paint = paint.then(async () => {
       if (gen !== liveGen) return
-      const wait = liveDelayMs(origin, progress.t, pace, performance.now())
-      if (wait > 1) await sleep(wait)
+      await waitUntilDue(progress.t, gen)
       if (gen !== liveGen) return
       onProgress(progress)
     })
@@ -112,13 +167,13 @@ export function runWorkspaceAsync(
       void paint
         .then(async () => {
           if (gen !== liveGen) return
-          if (message.result.ok && pace > 0) {
-            const hold = liveHoldMs(origin, input.draft.durationSec, pace, performance.now())
-            if (hold > 1) await sleep(hold)
+          if (message.result.ok && liveClock && liveClock.pace > 0) {
+            await waitUntilDue(input.draft.durationSec, gen)
           }
         })
         .then(() => {
           if (gen !== liveGen) return
+          liveClock = undefined
           cleanup()
           resolve(message.result)
         })

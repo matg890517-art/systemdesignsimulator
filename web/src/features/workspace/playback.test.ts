@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPlayback,
+  formatSimClock,
+  PLAYBACK_SPEEDS,
   emitEvery,
   flowPacketCount,
   flowPeriodSec,
@@ -135,6 +137,17 @@ describe('F30 playback view', () => {
     expect(flowPacketCount(20)).toBeGreaterThanOrEqual(2)
     expect(flowPacketCount(500)).toBeGreaterThan(flowPacketCount(20))
     expect(flowPacketCount(10_000)).toBeLessThanOrEqual(5)
+  })
+
+  it('offers 0.5× through 10× for the Simulated player', () => {
+    expect(PLAYBACK_SPEEDS).toEqual([0.5, 1, 2, 5, 10])
+  })
+
+  it('prints current simulated time against Workload Duration', () => {
+    expect(formatSimClock(0, 60)).toBe('0.0s / 60s')
+    expect(formatSimClock(12.34, 60)).toBe('12.3s / 60s')
+    expect(formatSimClock(60, 60)).toBe('60.0s / 60s')
+    expect(formatSimClock(1.2, 8)).toBe('1.20s / 8s')
   })
 
   it('plays Simulated series only', () => {

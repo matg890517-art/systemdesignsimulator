@@ -1,95 +1,142 @@
+import { forwardRef, type ComponentProps } from 'react'
 import PauseIcon from '@mui/icons-material/Pause'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import { Box, IconButton, Slider, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material'
-import type { ShowMode } from './display-mode.ts'
+import {
+  Box,
+  IconButton,
+  Paper,
+  Snackbar,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material'
+import { formatSimClock, PLAYBACK_SPEEDS, type PlaybackSpeed } from './playback.ts'
 
-export const PLAYBACK_SPEEDS = [0.5, 1, 2] as const
-export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
+const TimePlayPaper = forwardRef<HTMLDivElement, ComponentProps<typeof Paper>>(
+  function TimePlayPaper(props, ref) {
+    return <Paper ref={ref} elevation={3} {...props} />
+  },
+)
 
-/** Simulated-only scrubber. Analytic has no time series. KPI strip stays the post-warm-up summary. */
-export function PlaybackBar({
+export type { PlaybackSpeed }
+
+/** Simulated-only clock: current time / Workload Duration. */
+export function SimClock({ t, durationSec }: { t: number; durationSec: number }) {
+  const max = Math.max(durationSec, 0)
+  const value = Math.min(Math.max(0, t), Math.max(max, 1e-9))
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
+  return (
+    <Stack
+      direction="row"
+      spacing={0.75}
+      sx={{ alignItems: 'center', minWidth: 0, flexShrink: 0 }}
+      aria-label="Simulated time"
+    >
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }}>Time</Typography>
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontFamily: '"IBM Plex Mono", monospace',
+          color: 'text.primary',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {formatSimClock(t, durationSec)}
+      </Typography>
+      <Box
+        sx={{
+          width: 64,
+          height: 4,
+          bgcolor: 'action.hover',
+          borderRadius: 1,
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: 'primary.main' }} />
+      </Box>
+    </Stack>
+  )
+}
+
+/** Persistent Simulated player. Pause holds the clock; Stop on the toolbar aborts. */
+export function TimePlaySnackbar({
+  open,
   t,
   durationSec,
   playing,
   speed,
-  showMode,
-  onToggle,
-  onScrub,
+  pauseDisabled,
+  onTogglePause,
   onSpeed,
 }: {
+  open: boolean
   t: number
   durationSec: number
   playing: boolean
   speed: PlaybackSpeed
-  showMode: ShowMode
-  onToggle: () => void
-  onScrub: (t: number) => void
+  pauseDisabled?: boolean
+  onTogglePause: () => void
   onSpeed: (speed: PlaybackSpeed) => void
 }) {
-  const max = Math.max(durationSec, 1e-9)
-  const value = Math.min(Math.max(0, t), max)
   return (
-    <Box
-      sx={{
-        pointerEvents: 'auto',
-        width: '100%',
-        bgcolor: 'rgba(255, 255, 255, 0.94)',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 2,
-        boxShadow: 1,
-        px: 1,
-        py: 0.5,
-      }}
+    <Snackbar
+      open={open}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      ClickAwayListenerProps={{ mouseEvent: false, touchEvent: false }}
+      sx={{ bottom: { xs: 16 } }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
-        <IconButton size="small" onClick={onToggle} aria-label={playing ? 'Pause replay' : 'Play replay'}>
-          {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
-        </IconButton>
-        <Typography sx={{ fontSize: 11, minWidth: 92, color: 'text.secondary', flexShrink: 0 }}>
-          {max < 15 ? value.toFixed(2) : value.toFixed(1)}s / {max.toFixed(0)}s
-        </Typography>
-        <Slider
-          size="small"
-          min={0}
-          max={max}
-          step={0.001}
-          value={value}
-          onChange={(_, next) => onScrub(Array.isArray(next) ? next[0]! : next)}
-          aria-label="Simulated time"
-          sx={{ flex: 1, minWidth: 80, py: 0.5 }}
-        />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={speed}
-          onChange={(_, next: PlaybackSpeed | null) => {
-            if (next) onSpeed(next)
-          }}
-          aria-label="Replay speed"
-          sx={{
-            flexShrink: 0,
-            '& .MuiToggleButton-root': { px: 0.75, py: 0.25, fontSize: 10, minWidth: 36, minHeight: 24 },
-          }}
-        >
-          {PLAYBACK_SPEEDS.map((item) => (
-            <ToggleButton key={item} value={item} aria-label={`${item} times speed`}>
-              {item}×
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        <Tooltip
-          title={
-            showMode === 'instant'
-              ? 'Instantaneous: ρ and hop /s over the last Workload dt of simulated time. Queue depth is live. p99 stays empty.'
-              : 'Average: ρ and hop /s from t=0 to this time. Queue depth is live. p99 only if wait is at least 1 ms. KPI stays post-warm-up.'
-          }
-        >
-          <Typography sx={{ fontSize: 11, color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            {showMode === 'instant' ? 'Instant' : 'Average'}
-          </Typography>
-        </Tooltip>
-      </Stack>
-    </Box>
+      <TimePlayPaper
+        sx={{
+          px: 1,
+          py: 0.5,
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <IconButton
+            size="small"
+            onClick={onTogglePause}
+            disabled={pauseDisabled}
+            aria-label={playing ? 'Pause simulated time' : 'Play simulated time'}
+            title={
+              playing
+                ? 'Pause the clock. Stop on the toolbar aborts the run.'
+                : 'Play simulated time'
+            }
+          >
+            {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+          </IconButton>
+          <SimClock t={t} durationSec={durationSec} />
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={speed}
+            onChange={(_, next: PlaybackSpeed | null) => {
+              if (next) onSpeed(next)
+            }}
+            aria-label="Simulated speed"
+            sx={{
+              flexShrink: 0,
+              '& .MuiToggleButton-root': {
+                px: 0.75,
+                py: 0.25,
+                fontSize: 10,
+                minWidth: 36,
+                minHeight: 24,
+              },
+            }}
+          >
+            {PLAYBACK_SPEEDS.map((item) => (
+              <ToggleButton key={item} value={item} aria-label={`${item} times speed`}>
+                {item}×
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Stack>
+      </TimePlayPaper>
+    </Snackbar>
   )
 }

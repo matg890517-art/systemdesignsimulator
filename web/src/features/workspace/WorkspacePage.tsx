@@ -60,7 +60,13 @@ import {
 } from '../calibration/library.ts'
 import { FaultsPanel } from './FaultsPanel.tsx'
 import { idleKpis, kpisFromDraft, pickEdgeOffered, pickNodeStat } from './simulate.ts'
-import { isRunStopped, runWorkspaceAsync, stopWorkspaceRun } from './engine-client.ts'
+import {
+  isRunStopped,
+  runWorkspaceAsync,
+  setWorkspaceLivePace,
+  setWorkspaceLivePaused,
+  stopWorkspaceRun,
+} from './engine-client.ts'
 import { getWorkloadDraft, setWorkloadDraft, useWorkloadDraft } from './workload-store.ts'
 import {
   compileCanvas,
@@ -102,8 +108,13 @@ import {
   type TopologySnapshot,
 } from './persistence.ts'
 import { hopLabelWithRate, hopTypeLabel, readEdgeData } from './edge-data.ts'
-import { type PlaybackSpeed } from './PlaybackBar.tsx'
-import { canPlayback, playbackWallMs, PLAY_PAINT_MS, viewRunAt } from './playback.ts'
+import { SimClock, TimePlaySnackbar } from './PlaybackBar.tsx'
+import {
+  canPlayback,
+  PLAY_PAINT_MS,
+  type PlaybackSpeed,
+  viewRunAt,
+} from './playback.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
@@ -224,6 +235,7 @@ export function WorkspacePage() {
   const [playhead, setPlayhead] = useState(0)
   const [playingBack, setPlayingBack] = useState(false)
   const [playSpeed, setPlaySpeed] = useState<PlaybackSpeed>(1)
+  const [livePaused, setLivePaused] = useState(false)
   const [showMode, setShowMode] = useState<ShowMode>('instant')
   const [fitNonce, setFitNonce] = useState(0)
   const playSpeedRef = useRef<PlaybackSpeed>(1)
@@ -627,8 +639,8 @@ export function WorkspacePage() {
     }
     const duration = Math.max(run.durationSec, 1e-9)
     const startAt = Math.min(Math.max(0, from), duration)
-    const wall = playbackWallMs(duration) / Math.max(0.25, playSpeedRef.current)
-    const origin = performance.now() - (startAt / duration) * wall
+    const speed = Math.max(0.25, playSpeedRef.current)
+    const origin = performance.now() - (startAt / speed) * 1000
     lastRunRef.current = run
     playingBackRef.current = true
     const token = ++playTokenRef.current
@@ -636,7 +648,7 @@ export function WorkspacePage() {
     paintPlayhead(run, startAt, performance.now(), true)
     const loop = (now: number) => {
       if (!playingBackRef.current || playTokenRef.current !== token) return
-      const t = Math.min(duration, ((now - origin) / wall) * duration)
+      const t = Math.min(duration, ((now - origin) / 1000) * speed)
       const ended = t >= duration - 1e-9
       paintPlayhead(run, t, now, ended)
       if (ended) {
@@ -670,8 +682,22 @@ export function WorkspacePage() {
   function onPlaybackSpeed(next: PlaybackSpeed) {
     setPlaySpeed(next)
     playSpeedRef.current = next
+    if (running) {
+      setWorkspaceLivePace(next)
+      return
+    }
     const run = lastRunRef.current
     if (run && playingBackRef.current) startPlayback(run, playheadRef.current)
+  }
+
+  function onTogglePause() {
+    if (running) {
+      const next = !livePaused
+      setLivePaused(next)
+      setWorkspaceLivePaused(next)
+      return
+    }
+    onTogglePlayback()
   }
 
   function onStop() {
@@ -680,6 +706,7 @@ export function WorkspacePage() {
     cancelAnimationFrame(paintFrame.current)
     stopPlayback()
     const stopped = stopWorkspaceRun()
+    setLivePaused(false)
     setRunning(false)
     if (lastRun) {
       showLastRun(lastRun, false)
@@ -695,6 +722,10 @@ export function WorkspacePage() {
     const id = runGen.current + 1
     runGen.current = id
     stopPlayback()
+    stopWorkspaceRun()
+    playheadRef.current = 0
+    setPlayhead(0)
+    setLivePaused(false)
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
@@ -715,7 +746,7 @@ export function WorkspacePage() {
           draft: getWorkloadDraft(),
           profiles: getProfiles(),
           fault: getFault(),
-          pace: isSimulatedMode(getWorkloadDraft().mode) ? 1 : undefined,
+          pace: isSimulatedMode(getWorkloadDraft().mode) ? playSpeedRef.current : undefined,
         },
         (progress) => {
           if (!live || runGen.current !== id) return
@@ -807,6 +838,11 @@ export function WorkspacePage() {
       setBottlenecks(active.run.bottlenecks)
       setRan(true)
       setRunHint(active.run.hint)
+      if (isSimulatedMode(active.run.mode)) {
+        const t = active.run.durationSec || active.run.ticks?.at(-1)?.t || 0
+        playheadRef.current = t
+        setPlayhead(t)
+      }
     }
     setSessionReady(true)
     return () => {
@@ -1112,13 +1148,19 @@ export function WorkspacePage() {
           onChange={setShowMode}
           disabled={!isSimulatedMode(draft.mode)}
         />
+        {isSimulatedMode(draft.mode) ? (
+          <SimClock
+            t={running || (lastRun && isSimulatedMode(lastRun.mode)) ? playhead : 0}
+            durationSec={draft.durationSec}
+          />
+        ) : null}
         {running ? (
           <Button
             variant="outlined"
             color="error"
             onClick={onStop}
             startIcon={<StopRoundedIcon />}
-            title="Stop the live clock. Simulated time freezes on the last painted tick."
+            title="Abort the run. Pause on the time snackbar holds the clock."
           >
             Stop
           </Button>
@@ -1375,6 +1417,16 @@ export function WorkspacePage() {
           <FaultsPanel />
         </Box>
       </Drawer>
+      <TimePlaySnackbar
+        open={isSimulatedMode(draft.mode)}
+        t={running || (lastRun && isSimulatedMode(lastRun.mode)) ? playhead : 0}
+        durationSec={draft.durationSec}
+        playing={running ? !livePaused : playingBack}
+        speed={playSpeed}
+        pauseDisabled={!running && !canPlayback(lastRun)}
+        onTogglePause={onTogglePause}
+        onSpeed={onPlaybackSpeed}
+      />
       <Snackbar
         key={notice?.id}
         open={Boolean(notice)}
@@ -1384,7 +1436,7 @@ export function WorkspacePage() {
           setNotice(undefined)
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ bottom: { xs: 16 } }}
+        sx={{ bottom: { xs: isSimulatedMode(draft.mode) ? 88 : 16 } }}
       >
         <Alert
           severity={notice?.severity ?? 'info'}

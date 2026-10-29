@@ -2,8 +2,21 @@ import { normalizeShowMode, type ShowMode } from './display-mode.ts'
 import { isSimulatedMode } from './run-mode.ts'
 import type { NodeRunStat, RunTick, TickRates, WorkspaceRun } from './types.ts'
 
+export const PLAYBACK_SPEEDS = [0.5, 1, 2, 5, 10] as const
+export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
+
 export function canPlayback(run: WorkspaceRun | undefined): boolean {
   return Boolean(run && isSimulatedMode(run.mode) && run.ticks.length > 1)
+}
+
+/** Current simulated time vs Workload Duration. Not a VCR. */
+export function formatSimClock(t: number, durationSec: number): string {
+  const max = Math.max(0, durationSec)
+  const value = Math.min(Math.max(0, t), max)
+  const currentDigits = max > 0 && max < 15 ? 2 : 1
+  const full =
+    Math.abs(max - Math.round(max)) < 1e-6 ? String(Math.round(max)) : max.toFixed(1)
+  return `${value.toFixed(currentDigits)}s / ${full}s`
 }
 
 /** Sample this many fluid steps (plus first and last) so playback has a curve, not every Δt. */
