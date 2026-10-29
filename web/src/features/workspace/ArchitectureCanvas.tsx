@@ -144,6 +144,7 @@ function CanvasInner({
   focusRequest,
   fitNonce,
   onLoadReference,
+  onServiceDropped,
 }: {
   nodes: WorkspaceNode[]
   edges: Edge[]
@@ -162,6 +163,7 @@ function CanvasInner({
   focusRequest?: CanvasFocusRequest
   fitNonce?: number
   onLoadReference?: () => void
+  onServiceDropped?: (node: Node<ServiceNodeData>) => void
 }) {
   const { screenToFlowPosition, getInternalNode, setCenter, getZoom, fitView } = useReactFlow()
   const selectionKey = useRef('')
@@ -291,11 +293,11 @@ function CanvasInner({
         setNodes((current) => orderZonesBeforeChildren([...current, env]))
         return
       }
-      setNodes((current) =>
-        appendServiceInZone(current, serviceDraftFromDrop(payload, position), position),
-      )
+      const draft = serviceDraftFromDrop(payload, position)
+      setNodes((current) => appendServiceInZone(current, draft, position))
+      onServiceDropped?.(draft)
     },
-    [screenToFlowPosition, setNodes],
+    [screenToFlowPosition, setNodes, onServiceDropped],
   )
 
   const onDragOver = useCallback((event: DragEvent) => {
@@ -488,6 +490,7 @@ function ArchitectureCanvasView(props: {
   focusRequest?: CanvasFocusRequest
   fitNonce?: number
   onLoadReference?: () => void
+  onServiceDropped?: (node: Node<ServiceNodeData>) => void
 }) {
   const filterValue = useMemo(
     () => ({ filter: props.classFilter, edges: props.edges }),
@@ -514,6 +517,7 @@ function ArchitectureCanvasView(props: {
           focusRequest={props.focusRequest}
           fitNonce={props.fitNonce}
           onLoadReference={props.onLoadReference}
+          onServiceDropped={props.onServiceDropped}
         />
       </ClassFilterProvider>
     </ReactFlowProvider>

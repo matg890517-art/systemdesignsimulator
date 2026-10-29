@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { costFromCanvas } from '../workspace/node-profile.ts'
 import { calibrationRowsForCanvas, currentCanvas } from './canvas-library.ts'
 import { youtubeSeedProfiles } from './library.ts'
 import { initialNodes } from '../workspace/graph.ts'
@@ -87,5 +88,36 @@ describe('calibration canvas library', () => {
     const canvas = currentCanvas()
     expect(canvas.name).toBe('Example: Video streaming platform (YouTube-style)')
     expect(canvas.nodes.filter((node) => node.type === 'service')).toHaveLength(15)
+  })
+
+  it('C0 Results cost is 0 of 8 on Generic even if the in-memory library is YouTube seeds', () => {
+    const graph = referenceStackGraph('generic')
+    const empty = costFromCanvas(graph.nodes, youtubeSeedProfiles)
+    expect(empty.value).toBe('unknown')
+    expect(empty.priced).toBe(0)
+    expect(empty.eligible).toBe(8)
+    const withCdn = [
+      ...youtubeSeedProfiles,
+      {
+        id: 'node-cdn',
+        name: 'CDN',
+        bindsTo: 'cdn',
+        fields: [
+          {
+            id: 'costUsdPerHour',
+            label: 'Hourly cost',
+            unit: 'USD/hr',
+            role: 'costUsdPerHour' as const,
+            value: { state: 'set' as const, value: 12.5, confidence: 'estimated' as const },
+          },
+        ],
+      },
+    ]
+    const cost = costFromCanvas(graph.nodes, withCdn)
+    expect(cost.value).toBe('$12.50/hr')
+    expect(cost.priced).toBe(1)
+    expect(cost.eligible).toBe(8)
+    expect(cost.usdPerDay).toBe(300)
+    expect(cost.usdPerMonth).toBe(12.5 * 730)
   })
 })

@@ -74,6 +74,39 @@ describe('compileCanvas', () => {
     expect(expectedArrivals(workload)).toBeGreaterThan(DISCRETE_EVENT_GUARD)
   })
 
+  it('splits two CDNs from Clients so each hop is not a full copy of 240 rps', () => {
+    const graph = referenceStackGraph('generic')
+    const extra = {
+      ...graph.nodes.find((node) => node.id === 'cdn')!,
+      id: 'cdn-b',
+      position: { x: 40, y: 40 },
+    }
+    const hop = connectComponents([...graph.nodes, extra], graph.edges, 'clients', 'cdn-b')
+    if ('error' in hop) throw new Error(hop.error)
+    const { topology } = compileCanvas(
+      [...graph.nodes, extra],
+      hop.edges,
+      referenceWorkloadDraft(),
+      referenceStackProfiles,
+      'none',
+    )
+    const a = topology.edges.find((edge) => edge.id === 'c-cdn')
+    const b = topology.edges.find((edge) => edge.from === 'clients' && edge.to === 'cdn-b')
+    expect(a?.routing).toEqual({ mode: 'weighted', weight: 1 })
+    expect(b?.routing).toEqual({ mode: 'weighted', weight: 1 })
+    const run = runWorkspace(
+      [...graph.nodes, extra],
+      hop.edges,
+      { ...referenceWorkloadDraft(), mode: 'analytic' },
+      referenceStackProfiles,
+      'none',
+    )
+    expect(run.ok).toBe(true)
+    if (!run.ok) return
+    expect(run.run.edgeOffered['c-cdn'] ?? 0).toBeCloseTo(120, 0)
+    expect(Object.entries(run.run.edgeOffered).find(([id]) => id !== 'c-cdn' && id.startsWith('c'))?.[1] ?? 0).toBeLessThan(200)
+  })
+
   it('splits two Application LB backends by equal weight', () => {
     const next = connectComponents(initialNodes, initialEdges, 'alb', 'blob')
     if ('error' in next) throw new Error(next.error)

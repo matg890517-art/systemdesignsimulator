@@ -58,17 +58,14 @@ function routingMatrix(nodes: ScenarioNode[], edges: ScenarioEdge[], classId: st
 }
 
 /**
- * Two or more non-broadcast hops from a load balancer share the class by weight.
- * Single hops become equal weights. Broadcast still copies. One backend stays 100%.
+ * Two or more non-broadcast hops of the same class share by weight.
+ * Clients → two CDNs must not each copy 240 rps. Broadcast still copies. One backend stays 100%.
  */
-function splitLoadBalancerHops(nodes: ScenarioNode[], edges: ScenarioEdge[]): ScenarioEdge[] {
-  const lbs = new Set(nodes.filter((node) => node.kind === 'load_balancer').map((node) => node.id))
-  if (lbs.size === 0) return edges
+function splitSharedClassHops(edges: ScenarioEdge[]): ScenarioEdge[] {
   const rewrite = new Set<string>()
   const byFromClass = new Map<string, number>()
   const broadcast = new Set<string>()
   for (const edge of edges) {
-    if (!lbs.has(edge.from)) continue
     for (const [classId, hop] of Object.entries(edge.perClass)) {
       const key = `${edge.from}\0${classId}`
       byFromClass.set(key, (byFromClass.get(key) ?? 0) + 1)
@@ -142,7 +139,7 @@ export function compileScenario(input: Scenario): CompiledModel {
     edges.push(next)
   }
 
-  const splitEdges = splitLoadBalancerHops(nodes, edges)
+  const splitEdges = splitSharedClassHops(edges)
 
   const hasIncoming = new Set<string>()
   const hasOutgoing = new Set<string>()

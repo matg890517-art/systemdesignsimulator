@@ -47,8 +47,8 @@ export function nodeHealth(data: ServiceNodeData): NodeHealth {
   return healthFor(data.util)
 }
 
-export function formatPct(util: number): string {
-  if (util <= 0) return '—'
+export function formatPct(util: number, zero: string = '—'): string {
+  if (util <= 0) return zero
   return `${Math.round(util * 100)}%`
 }
 

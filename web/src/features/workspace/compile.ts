@@ -441,19 +441,13 @@ function uploadEdge(edges: Edge[]): Edge | undefined {
   return edges.find((item) => item.id === 'up-aks') ?? edges.find((item) => item.from === 'uploaders')
 }
 
-/** Two or more hops from a load balancer share the class by weight. Broadcast still copies. */
-function splitLoadBalancerEdges(components: Component[], edges: Edge[]): Edge[] {
-  const lbs = new Set(
-    components.filter((item) => item.kind === 'load_balancer').map((item) => item.id),
-  )
-  if (lbs.size === 0) return edges
+/** Two or more hops of the same class share by weight. Clients → two CDNs split; broadcast still copies. */
+function splitSharedClassEdges(edges: Edge[]): Edge[] {
   const count = new Map<string, number>()
   const broadcast = new Set<string>()
   for (const edge of edges) {
-    if (!lbs.has(edge.from) || edge.routing.mode === 'broadcast') {
-      if (lbs.has(edge.from) && edge.routing.mode === 'broadcast') {
-        for (const classId of Object.keys(edge.classes)) broadcast.add(`${edge.from}:${classId}`)
-      }
+    if (edge.routing.mode === 'broadcast') {
+      for (const classId of Object.keys(edge.classes)) broadcast.add(`${edge.from}:${classId}`)
       continue
     }
     for (const classId of Object.keys(edge.classes)) {
@@ -462,9 +456,7 @@ function splitLoadBalancerEdges(components: Component[], edges: Edge[]): Edge[] 
     }
   }
   return edges.map((edge) => {
-    if (!lbs.has(edge.from) || edge.routing.mode === 'broadcast' || edge.routing.mode === 'weighted') {
-      return edge
-    }
+    if (edge.routing.mode === 'broadcast' || edge.routing.mode === 'weighted') return edge
     const splits = Object.keys(edge.classes).some((classId) => {
       const key = `${edge.from}:${classId}`
       return (count.get(key) ?? 0) > 1 && !broadcast.has(key)
@@ -535,7 +527,7 @@ export function compileCanvas(
   }
 
   const aksId = crashTarget(components)
-  const splitEdges = splitLoadBalancerEdges(components, topologyEdges)
+  const splitEdges = splitSharedClassEdges(topologyEdges)
   const link = uploadEdge(splitEdges)
   if (fault === 'crash' && aksId) {
     const target = components.find((item) => item.id === aksId)

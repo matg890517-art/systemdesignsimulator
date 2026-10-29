@@ -5,6 +5,7 @@ import {
   parseCalibrationCsv,
   serializeCalibrationCsv,
 } from '@sds/engine'
+import { browserStore, loadCurrent, patchCurrentLibrary } from '../workspace/persistence.ts'
 import type { CalibrationProfile, Confidence, FaultMode } from './types.ts'
 
 export type { CalibrationProfile, Confidence, FaultMode }
@@ -89,10 +90,29 @@ type LibraryState = {
 }
 
 let state: LibraryState = { profiles: youtubeSeedProfiles, fault: 'none' }
+let didHydrate = false
 const listeners = new Set<() => void>()
+
+function persistLibrary() {
+  const store = browserStore()
+  if (!store) return
+  patchCurrentLibrary(store, state.profiles, state.fault)
+}
 
 function emit(next: LibraryState) {
   state = next
+  persistLibrary()
+  for (const listener of listeners) listener()
+}
+
+/** Results and Calibration do not mount Workspace, so they need the saved canvas library. */
+export function hydrateLibraryFromSnapshot() {
+  if (didHydrate) return
+  didHydrate = true
+  const store = browserStore()
+  const snap = store ? loadCurrent(store) : undefined
+  if (!snap) return
+  state = { profiles: snap.profiles, fault: snap.fault }
   for (const listener of listeners) listener()
 }
 

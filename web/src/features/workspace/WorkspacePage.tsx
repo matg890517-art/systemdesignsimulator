@@ -54,6 +54,7 @@ import {
   getProfiles,
   replaceProfiles,
   setFault,
+  upsertProfile,
   useLibrary,
   youtubeSeedProfiles,
 } from '../calibration/library.ts'
@@ -106,7 +107,7 @@ import { canPlayback, playbackWallMs, PLAY_PAINT_MS, viewRunAt } from './playbac
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
-import { costFromCanvas } from './node-profile.ts'
+import { blankProfileForNode, costFromCanvas } from './node-profile.ts'
 import { AKS_HEADROOM_CHALLENGE, scoreAksHeadroom } from '../challenge/challenge.ts'
 import {
   patchZone,
@@ -312,9 +313,11 @@ export function WorkspacePage() {
   }, [])
 
   const liveCost = costFromCanvas(nodes, library.profiles)
-  const kpisToShow = ran
-    ? { ...kpis, cost: liveCost.value, costHint: liveCost.hint }
-    : kpisFromDraft(draft, library.profiles, nodes, edges)
+  const kpisToShow = {
+    ...(ran ? kpis : kpisFromDraft(draft, library.profiles, nodes, edges)),
+    cost: liveCost.value,
+    costHint: liveCost.hint,
+  }
   const modeMeta = RUN_MODES.find((item) => item.id === draft.mode) ?? RUN_MODES[0]!
   const arrivals = useMemo(() => {
     if (normalizeRunMode(draft.mode) !== 'simulated') return 0
@@ -828,7 +831,7 @@ export function WorkspacePage() {
       }
     }, 250)
     return () => window.clearTimeout(handle)
-  }, [sessionReady, nodes, edges, draft, library.fault, scene, projectName])
+  }, [sessionReady, nodes, edges, draft, library.fault, library.profiles, scene, projectName])
 
   // Attachment sides follow card centers. Same hop; only the handle ids change.
   useEffect(() => {
@@ -1220,6 +1223,10 @@ export function WorkspacePage() {
                 focusRequest={canvasFocus}
                 fitNonce={fitNonce}
                 onLoadReference={() => onLoadReference('generic')}
+                onServiceDropped={(node) => {
+                  const data = node.data as ServiceNodeData
+                  upsertProfile(blankProfileForNode(node.id, data.title, data.catalogId))
+                }}
               />
             ) : (
               <Box

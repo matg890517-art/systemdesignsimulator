@@ -172,6 +172,17 @@ export function saveCurrent(store: SnapshotStore, snapshot: TopologySnapshot) {
   store.setItem(CURRENT_KEY, serializeSnapshot(snapshot))
 }
 
+/** Keep typed $/hr when Calibration or Inspector writes and Workspace is not mounted. */
+export function patchCurrentLibrary(
+  store: SnapshotStore,
+  profiles: CalibrationProfile[],
+  fault: FaultMode,
+) {
+  const current = loadCurrent(store)
+  if (!current) return
+  saveCurrent(store, { ...current, profiles, fault })
+}
+
 export function listProjects(store: SnapshotStore): TopologySnapshot[] {
   const raw = store.getItem(PROJECTS_KEY)
   if (!raw) return []

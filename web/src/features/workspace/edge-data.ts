@@ -107,7 +107,7 @@ export function hopTypeLabel(edge: RfEdge): string {
 }
 
 export function hopLabelWithRate(typeLabel: string, offered?: number): string {
-  if (offered === undefined || offered <= 0) return typeLabel
+  if (offered === undefined || offered < 0.05) return typeLabel
   const rate = formatHopRate(offered)
   if (typeLabel.includes(' · cross ·')) {
     return typeLabel.replace(' · cross ·', ` · ${rate} · cross ·`)

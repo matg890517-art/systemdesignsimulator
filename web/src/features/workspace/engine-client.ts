@@ -100,6 +100,7 @@ export function runWorkspaceAsync(
           classStats: message.classStats,
           edgeOffered: message.edgeOffered,
           edgeClassOffered: message.edgeClassOffered,
+          instant: message.instant,
         })
         return
       }

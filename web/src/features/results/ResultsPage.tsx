@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Box, MenuItem, Select, Stack, Typography } from '@mui/material'
-import { costFromProfiles, hourlyByBindsTo } from '@sds/engine'
+import { hourlyByBindsTo } from '@sds/engine'
 import { KpiStat } from '../../components/KpiStat.tsx'
 import { TopNav } from '../../components/TopNav.tsx'
+import { readCurrentCanvas } from '../calibration/canvas-library.ts'
 import { useLibrary } from '../calibration/library.ts'
 import { idleKpis } from '../workspace/simulate.ts'
 import {
@@ -12,7 +13,7 @@ import {
   useRunHistory,
 } from '../workspace/run-history.ts'
 import type { KpiState } from '../workspace/types.ts'
-import { configProfileForNode } from '../workspace/node-profile.ts'
+import { costFromCanvas } from '../workspace/node-profile.ts'
 import { CostPanel } from './CostPanel.tsx'
 import { Explainer } from './Explainer.tsx'
 import { FidelityPanel } from './FidelityPanel.tsx'
@@ -26,17 +27,8 @@ export function ResultsPage() {
   const record = activeRecord(history)
   const library = useLibrary()
   const ranked = record?.ranking ?? []
-  const cost = costFromProfiles(
-    ranked.length > 0
-      ? ranked.map((row) =>
-          configProfileForNode(
-            library.profiles.find((profile) => profile.bindsTo === row.id),
-            row.id,
-            row.title,
-          ),
-        )
-      : library.profiles,
-  )
+  const canvas = readCurrentCanvas()
+  const cost = costFromCanvas(canvas.nodes, library.profiles)
   const [recorded, setRecorded] = useState(absentRecordedTest)
   const fidelity = useMemo(() => scoreReferenceFidelity(recorded), [recorded])
   const kpis: KpiState = {

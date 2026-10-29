@@ -104,6 +104,7 @@ describe('remaining P0 requirements', () => {
       }),
     ).toBe('miss · R/W')
     expect(hopLabelWithRate('B · cross · Estimated', 2)).toBe('B · 2.0 /s · cross · Estimated')
+    expect(hopLabelWithRate('R/W', 0.04)).toBe('R/W')
   })
 
   it('F4 compiles typed edge payload bytes and fan-out from canvas data', () => {

@@ -296,6 +296,18 @@ describe('load balancer split', () => {
     expect(result.nodes.a?.lambda).toBeCloseTo(100, 6)
     expect(result.nodes.b?.lambda).toBeCloseTo(100, 6)
   })
+
+  it('splits two CDNs from Clients so 240 rps is not copied onto both hops', () => {
+    const scenario = mmcScenario(80, 4, 10)
+    scenario.nodes.push(pool('cdn-b', 8, 1))
+    scenario.edges = [
+      { id: 'c-a', from: 'clients', to: 'pool', perClass: { read: hop() } },
+      { id: 'c-b', from: 'clients', to: 'cdn-b', perClass: { read: hop() } },
+    ]
+    const result = solveAnalytic(compileScenario(scenario))
+    expect(result.nodes.pool?.lambda).toBeCloseTo(40, 6)
+    expect(result.nodes['cdn-b']?.lambda).toBeCloseTo(40, 6)
+  })
 })
 
 describe('Simulated time series', () => {

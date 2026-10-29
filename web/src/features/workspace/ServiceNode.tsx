@@ -104,6 +104,20 @@ export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNo
               </Typography>
             </Tooltip>
           ) : null}
+        </Stack>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+          <Typography
+            sx={{
+              fontFamily: '"IBM Plex Mono", monospace',
+              fontSize: 13,
+              color: utilColor[health],
+            }}
+          >
+            {formatPct(data.util, generator || data.p99 === 'not run' ? '—' : '0%')}
+          </Typography>
+          <Typography noWrap sx={{ fontSize: 11, color: 'text.secondary', minWidth: 0, flex: 1 }}>
+            {data.p99 === 'not run' ? '' : data.p99}
+          </Typography>
           {generator ? null : (
             <Tooltip
               title={`${confidenceLabel(confidence === 'unknown' ? undefined : confidence)} capacity. ${
@@ -133,20 +147,6 @@ export function ServiceNodeView({ id, data, selected }: NodeProps<Node<ServiceNo
               </Box>
             </Tooltip>
           )}
-        </Stack>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
-          <Typography
-            sx={{
-              fontFamily: '"IBM Plex Mono", monospace',
-              fontSize: 13,
-              color: utilColor[health],
-            }}
-          >
-            {formatPct(data.util)}
-          </Typography>
-          <Typography noWrap sx={{ fontSize: 11, color: 'text.secondary', minWidth: 0, flex: 1 }}>
-            {data.p99}
-          </Typography>
           {state === 'live' ? (
             <Box
               component="span"

@@ -94,7 +94,7 @@ describe('UX polish: card states and confidence badge', () => {
     expect(profileConfidence(mixed)).toBe('estimated')
     expect(profileCitation(mixed)).toBe('Estimated · Pool')
     expect(confidenceBadge('vendor')).toEqual({ label: 'Vendor', tone: 'vendor' })
-    expect(confidenceBadge('unknown').label).toBe('Unknown')
+    expect(confidenceBadge('unknown').label).toBe('Unk.')
   })
 
   it('prints n from the profile, not from the card title, and keeps unknown as unknown', () => {

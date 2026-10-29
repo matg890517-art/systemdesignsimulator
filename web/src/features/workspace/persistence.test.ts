@@ -7,7 +7,10 @@ import {
   compileSnapshot,
   createMemoryStore,
   listProjects,
+  loadCurrent,
   parseSnapshot,
+  patchCurrentLibrary,
+  saveCurrent,
   serializeSnapshot,
   snapshotFilename,
   snapshotFrom,
@@ -72,6 +75,47 @@ describe('F12 topology snapshot', () => {
     const restored = parseSnapshot(serializeSnapshot(snapshot))
     expect(restored?.scene).toBe('youtube')
     expect(restored?.nodes.some((node) => node.id === 'aks')).toBe(true)
+  })
+
+  it('patches typed $/hr onto the saved canvas without needing Workspace mounted', () => {
+    const store = createMemoryStore()
+    const snapshot = snapshotFrom({
+      name: 'Generic reference stack',
+      scene: 'reference',
+      nodes: initialNodes,
+      edges: initialEdges,
+      draft: defaultWorkloadDraft(),
+      profiles: getProfiles(),
+      fault: 'none',
+    })
+    saveCurrent(store, snapshot)
+    patchCurrentLibrary(
+      store,
+      [
+        {
+          id: 'node-cdn',
+          name: 'CDN',
+          bindsTo: 'cdn',
+          fields: [
+            {
+              id: 'costUsdPerHour',
+              label: 'Hourly cost',
+              unit: 'USD/hr',
+              role: 'costUsdPerHour',
+              value: { state: 'set', value: 12.5, confidence: 'estimated' },
+            },
+          ],
+        },
+      ],
+      'none',
+    )
+    const restored = loadCurrent(store)
+    expect(restored?.name).toBe('Generic reference stack')
+    expect(
+      restored?.profiles
+        .find((profile) => profile.bindsTo === 'cdn')
+        ?.fields.find((field) => field.role === 'costUsdPerHour')?.value,
+    ).toEqual({ state: 'set', value: 12.5, confidence: 'estimated' })
   })
 })
 

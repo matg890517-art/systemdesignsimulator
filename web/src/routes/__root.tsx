@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   HeadContent,
   Outlet,
@@ -15,6 +16,7 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
+import { hydrateLibraryFromSnapshot } from '../features/calibration/library.ts'
 import { sdsTheme } from '../theme/sdsTheme.ts'
 
 import appCss from '../styles.css?url'
@@ -51,6 +53,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    hydrateLibraryFromSnapshot()
+  }, [])
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

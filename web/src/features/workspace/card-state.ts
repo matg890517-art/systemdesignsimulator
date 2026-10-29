@@ -22,7 +22,7 @@ export function confidenceBadge(confidence: Confidence | 'unknown'): ConfidenceB
   if (confidence === 'measured') return { label: 'Measured', tone: 'measured' }
   if (confidence === 'vendor') return { label: 'Vendor', tone: 'vendor' }
   if (confidence === 'estimated') return { label: 'Est.', tone: 'estimated' }
-  return { label: 'Unknown', tone: 'unknown' }
+  return { label: 'Unk.', tone: 'unknown' }
 }
 
 export type ServerCountDisplay = {
