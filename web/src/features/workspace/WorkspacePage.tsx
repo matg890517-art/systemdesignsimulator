@@ -712,10 +712,13 @@ export function WorkspacePage() {
           draft: getWorkloadDraft(),
           profiles: getProfiles(),
           fault: getFault(),
+          pace: isSimulatedMode(getWorkloadDraft().mode) ? 1 : undefined,
         },
         (progress) => {
           if (!live || runGen.current !== id) return
-          setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
+          playheadRef.current = progress.t
+          setPlayhead(progress.t)
+          setRunHint(`worker · live · t ${progress.t.toFixed(1)}s`)
           if (Object.keys(progress.nodeStats ?? {}).length === 0) return
           cancelAnimationFrame(paintFrame.current)
           paintFrame.current = requestAnimationFrame(() => {
@@ -765,8 +768,7 @@ export function WorkspacePage() {
         run: result.run,
         ranking: rankingFromNodes(nodes, result.run, getProfiles()),
       })
-      if (canPlayback(result.run)) startPlayback(result.run)
-      else showLastRun(result.run, false)
+      showLastRun(result.run, false)
     } catch (error) {
       if (runGen.current !== id || isRunStopped(error)) return
       clearLive()
@@ -1113,7 +1115,7 @@ export function WorkspacePage() {
             color="error"
             onClick={onStop}
             startIcon={<StopRoundedIcon />}
-            title="Stop the run on the worker. The canvas returns to the last finished run."
+            title="Stop the live clock. Simulated time freezes on the last painted tick."
           >
             Stop
           </Button>
@@ -1287,7 +1289,7 @@ export function WorkspacePage() {
                 <HeatLegend />
               </Stack>
             </Box>
-            {!running && lastRun && canPlayback(lastRun) ? (
+            {(running && isSimulatedMode(draft.mode)) || (!running && lastRun && canPlayback(lastRun)) ? (
               <Box
                 sx={{
                   position: 'absolute',
@@ -1299,12 +1301,12 @@ export function WorkspacePage() {
               >
                 <PlaybackBar
                   t={playhead}
-                  durationSec={lastRun.durationSec}
-                  playing={playingBack}
+                  durationSec={running ? draft.durationSec : lastRun?.durationSec ?? draft.durationSec}
+                  playing={running || playingBack}
                   speed={playSpeed}
                   showMode={showMode}
-                  onToggle={onTogglePlayback}
-                  onScrub={onScrubPlayback}
+                  onToggle={running ? onStop : onTogglePlayback}
+                  onScrub={running ? () => undefined : onScrubPlayback}
                   onSpeed={onPlaybackSpeed}
                 />
               </Box>

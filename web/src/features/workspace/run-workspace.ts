@@ -926,7 +926,7 @@ export function runWorkspace(
   }
 }
 
-/** Worker path: Simulated DES yields every 8 ms so cancel can land. Analytic stays sync. */
+/** Worker path: Simulated DES emits each dt, optionally paced to wall time. Analytic stays sync. */
 export async function runWorkspaceSliced(
   nodes: Node<ServiceNodeData | ZoneNodeData>[],
   rfEdges: RfEdge[],
@@ -935,6 +935,7 @@ export async function runWorkspaceSliced(
   fault: FaultMode,
   onProgress?: (progress: RunProgress) => void,
   cancelled?: () => boolean,
+  pace?: number,
 ): Promise<WorkspaceOutcome> {
   const { topology, workload } = compileCanvas(nodes, rfEdges, draft, profiles, fault)
   if (topology.components.length === 0) {
@@ -956,6 +957,7 @@ export async function runWorkspaceSliced(
         ? solveAnalytic(compiled)
         : await simulateWithSlices(compiled, workload.seed, {
             cancelled,
+            pace,
             onProgress: (info) => paintSimProgress(topology, info, profiles, onProgress),
           })
     return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)

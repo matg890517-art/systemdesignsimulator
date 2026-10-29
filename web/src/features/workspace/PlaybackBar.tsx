@@ -81,7 +81,7 @@ export function PlaybackBar({
         <Tooltip
           title={
             showMode === 'instant'
-              ? 'Instantaneous: ρ and hop /s over the last 1 s of simulated time, not dt. Queue depth is live. p99 stays empty.'
+              ? 'Instantaneous: ρ and hop /s over the last Workload dt of simulated time. Queue depth is live. p99 stays empty.'
               : 'Average: ρ and hop /s from t=0 to this time. Queue depth is live. p99 only if wait is at least 1 ms. KPI stays post-warm-up.'
           }
         >

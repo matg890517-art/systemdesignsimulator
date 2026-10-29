@@ -275,8 +275,8 @@ export function WorkloadEditor({
 
       <Typography sx={{ mt: 2, fontSize: 12, color: discreteBlocked ? 'error.main' : 'text.secondary' }}>
         {discreteBlocked
-          ? `Simulated mode would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (guard ${DISCRETE_EVENT_GUARD.toLocaleString()}). Use Analytic, or lower rate / duration.`
-          : `About ${Math.round(arrivals).toLocaleString()} arrivals over ${draft.durationSec}s at peak.`}
+          ? `Simulated would schedule about ${Math.round(arrivals).toLocaleString()} arrivals (Σ class rps × peak factor × duration). Guard is ${DISCRETE_EVENT_GUARD.toLocaleString()}. Use Analytic, or lower rate / duration.`
+          : `About ${Math.round(arrivals).toLocaleString()} arrivals (Σ class rps × peak factor × ${draft.durationSec}s).`}
       </Typography>
     </Box>
   )

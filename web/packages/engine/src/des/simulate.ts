@@ -60,11 +60,16 @@ function emptyNode(status: NodeResult['status']): NodeResult {
 
 export const WORKER_SLICE_MS = 8
 
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 export type SimHooks = {
   cancelled?: () => boolean
   onProgress?: (info: { events: number; t_s: number; fraction: number; tick?: SimTick }) => void
   sliceMs?: number
   now?: () => number
+  /** Simulated seconds per wall second. 1 = live clock. Unset = run as fast as the worker can. */
+  pace?: number
+  sleep?: (ms: number) => Promise<void>
 }
 
 function offeredAt(row: WorkloadRow, tUs: number): number {
@@ -225,7 +230,6 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
   const series: SimTick[] = []
   const dtUs = scenario.run.dt_s && scenario.run.dt_s > 0 ? scenario.run.dt_s * US : undefined
   const tickStepUs = tickEveryUs(durationUs, dtUs)
-  let nextTickUs = 0
   let lastSnapUs = 0
   const lastArrived = rt.map(() => 0)
   const lastCompleted = rt.map(() => 0)
@@ -304,8 +308,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
     return tick
   }
 
-  const maybeTick = (tUs: number) => {
-    if (tUs + 1 < nextTickUs) return
+  const emitTickAt = (tUs: number) => {
     const tick = snapshot(tUs)
     series.push(tick)
     hooks?.onProgress?.({
@@ -314,10 +317,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       fraction: Math.min(1, tick.t_s / Math.max(scenario.run.duration_s, 1e-9)),
       tick,
     })
-    while (nextTickUs <= tUs) nextTickUs += tickStepUs
   }
-
-  maybeTick(0)
 
   const startService = (ni: number, reqIndex: number, t: number) => {
     const node = nodes[ni]!
@@ -460,10 +460,7 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
         schedule(ev.t + Math.max(1, Math.round(ia)), EventKind.generate, ni, ci)
         if (row.profile === 'ramp') {
           const accept = offeredAt(row, ev.t) / row.rate_rps
-          if (stream(node.id, 'thin').next() > accept) {
-            maybeTick(ev.t)
-            return 'ok'
-          }
+          if (stream(node.id, 'thin').next() > accept) return 'ok'
         }
       }
       const req: Req = {
@@ -489,20 +486,24 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
       const next = rtN.queue.shift()
       if (next !== undefined) startService(ni, next, ev.t)
     }
-    maybeTick(ev.t)
     return 'ok'
   }
 
-  const pump = (): boolean => {
-    if (!heap.size) return false
-    let n = 0
-    while (heap.size && n < 512) {
+  const advanceTo = (untilUs: number): 'ok' | 'stop' => {
+    while (heap.size) {
+      const next = heap.peek()
+      if (!next || next.t > untilUs) break
       const ev = heap.pop()
-      if (!ev) return false
-      if (handle(ev) === 'stop') return false
-      n++
+      if (!ev) break
+      if (handle(ev) === 'stop') return 'stop'
     }
-    return heap.size > 0
+    return 'ok'
+  }
+
+  const nextSampleUs = (tUs: number) => {
+    if (tUs >= durationUs) return durationUs
+    const next = tUs + tickStepUs
+    return next >= durationUs ? durationUs : next
   }
 
   const finish = (): EngineResult => {
@@ -622,22 +623,43 @@ function buildSim(compiled: CompiledModel, seed: number, hooks?: SimHooks) {
 
   return {
     runSync() {
-      while (pump()) {}
+      let tUs = 0
+      for (;;) {
+        if (hooks?.cancelled?.()) {
+          warnings.push('cancelled')
+          break
+        }
+        if (advanceTo(tUs) === 'stop') break
+        emitTickAt(tUs)
+        if (tUs >= durationUs) break
+        tUs = nextSampleUs(tUs)
+      }
       return finish()
     },
     async runAsync() {
       const now = hooks?.now ?? Date.now
       const slice = hooks?.sliceMs ?? WORKER_SLICE_MS
-      let last = now()
-      while (pump()) {
+      const sleep = hooks?.sleep ?? defaultSleep
+      const pace = hooks?.pace
+      const origin = now()
+      let last = origin
+      let tUs = 0
+      for (;;) {
         if (hooks?.cancelled?.()) {
           warnings.push('cancelled')
           break
         }
-        if (now() - last >= slice) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
+        if (advanceTo(tUs) === 'stop') break
+        emitTickAt(tUs)
+        if (pace && pace > 0) {
+          const wait = origin + (tUs / US / pace) * 1000 - now()
+          if (wait > 1) await sleep(wait)
+        } else if (now() - last >= slice) {
+          await sleep(0)
           last = now()
         }
+        if (tUs >= durationUs) break
+        tUs = nextSampleUs(tUs)
       }
       return finish()
     },

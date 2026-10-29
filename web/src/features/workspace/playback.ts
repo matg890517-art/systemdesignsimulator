@@ -49,7 +49,7 @@ export function pickTick(ticks: RunTick[] | undefined, t: number): RunTick | und
 }
 
 /**
- * Instant holds the last closed 1 s window. The t=0 DES snapshot has a 0 s window
+ * Instant holds the last closed dt window. The t=0 DES snapshot has a 0 s window
  * (all zeros / busy-or-idle), so it is not a sample — use the first closed tick until then.
  */
 export function pickInstantTick(ticks: RunTick[] | undefined, t: number): RunTick | undefined {
@@ -149,7 +149,7 @@ export function lerpRates(from: TickRates, to: TickRates, u: number): TickRates 
 }
 
 /**
- * Instantaneous = last 1 s sample (held, not lerped). Average = t=0 to playhead (lerped).
+ * Instantaneous = last dt sample (held, not lerped). Average = t=0 to playhead (lerped).
  * Slider still moves continuously. Not extra DES samples.
  */
 export function viewRunAt(run: WorkspaceRun, t: number, showMode: ShowMode = 'average'): WorkspaceRun {

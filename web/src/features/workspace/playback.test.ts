@@ -110,7 +110,7 @@ describe('F30 playback view', () => {
     expect(viewRunAt(run, 19.4, 'instant').edgeOffered['c-cdn']).toBe(80)
   })
 
-  it('Instant at t=0 holds the first closed 1 s window, not the empty snapshot', () => {
+  it('Instant at t=0 holds the first closed dt window, not the empty snapshot', () => {
     const series: WorkspaceRun = {
       ...run,
       mode: 'simulated',

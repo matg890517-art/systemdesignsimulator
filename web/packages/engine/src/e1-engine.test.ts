@@ -299,11 +299,15 @@ describe('load balancer split', () => {
 })
 
 describe('Simulated time series', () => {
-  it('emits decimated ticks including t=0 while N7 numbers stay post-warm-up', () => {
-    const result = simulateOnce(compileScenario(mmcScenario(40, 1, 20)))
-    expect(result.ticks?.length).toBeGreaterThan(1)
+  it('emits a tick every dt including t=0 while N7 numbers stay post-warm-up', () => {
+    const scenario = mmcScenario(40, 1, 20)
+    scenario.run.dt_s = 0.1
+    const result = simulateOnce(compileScenario(scenario))
+    expect(result.ticks?.length).toBe(21)
     expect(result.ticks?.[0]?.t_s).toBeCloseTo(0, 6)
+    expect(result.ticks?.[1]?.t_s).toBeCloseTo(0.1, 6)
     expect(result.ticks?.[0]?.nodes.pool?.lambda).toBe(0)
+    expect(result.ticks?.at(-1)?.t_s).toBeCloseTo(2, 6)
     expect(result.ticks?.at(-1)?.nodes.pool?.lambda).toBeGreaterThan(0)
     expect(Math.abs((result.ticks?.at(-1)?.nodes.pool?.lambda ?? 0) - 40) / 40).toBeLessThan(0.2)
     expect(Math.abs((result.ticks?.at(-1)?.nodes.pool?.rho ?? 0) - 0.8) / 0.8).toBeLessThan(0.25)
@@ -318,11 +322,29 @@ describe('Simulated time series', () => {
     expect(hist.percentileMs(0.99)).toBeGreaterThan(0)
   })
 
-  it('samples Instantaneous every 1 s, not Workload dt', () => {
-    expect(tickEveryUs(2_000_000, 100_000)).toBe(1_000_000)
-    expect(tickEveryUs(60_000_000, 100_000)).toBe(1_000_000)
+  it('samples Instantaneous every Workload dt, with no duration stretch', () => {
+    expect(tickEveryUs(2_000_000, 100_000)).toBe(100_000)
+    expect(tickEveryUs(60_000_000, 100_000)).toBe(100_000)
     expect(tickEveryUs(60_000_000)).toBe(1_000_000)
-    expect(tickEveryUs(120_000_000)).toBe(2_000_000)
+    expect(tickEveryUs(120_000_000)).toBe(1_000_000)
+  })
+
+  it('paces runAsync so wall time tracks each dt', async () => {
+    const scenario = mmcScenario(40, 1, 20)
+    scenario.run = { ...scenario.run, duration_s: 1, warmup_s: 0, dt_s: 0.5 }
+    let wall = 0
+    const sleeps: number[] = []
+    await simulateWithSlices(compileScenario(scenario), 1, {
+      pace: 1,
+      now: () => wall,
+      sleep: async (ms) => {
+        sleeps.push(ms)
+        wall += ms
+      },
+    })
+    expect(sleeps.length).toBeGreaterThanOrEqual(2)
+    expect(sleeps[0]).toBeGreaterThan(400)
+    expect(sleeps[0]).toBeLessThan(600)
   })
 
   it('ramps offered load from 0 to the target in Simulated only', () => {

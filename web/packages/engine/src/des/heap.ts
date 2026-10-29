@@ -36,6 +36,17 @@ export class EventHeap {
     this.up(i)
   }
 
+  peek(): { t: number; seq: number; kind: number; a: number; b: number } | undefined {
+    if (this.size === 0) return undefined
+    return {
+      t: this.time[0]!,
+      seq: this.seq[0]!,
+      kind: this.kind[0]!,
+      a: this.a[0]!,
+      b: this.b[0]!,
+    }
+  }
+
   pop(): { t: number; seq: number; kind: number; a: number; b: number } | undefined {
     if (this.size === 0) return undefined
     const t = this.time[0]!

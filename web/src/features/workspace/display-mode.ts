@@ -4,7 +4,7 @@ export const SHOW_MODES = [
     id: 'instant' as const,
     label: 'Instantaneous',
     shortLabel: 'Instant',
-    hint: 'ρ is % of limit in the last 1 s of simulated time. Hop /s is arrivals in that 1 s, not one request and not Workload dt. p99 stays empty. DES is event-driven.',
+    hint: 'ρ is % of limit in the last Workload dt of simulated time. Hop /s is arrivals in that dt, not one request. p99 stays empty. DES is event-driven.',
   },
   {
     id: 'average' as const,

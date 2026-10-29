@@ -1,3 +1,4 @@
+import { liveDelayMs, liveHoldMs } from './live-pace.ts'
 import { runWorkspace, type RunProgress } from './run-workspace.ts'
 import type { EngineJobMessage, EngineJobRequest, EngineJobResult } from './engine-job.ts'
 
@@ -5,6 +6,7 @@ type JobInput = Omit<EngineJobRequest, 'id'>
 
 let worker: Worker | undefined
 let nextId = 1
+let liveGen = 0
 const pending = new Map<number, (error: Error) => void>()
 
 /** Thrown to a caller whose run was stopped from the toolbar. Not an engine failure. */
@@ -24,11 +26,16 @@ function getWorker(): Worker {
   return worker
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
 /**
  * Cooperative cancel posts first so a yielding Simulated run can stop. Terminate still
  * unfreezes the tab if the job is in a blocking slice.
  */
 export function stopWorkspaceRun(): boolean {
+  liveGen += 1
   if (!worker || pending.size === 0) return false
   try {
     worker.postMessage({ type: 'cancel' })
@@ -56,6 +63,25 @@ export function runWorkspaceAsync(
   const id = nextId
   nextId += 1
   const target = getWorker()
+  const pace = input.pace ?? 0
+  const origin = performance.now()
+  const gen = liveGen
+  let paint = Promise.resolve()
+
+  const deliver = (progress: RunProgress) => {
+    if (!onProgress) return
+    if (!(pace > 0)) {
+      onProgress(progress)
+      return
+    }
+    paint = paint.then(async () => {
+      if (gen !== liveGen) return
+      const wait = liveDelayMs(origin, progress.t, pace, performance.now())
+      if (wait > 1) await sleep(wait)
+      if (gen !== liveGen) return
+      onProgress(progress)
+    })
+  }
 
   return new Promise((resolve, reject) => {
     const cleanup = () => {
@@ -67,7 +93,7 @@ export function runWorkspaceAsync(
       const message = event.data
       if (message.id !== id) return
       if (message.type === 'progress') {
-        onProgress?.({
+        deliver({
           t: message.t,
           fraction: message.fraction,
           nodeStats: message.nodeStats,
@@ -77,12 +103,24 @@ export function runWorkspaceAsync(
         })
         return
       }
-      cleanup()
       if (message.type === 'error') {
+        cleanup()
         reject(new Error(message.message))
         return
       }
-      resolve(message.result)
+      void paint
+        .then(async () => {
+          if (gen !== liveGen) return
+          if (message.result.ok && pace > 0) {
+            const hold = liveHoldMs(origin, input.draft.durationSec, pace, performance.now())
+            if (hold > 1) await sleep(hold)
+          }
+        })
+        .then(() => {
+          if (gen !== liveGen) return
+          cleanup()
+          resolve(message.result)
+        })
     }
     const onError = (event: ErrorEvent) => {
       cleanup()
@@ -94,7 +132,7 @@ export function runWorkspaceAsync(
     })
     target.addEventListener('message', onMessage)
     target.addEventListener('error', onError)
-    const request: EngineJobRequest = { id, ...input }
+    const request: EngineJobRequest = { id, ...input, pace: 0 }
     target.postMessage(request)
   })
 }

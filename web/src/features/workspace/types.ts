@@ -130,7 +130,7 @@ export type TickRates = {
 /** One sampled engine tick. Playback and edge motion read this; they do not re-run the math. */
 export type RunTick = TickRates & {
   t: number
-  /** Instantaneous window (this sample). Average fields on the tick are 0→t. */
+  /** Instantaneous window (last dt). Average fields on the tick are 0→t. */
   instant?: TickRates
 }
 

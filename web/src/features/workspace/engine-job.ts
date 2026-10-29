@@ -12,6 +12,8 @@ export type EngineJobRequest = {
   draft: WorkloadDraft
   profiles: CalibrationProfile[]
   fault: FaultMode
+  /** Worker DES speed. 0/omit = as fast as possible. Live 1× match is paced on the page. */
+  pace?: number
 }
 
 export type EngineJobResult = { ok: true; run: WorkspaceRun } | { ok: false; reason: string }
@@ -41,6 +43,7 @@ export async function runEngineJob(
         })
       },
       cancelled,
+      request.pace,
     )
     if (result.ok) {
       result.run.hint = `${result.run.hint} · worker`

@@ -159,7 +159,7 @@ Healthy rho < 0.70; Warning 0.70 to 0.85; Critical 0.85 to under 1; Unstable 1 o
 - Latency: log-linear bucket histogram per node, class and path, 1 percent relative error, giving p50, p95, p99, p99.9 without storing samples.
 - Utilization and queue length: time-weighted integrals.
 - Counters: arrived, completed, dropped (buffer), timed out, in flight.
-- Time series for charts and playback: sampled every `dt`, decimated for display.
+- Time series for charts and playback: one sample every `dt`, live-paced to wall time.
 
 ### 7.5 Statistics
 - Warm-up: discard everything before `warmup_s` (default 20 percent of the run); optional MSER-5 detection.
@@ -243,7 +243,7 @@ Later phases
 - Workload tab: constant is the Analytic λ. Simulated may Ramp 0→target over ramp seconds (default = warm-up). Poisson/step/spike stay later E2.
 - Fault section: visible but disabled, labeled "Phase E3".
 - Results: per-node card with utilization gauge and p50/p95/p99; hockey-stick chart (latency versus load per component); bottleneck and headroom banner; stability chip; evidence badge.
-- F30: Analytic hockey-stick is the proof. Simulated playback reads the decimated DES series (including warm-up ticks). Show mode Instantaneous = last 1 s of simulated time (not dt); Average = 0→playhead (lerped). Queue depth is live; traveling dots follow the painted hop rate. Visual only; no accuracy claim. Analytic has no timeline.
+- F30: Analytic hockey-stick is the proof. Simulated emits one tick per Workload dt and live-paces 1 s sim ≈ 1 s wall. Show mode Instantaneous = last dt; Average = 0→playhead (lerped). Queue depth is live; traveling dots follow the painted hop rate. Visual only; no accuracy claim. Analytic has no timeline.
 
 ## 12. Known limits and risks
 
@@ -260,7 +260,7 @@ Later phases
 - N4: remove "60 FPS canvas"; state that no frame-rate or speed claim is made.
 - F5: constant profile for Analytic; Simulated may Ramp 0→target. Other profiles stay later E2.
 - F8: moves to E3; Fault section disabled until then.
-- F30: Analytic hockey-stick; Simulated playback reads the decimated series.
+- F30: Analytic hockey-stick; Simulated emits one tick per dt and live-paces 1×.
 - Architecture and stack table: align with the tech stack file (TanStack Start, Store/Charts marked Evaluate, Drizzle Evaluate); remove Zustand and Redis rows unless re-decided.
 - Roadmap: insert E1.1 to E1.11, then E2 to E4.
 - Changelog: Oct 28, 2026 row for the engine redesign.

@@ -103,7 +103,7 @@ export type Scenario = {
     warmup_s: number
     replications: number
     eventBudget: number
-    /** Workload dt (arrival / solver step). Instantaneous canvas window is 1 s, not dt. */
+    /** Workload dt. Simulated emits one canvas tick per dt and Instantaneous uses that window. */
     dt_s?: number
   }
   classes: ScenarioClass[]

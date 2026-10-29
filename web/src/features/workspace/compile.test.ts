@@ -277,6 +277,7 @@ describe('compileCanvas', () => {
     expect(analytic.run.ticks).toHaveLength(1)
     expect(simulated.run.ticks.length).toBeGreaterThan(1)
     expect(simulated.run.ticks[0]?.t).toBeCloseTo(0, 6)
+    expect(simulated.run.ticks[1]?.t).toBeCloseTo(0.1, 5)
     expect(simulated.run.ticks[0]?.instant?.nodeStats.cdn.p99).toBe('')
     expect(simulated.run.ticks[0]?.nodeStats.cdn.p99).toBe('')
     expect(simulated.run.ticks.at(-1)?.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan(150)
