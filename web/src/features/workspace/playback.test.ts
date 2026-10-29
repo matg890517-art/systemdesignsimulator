@@ -4,7 +4,9 @@ import {
   emitEvery,
   flowPacketCount,
   flowPeriodSec,
+  pickInstantTick,
   pickTick,
+  pickTickSpan,
   playbackWallMs,
   shouldEmitTick,
   viewRunAt,
@@ -89,12 +91,39 @@ describe('F30 playback view', () => {
   })
 
   it('Average is 0→playhead; Instantaneous is the sample window', () => {
-    expect(viewRunAt(run, 10, 'average').edgeOffered['c-cdn']).toBe(120)
-    expect(viewRunAt(run, 10, 'average').nodeStats.cdn.backlog).toBe(0)
-    expect(viewRunAt(run, 10, 'instant').edgeOffered['c-cdn']).toBe(80)
-    expect(viewRunAt(run, 30, 'average').edgeOffered['c-cdn']).toBe(300)
-    expect(viewRunAt(run, 30, 'instant').edgeOffered['c-cdn']).toBe(480)
+    expect(viewRunAt(run, 19.5, 'average').edgeOffered['c-cdn']).toBe(240)
+    expect(viewRunAt(run, 19.5, 'instant').edgeOffered['c-cdn']).toBe(220)
+    expect(viewRunAt(run, 20.5, 'average').edgeOffered['c-cdn']).toBe(300)
+    expect(viewRunAt(run, 20.5, 'instant').edgeOffered['c-cdn']).toBe(480)
     expect(viewRunAt(run, 40, 'average').nodeStats.cdn.backlog).toBe(7)
+  })
+
+  it('lerps hop rate and util between engine ticks so the timeline is continuous', () => {
+    const span = pickTickSpan(run.ticks, 10)
+    expect(span?.from.t).toBe(0.5)
+    expect(span?.to.t).toBe(19.5)
+    expect(span?.u).toBeCloseTo(9.5 / 19, 6)
+    const mid = viewRunAt(run, 10, 'average')
+    expect(mid.edgeOffered['c-cdn']).toBeCloseTo(120 + 120 * (9.5 / 19), 6)
+    expect(mid.nodeStats.cdn.util).toBeCloseTo(0.1 + 0.1 * (9.5 / 19), 6)
+    expect(viewRunAt(run, 10, 'instant').edgeOffered['c-cdn']).toBe(80)
+    expect(viewRunAt(run, 19.4, 'instant').edgeOffered['c-cdn']).toBe(80)
+  })
+
+  it('Instant at t=0 holds the first closed 1 s window, not the empty snapshot', () => {
+    const series: WorkspaceRun = {
+      ...run,
+      mode: 'simulated',
+      ticks: [tick(0, 0, {}, 0), tick(1, 40, {}, 200), tick(2, 80, {}, 210)],
+      durationSec: 60,
+    }
+    expect(pickInstantTick(series.ticks, 0)?.t).toBe(1)
+    expect(viewRunAt(series, 0, 'instant').edgeOffered['c-cdn']).toBe(200)
+    expect(viewRunAt(series, 0.4, 'instant').edgeOffered['c-cdn']).toBe(200)
+    expect(viewRunAt(series, 1, 'instant').edgeOffered['c-cdn']).toBe(200)
+    expect(viewRunAt(series, 1.5, 'instant').edgeOffered['c-cdn']).toBe(200)
+    expect(viewRunAt(series, 2, 'instant').edgeOffered['c-cdn']).toBe(210)
+    expect(viewRunAt(series, 0, 'average').edgeOffered['c-cdn']).toBe(0)
   })
 
   it('keeps a replay short enough to watch and speeds packets with rate', () => {

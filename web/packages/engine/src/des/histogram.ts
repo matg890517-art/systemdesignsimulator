@@ -28,7 +28,7 @@ export class LatencyHist {
   }
 
   percentileMs(p: number): number {
-    if (!this.n) return 0
+    if (!this.n) return Number.NaN
     const target = p * this.n
     let acc = 0
     for (let i = 0; i < BINS; i++) {

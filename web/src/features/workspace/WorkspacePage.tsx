@@ -102,7 +102,7 @@ import {
 } from './persistence.ts'
 import { hopLabelWithRate, hopTypeLabel, readEdgeData } from './edge-data.ts'
 import { PlaybackBar, type PlaybackSpeed } from './PlaybackBar.tsx'
-import { canPlayback, playbackWallMs, viewRunAt } from './playback.ts'
+import { canPlayback, playbackWallMs, PLAY_PAINT_MS, viewRunAt } from './playback.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
@@ -217,6 +217,8 @@ export function WorkspacePage() {
   const classFilterRef = useRef(classFilter)
   const playheadRef = useRef(0)
   const playingBackRef = useRef(false)
+  const playTokenRef = useRef(0)
+  const lastPlayPaintAt = useRef(0)
   const [playhead, setPlayhead] = useState(0)
   const [playingBack, setPlayingBack] = useState(false)
   const [playSpeed, setPlaySpeed] = useState<PlaybackSpeed>(1)
@@ -226,8 +228,6 @@ export function WorkspacePage() {
   const showModeRef = useRef<ShowMode>('instant')
   lastRunRef.current = lastRun
   classFilterRef.current = classFilter
-  playheadRef.current = playhead
-  playingBackRef.current = playingBack
   playSpeedRef.current = playSpeed
   showModeRef.current = showMode
   const [sessionReady, setSessionReady] = useState(false)
@@ -601,14 +601,17 @@ export function WorkspacePage() {
   }
 
   function stopPlayback() {
+    playTokenRef.current += 1
     cancelAnimationFrame(playFrame.current)
     playingBackRef.current = false
     setPlayingBack(false)
   }
 
-  function paintPlayhead(run: WorkspaceRun, t: number) {
+  function paintPlayhead(run: WorkspaceRun, t: number, now = performance.now(), force = false) {
     playheadRef.current = t
     setPlayhead(t)
+    if (!force && now - lastPlayPaintAt.current < PLAY_PAINT_MS) return
+    lastPlayPaintAt.current = now
     paintRun(viewRunAt(run, t, showModeRef.current), classFilterRef.current, false)
   }
 
@@ -622,14 +625,17 @@ export function WorkspacePage() {
     const startAt = Math.min(Math.max(0, from), duration)
     const wall = playbackWallMs(duration) / Math.max(0.25, playSpeedRef.current)
     const origin = performance.now() - (startAt / duration) * wall
+    lastRunRef.current = run
     playingBackRef.current = true
+    const token = ++playTokenRef.current
     setPlayingBack(true)
-    paintPlayhead(run, startAt)
+    paintPlayhead(run, startAt, performance.now(), true)
     const loop = (now: number) => {
-      if (!playingBackRef.current || lastRunRef.current !== run) return
+      if (!playingBackRef.current || playTokenRef.current !== token) return
       const t = Math.min(duration, ((now - origin) / wall) * duration)
-      paintPlayhead(run, t)
-      if (t >= duration - 1e-9) {
+      const ended = t >= duration - 1e-9
+      paintPlayhead(run, t, now, ended)
+      if (ended) {
         playingBackRef.current = false
         setPlayingBack(false)
         return
@@ -643,7 +649,7 @@ export function WorkspacePage() {
     const run = lastRunRef.current
     if (!run || !canPlayback(run)) return
     stopPlayback()
-    paintPlayhead(run, t)
+    paintPlayhead(run, t, performance.now(), true)
   }
 
   function onTogglePlayback() {
@@ -708,6 +714,8 @@ export function WorkspacePage() {
         },
         (progress) => {
           if (!live || runGen.current !== id) return
+          setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
+          if (Object.keys(progress.nodeStats ?? {}).length === 0) return
           cancelAnimationFrame(paintFrame.current)
           paintFrame.current = requestAnimationFrame(() => {
             if (!live || runGen.current !== id) return
@@ -733,7 +741,6 @@ export function WorkspacePage() {
               classFilterRef.current,
               true,
             )
-            setRunHint(`worker · running · t ${progress.t.toFixed(1)}s`)
           })
         },
       )
@@ -750,6 +757,7 @@ export function WorkspacePage() {
       setBottlenecks(result.run.bottlenecks)
       setRunHint(result.run.hint)
       setLastRun(result.run)
+      lastRunRef.current = result.run
       publishRun({
         projectName,
         hint: result.run.hint,

@@ -23,6 +23,7 @@ import {
   referenceStackProfiles,
   referenceWorkloadDraft,
 } from './reference-graph.ts'
+import { formatCardWait } from './run-workspace.ts'
 import { runWorkspace } from './simulate.ts'
 import type { ServiceNodeData } from './types.ts'
 import type { Node } from '@xyflow/react'
@@ -257,8 +258,8 @@ describe('compileCanvas', () => {
     expect(analytic.ok).toBe(true)
     if (!analytic.ok) return
     expect(analytic.run.mode).toBe('analytic')
-    expect(analytic.run.nodeStats.cdn.p99).toMatch(/p99|wait/)
-    expect(analytic.run.nodeStats.cdn.p99).not.toMatch(/unknown · fluid/)
+    expect(analytic.run.nodeStats.cdn.p99).not.toMatch(/0 ms|unknown · fluid/)
+    expect(analytic.run.nodeStats.clients.p99).toMatch(/rps|\/s/)
     expect(analytic.run.kpis.latency).not.toBe('unknown')
     expect(analytic.run.hockeyStick?.rps.length).toBeGreaterThan(0)
 
@@ -276,7 +277,17 @@ describe('compileCanvas', () => {
     expect(analytic.run.ticks).toHaveLength(1)
     expect(simulated.run.ticks.length).toBeGreaterThan(1)
     expect(simulated.run.ticks[0]?.t).toBeCloseTo(0, 6)
+    expect(simulated.run.ticks[0]?.instant?.nodeStats.cdn.p99).toBe('')
+    expect(simulated.run.ticks[0]?.nodeStats.cdn.p99).toBe('')
     expect(simulated.run.ticks.at(-1)?.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan(150)
+  })
+
+  it('leaves card p99 empty unless the wait tail is at least 1 ms', () => {
+    expect(formatCardWait({ generator: false, rps: 10, p99: 0 })).toBe('')
+    expect(formatCardWait({ generator: false, rps: 10, p99: 0.4 })).toBe('')
+    expect(formatCardWait({ generator: false, rps: 10, p99: 12, instantaneous: true })).toBe('')
+    expect(formatCardWait({ generator: false, rps: 10, p99: 12 })).toBe('12 ms p99')
+    expect(formatCardWait({ generator: true, rps: 210.5, p99: 0 })).toMatch(/rps/)
   })
 
   it('ramps Simulated hop rates from ~0 while Analytic still solves the target', () => {
@@ -303,9 +314,9 @@ describe('compileCanvas', () => {
     )
     expect(simulated.ok).toBe(true)
     if (!simulated.ok) return
-    const first = simulated.run.ticks.find((tick) => tick.t > 0 && tick.t < 0.25)
-    const late = simulated.run.ticks.find((tick) => tick.t >= 1.2)
-    expect(first?.edgeOffered['c-cdn'] ?? 0).toBeLessThan(80)
+    const first = simulated.run.ticks.find((tick) => tick.t >= 0.99 && tick.t <= 1.01)
+    const late = simulated.run.ticks.find((tick) => tick.t >= 1.9)
+    expect(first?.edgeOffered['c-cdn'] ?? 0).toBeLessThan(late?.edgeOffered['c-cdn'] ?? 0)
     expect(late?.edgeOffered['c-cdn'] ?? 0).toBeGreaterThan(80)
     expect(simulated.run.nodeStats.cdn.offered).toBeGreaterThan(80)
   })

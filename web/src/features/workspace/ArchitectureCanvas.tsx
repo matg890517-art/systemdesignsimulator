@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -83,7 +84,7 @@ function ClassAwareEdge(props: EdgeProps) {
       ? props.style.stroke
       : '#7B8794'
     : '#D5DBE3'
-  const period = flowPeriodSec(flowRps)
+  const period = Math.round(flowPeriodSec(flowRps) * 5) / 5
   const packets = flowing ? flowPacketCount(flowRps) : 0
   const fill = packetFill(stroke)
   return (
@@ -104,11 +105,7 @@ function ClassAwareEdge(props: EdgeProps) {
         style={{ ...props.style, stroke, opacity: visible ? 1 : 0.14 }}
       />
       {packets > 0 ? (
-        <g
-          className="sds-flow-packets"
-          pointerEvents="none"
-          key={`${props.id}-${Math.round(props.sourceX)}-${Math.round(props.targetX)}-${packets}`}
-        >
+        <g className="sds-flow-packets" pointerEvents="none">
           {Array.from({ length: packets }, (_, i) => (
             <circle key={i} r={4} fill={fill} stroke="#FFFFFF" strokeWidth={1.25}>
               <animateMotion
@@ -472,7 +469,7 @@ function CanvasInner({
 
 export type CanvasFocusRequest = { nodeId: string; nonce: number }
 
-export function ArchitectureCanvas(props: {
+function ArchitectureCanvasView(props: {
   nodes: WorkspaceNode[]
   edges: Edge[]
   classFilter: ClassFilter
@@ -522,3 +519,5 @@ export function ArchitectureCanvas(props: {
     </ReactFlowProvider>
   )
 }
+
+export const ArchitectureCanvas = memo(ArchitectureCanvasView)

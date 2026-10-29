@@ -46,15 +46,15 @@ function emptyNode(status: NodeResult['status']): NodeResult {
     status,
     Wq_ms: 0,
     W_ms: 0,
-    p50: 0,
-    p95: 0,
-    p99: 0,
+    p50: Number.NaN,
+    p95: Number.NaN,
+    p99: Number.NaN,
     L: 0,
     Lq: 0,
     throughput: 0,
     dropRate: 0,
     timeoutRate: 0,
-    waitUnknown: false,
+    waitUnknown: true,
   }
 }
 

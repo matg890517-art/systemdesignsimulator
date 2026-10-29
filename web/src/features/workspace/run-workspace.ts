@@ -85,6 +85,23 @@ function formatRps(n: number): string {
   return `${n.toFixed(2)} /s`
 }
 
+/**
+ * Card subtitle. Clients show offered rps. p99 is a tail: Instantaneous has none,
+ * and a value that rounds to 0 ms stays empty (not a filled-in zero).
+ */
+export function formatCardWait(opts: {
+  generator: boolean
+  rps: number
+  p99: number
+  waitUnknown?: boolean
+  instantaneous?: boolean
+}): string {
+  if (opts.generator) return formatRps(opts.rps)
+  if (opts.instantaneous) return ''
+  if (opts.waitUnknown || !Number.isFinite(opts.p99) || opts.p99 < 0.5) return ''
+  return `${opts.p99.toFixed(0)} ms p99`
+}
+
 function muOf(component: Component, classIds: string[]): number {
   const servers =
     component.behavior.servers.state === 'set' ? unwrap(component.behavior.servers) : Number.POSITIVE_INFINITY
@@ -491,11 +508,12 @@ function statsFromEngine(
     }
     if (!row) continue
     const generator = component.kind === 'traffic_generator'
-    const waitText = generator
-      ? formatRps(row.lambda)
-      : row.waitUnknown || !Number.isFinite(row.p99)
-        ? 'unknown wait'
-        : `${row.p99.toFixed(0)} ms p99`
+    const waitText = formatCardWait({
+      generator,
+      rps: row.lambda,
+      p99: row.p99,
+      waitUnknown: row.waitUnknown,
+    })
     const mu = serviceMs && servers ? servers / (serviceMs / 1000) : Number.POSITIVE_INFINITY
     const offered = row.lambda
     const completed = row.throughput
@@ -576,11 +594,13 @@ function ratesFromSimTick(
     const lambda = kind === 'instant' ? row.lambda_now : row.lambda
     const rho = kind === 'instant' ? row.rho_now : row.rho
     const throughput = kind === 'instant' ? row.throughput_now : row.throughput
-    const waitText = generator
-      ? formatRps(lambda)
-      : row.waitUnknown || !Number.isFinite(row.p99)
-        ? 'unknown wait'
-        : `${row.p99.toFixed(0)} ms p99`
+    const waitText = formatCardWait({
+      generator,
+      rps: lambda,
+      p99: row.p99,
+      waitUnknown: row.waitUnknown,
+      instantaneous: kind === 'instant',
+    })
     const mu = serviceMs && servers ? servers / (serviceMs / 1000) : Number.POSITIVE_INFINITY
     stats[component.id] = {
       util: generator ? 0 : Number.isFinite(rho) ? Math.min(1, Math.max(0, rho)) : 0,
@@ -650,6 +670,20 @@ function tickFromSimTick(
   }
 }
 
+/** Heartbeats without a tick must not paint. Empty nodeStats wipes Instant to zeros. */
+function paintSimProgress(
+  topology: Topology,
+  info: { t_s: number; fraction: number; tick?: SimTick },
+  profiles: CalibrationProfile[],
+  onProgress?: (progress: RunProgress) => void,
+) {
+  if (!info.tick) return
+  onProgress?.({
+    ...tickFromSimTick(topology, info.tick, 'simulated', profiles),
+    fraction: info.fraction,
+  })
+}
+
 function hockeyFromSweep(
   topology: Topology,
   sweep: { rps: number; waitMs: Record<string, number> }[],
@@ -717,7 +751,7 @@ function finishFromEngine(
     mode === 'simulated' && result.ticks && result.ticks.length > 0
       ? result.ticks.map((tick) => tickFromSimTick(topology, tick, mode, profiles))
       : [lastTick]
-  onProgress?.({ ...lastTick, fraction: 1 })
+  onProgress?.({ ...(ticks.at(-1) ?? lastTick), fraction: 1 })
   return {
     ok: true,
     run: {
@@ -771,23 +805,7 @@ export function runWorkspace(
         ? solveAnalytic(compiled)
         : simulateOnce(compiled, workload.seed, {
             cancelled,
-            onProgress: (info) => {
-              onProgress?.(
-                info.tick
-                  ? {
-                      ...tickFromSimTick(topology, info.tick, 'simulated', profiles),
-                      fraction: info.fraction,
-                    }
-                  : {
-                      t: info.t_s,
-                      fraction: info.fraction,
-                      nodeStats: {},
-                      classStats: {},
-                      edgeOffered: {},
-                      edgeClassOffered: {},
-                    },
-              )
-            },
+            onProgress: (info) => paintSimProgress(topology, info, profiles, onProgress),
           })
     return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)
   }
@@ -938,23 +956,7 @@ export async function runWorkspaceSliced(
         ? solveAnalytic(compiled)
         : await simulateWithSlices(compiled, workload.seed, {
             cancelled,
-            onProgress: (info) => {
-              onProgress?.(
-                info.tick
-                  ? {
-                      ...tickFromSimTick(topology, info.tick, 'simulated', profiles),
-                      fraction: info.fraction,
-                    }
-                  : {
-                      t: info.t_s,
-                      fraction: info.fraction,
-                      nodeStats: {},
-                      classStats: {},
-                      edgeOffered: {},
-                      edgeClassOffered: {},
-                    },
-              )
-            },
+            onProgress: (info) => paintSimProgress(topology, info, profiles, onProgress),
           })
     return finishFromEngine(topology, workload, compiled, result, mode, profiles, onProgress)
   }

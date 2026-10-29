@@ -103,7 +103,7 @@ export type Scenario = {
     warmup_s: number
     replications: number
     eventBudget: number
-    /** Workload dt. Simulated ticks use this as the Instantaneous window, capped by the 48-frame budget. */
+    /** Workload dt (arrival / solver step). Instantaneous canvas window is 1 s, not dt. */
     dt_s?: number
   }
   classes: ScenarioClass[]

@@ -50,7 +50,7 @@ export type SimTickEdge = {
   flow_rps_now: Record<string, number>
 }
 
-/** One DES canvas sample. `_now` is this sample window; plain fields are 0→t. Lq is the live queue. N7 stays post-warm-up. */
+/** One DES canvas sample. `_now` is the last 1 s of simulated time; plain fields are 0→t. Lq is the live queue. N7 stays post-warm-up. */
 export type SimTick = {
   t_s: number
   nodes: Record<string, SimTickNode>

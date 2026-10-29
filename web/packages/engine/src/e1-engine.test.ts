@@ -4,6 +4,7 @@ import { md1WaitMs, mm1kBlocking, erlangCWaitMs } from './analytic/queue.ts'
 import { zipfHitRatio } from './analytic/zipf.ts'
 import { solveAnalytic, runAnalyticScenario } from './analytic/solve.ts'
 import { simulateOnce, simulateWithSlices } from './des/simulate.ts'
+import { LatencyHist } from './des/histogram.ts'
 import { tickEveryUs } from './des/ticks.ts'
 import { createStreamRng } from './des/rng.ts'
 import { SCHEMA_VERSION, defaultRun, defaultTargets } from './schema/index.ts'
@@ -310,10 +311,18 @@ describe('Simulated time series', () => {
     expect(Math.abs((result.nodes.pool?.lambda ?? 0) - 40) / 40).toBeLessThan(0.08)
   })
 
-  it('samples Instantaneous on dt and caps a 60 s run near 10 dt', () => {
-    expect(tickEveryUs(2_000_000, 100_000)).toBe(100_000)
-    expect(tickEveryUs(60_000_000, 100_000)).toBe(1_250_000)
-    expect(tickEveryUs(60_000_000)).toBe(1_250_000)
+  it('empty wait histogram has no p99', () => {
+    const hist = new LatencyHist()
+    expect(hist.percentileMs(0.99)).toBeNaN()
+    hist.addUs(20_000)
+    expect(hist.percentileMs(0.99)).toBeGreaterThan(0)
+  })
+
+  it('samples Instantaneous every 1 s, not Workload dt', () => {
+    expect(tickEveryUs(2_000_000, 100_000)).toBe(1_000_000)
+    expect(tickEveryUs(60_000_000, 100_000)).toBe(1_000_000)
+    expect(tickEveryUs(60_000_000)).toBe(1_000_000)
+    expect(tickEveryUs(120_000_000)).toBe(2_000_000)
   })
 
   it('ramps offered load from 0 to the target in Simulated only', () => {
@@ -322,9 +331,9 @@ describe('Simulated time series', () => {
       { clientId: 'clients', classId: 'read', profile: 'ramp', rate_rps: 80, ramp_s: 1 },
     ]
     const simulated = simulateOnce(compileScenario(scenario))
-    const firstLive = simulated.ticks?.find((tick) => tick.t_s > 0 && tick.t_s < 0.25)
-    const late = simulated.ticks?.find((tick) => tick.t_s >= 1.2)
-    expect(firstLive?.nodes.clients?.lambda ?? 0).toBeLessThan(40)
+    const t1 = simulated.ticks?.find((tick) => tick.t_s >= 0.99 && tick.t_s <= 1.01)
+    const late = simulated.ticks?.find((tick) => tick.t_s >= 1.9)
+    expect(t1?.nodes.clients?.lambda ?? 0).toBeLessThan(late?.nodes.clients?.lambda ?? 0)
     expect(late?.nodes.clients?.lambda ?? 0).toBeGreaterThan(40)
     const analytic = solveAnalytic(compileScenario(scenario))
     expect(analytic.nodes.pool?.lambda).toBeCloseTo(80, 6)
