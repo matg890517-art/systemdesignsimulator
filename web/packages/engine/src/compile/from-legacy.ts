@@ -23,7 +23,8 @@ const KIND: Record<string, NodeKind> = {
   cache: 'cache',
   relational_db: 'database',
   nosql_db: 'database',
-  object_storage: 'external',
+  // Object store is a capacity pool (n, S), not a delay-only External API.
+  object_storage: 'service',
   cdn: 'cdn',
 }
 

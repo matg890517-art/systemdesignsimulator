@@ -24,7 +24,8 @@ import { classesFromActiveMap, hasExplicitClasses, readEdgeData } from './edge-d
 export const REQUEST_CLASSES = ['read', 'write', 'async', 'bulk'] as const
 export type WorkspaceClassId = (typeof REQUEST_CLASSES)[number]
 
-export const DISCRETE_EVENT_GUARD = 20_000
+/** Tab-safety UI cap on Simulated arrivals. Engine eventBudget is 50e6. Not a closed N6. */
+export const DISCRETE_EVENT_GUARD = 5_000_000
 
 export type WorkloadDraft = {
   durationSec: number

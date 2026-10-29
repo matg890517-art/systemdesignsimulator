@@ -102,7 +102,7 @@ import {
   type TopologySnapshot,
 } from './persistence.ts'
 import { hopLabelWithRate, hopTypeLabel, readEdgeData } from './edge-data.ts'
-import { PlaybackBar, type PlaybackSpeed } from './PlaybackBar.tsx'
+import { type PlaybackSpeed } from './PlaybackBar.tsx'
 import { canPlayback, playbackWallMs, PLAY_PAINT_MS, viewRunAt } from './playback.ts'
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
@@ -1296,28 +1296,6 @@ export function WorkspacePage() {
                 <HeatLegend />
               </Stack>
             </Box>
-            {(running && isSimulatedMode(draft.mode)) || (!running && lastRun && canPlayback(lastRun)) ? (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: 52,
-                  right: 8,
-                  bottom: 8,
-                  zIndex: 5,
-                }}
-              >
-                <PlaybackBar
-                  t={playhead}
-                  durationSec={running ? draft.durationSec : lastRun?.durationSec ?? draft.durationSec}
-                  playing={running || playingBack}
-                  speed={playSpeed}
-                  showMode={showMode}
-                  onToggle={running ? onStop : onTogglePlayback}
-                  onScrub={running ? () => undefined : onScrubPlayback}
-                  onSpeed={onPlaybackSpeed}
-                />
-              </Box>
-            ) : null}
             </Box>
             <Inspector
               bottlenecks={shownBottlenecks}

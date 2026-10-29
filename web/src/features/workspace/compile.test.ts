@@ -71,7 +71,11 @@ describe('compileCanvas', () => {
       catalogId: 'generic-clients',
       title: 'Uploaders',
     })
-    expect(expectedArrivals(workload)).toBeGreaterThan(DISCRETE_EVENT_GUARD)
+    expect(expectedArrivals(workload)).toBe(53_802 * 60)
+    expect(expectedArrivals(workload)).toBeLessThan(DISCRETE_EVENT_GUARD)
+    expect(expectedArrivals({ ...workload, durationSec: 86_400 })).toBeGreaterThan(
+      DISCRETE_EVENT_GUARD,
+    )
   })
 
   it('splits two CDNs from Clients so each hop is not a full copy of 240 rps', () => {
@@ -81,15 +85,21 @@ describe('compileCanvas', () => {
       id: 'cdn-b',
       position: { x: 40, y: 40 },
     }
+    const cdnProfile = referenceStackProfiles.find((profile) => profile.bindsTo === 'cdn')!
+    const profiles = [
+      ...referenceStackProfiles,
+      { ...cdnProfile, id: 'ref-cdn-b', bindsTo: 'cdn-b' },
+    ]
     const hop = connectComponents([...graph.nodes, extra], graph.edges, 'clients', 'cdn-b')
     if ('error' in hop) throw new Error(hop.error)
     const { topology } = compileCanvas(
       [...graph.nodes, extra],
       hop.edges,
       referenceWorkloadDraft(),
-      referenceStackProfiles,
+      profiles,
       'none',
     )
+    const extraId = hop.edges.find((edge) => edge.source === 'clients' && edge.target === 'cdn-b')?.id
     const a = topology.edges.find((edge) => edge.id === 'c-cdn')
     const b = topology.edges.find((edge) => edge.from === 'clients' && edge.to === 'cdn-b')
     expect(a?.routing).toEqual({ mode: 'weighted', weight: 1 })
@@ -98,13 +108,13 @@ describe('compileCanvas', () => {
       [...graph.nodes, extra],
       hop.edges,
       { ...referenceWorkloadDraft(), mode: 'analytic' },
-      referenceStackProfiles,
+      profiles,
       'none',
     )
     expect(run.ok).toBe(true)
     if (!run.ok) return
     expect(run.run.edgeOffered['c-cdn'] ?? 0).toBeCloseTo(120, 0)
-    expect(Object.entries(run.run.edgeOffered).find(([id]) => id !== 'c-cdn' && id.startsWith('c'))?.[1] ?? 0).toBeLessThan(200)
+    expect(extraId && run.run.edgeOffered[extraId]).toBeCloseTo(120, 0)
   })
 
   it('splits two Application LB backends by equal weight', () => {
@@ -249,11 +259,11 @@ describe('compileCanvas', () => {
     expect(albRead).toBeLessThan(6_000)
   })
 
-  it('refuses discrete at the example 51k rps and allows a short bulk-only run', () => {
+  it('refuses a 1-day YouTube Simulated run and allows a short bulk-only run', () => {
     const blocked = runWorkspace(
       initialNodes,
       initialEdges,
-      { ...defaultWorkloadDraft(), mode: 'simulated' },
+      { ...defaultWorkloadDraft(), mode: 'simulated', durationSec: 86_400 },
       getProfiles(),
       'none',
     )
@@ -587,6 +597,8 @@ describe('generic reference stack', () => {
     expect(result.run.edgeClassOffered['c-cdn']?.read).toBeCloseTo(200, 0)
     expect(result.run.nodeStats.service.offered).toBeGreaterThan(0)
     expect(result.run.nodeStats.worker.offered).toBeGreaterThan(0)
+    expect(result.run.nodeStats.object.util).toBeCloseTo(0.025, 3)
+    expect(result.run.nodeStats.object.p99).toBe('')
   })
 
   it('sends Write to Queue when that hop is switched on', () => {

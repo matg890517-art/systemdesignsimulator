@@ -37,7 +37,7 @@ describe('N4 engine job', () => {
         id: 8,
         nodes: initialNodes,
         edges: initialEdges,
-        draft: { ...defaultWorkloadDraft(), mode: 'simulated' },
+        draft: { ...defaultWorkloadDraft(), mode: 'simulated', durationSec: 86_400 },
         profiles: getProfiles(),
         fault: 'none',
       },

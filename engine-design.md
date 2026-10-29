@@ -119,7 +119,8 @@ For each class: lambda = gamma + P^T lambda, where `P[j][i]` = routing probabili
 | Database | M/G/c with c = connection pool (or hard limit); read and write classes may have different service times |
 | Queue / broker | Producer rate versus consumer capacity. Reports steady lag (M/M/c wait of consumers) or backlog growth if rho >= 1 |
 | CDN | Hit ratio offloads origin; edge capacity from catalog quota |
-| External | Fixed latency distribution, no queue |
+| Object store | M/G/c like a server pool. `object_storage` is not External. |
+| External | Fixed latency distribution, no queue. Third-party APIs only. |
 
 ### 6.4 Path latency
 - Per class, per sync path: sum of visit ratio x node sojourn time, plus edge latencies.
@@ -243,7 +244,7 @@ Later phases
 - Workload tab: constant is the Analytic λ. Simulated may Ramp 0→target over ramp seconds (default = warm-up). Poisson/step/spike stay later E2.
 - Fault section: visible but disabled, labeled "Phase E3".
 - Results: per-node card with utilization gauge and p50/p95/p99; hockey-stick chart (latency versus load per component); bottleneck and headroom banner; stability chip; evidence badge.
-- F30: Analytic hockey-stick is the proof. Simulated emits one tick per Workload dt and live-paces 1 s sim ≈ 1 s wall. Show mode Instantaneous = last dt; Average = 0→playhead (lerped). Queue depth is live; traveling dots follow the painted hop rate. Visual only; no accuracy claim. Analytic has no timeline.
+- F30: Analytic hockey-stick is the proof. Simulated emits one tick per Workload dt and live-paces 1 s sim ≈ 1 s wall. Show mode Instantaneous = last dt; Average = 0→now (lerped). Queue depth is live; traveling dots follow the painted hop rate. No VCR scrubber. Visual only; no accuracy claim. Analytic has no timeline.
 
 ## 12. Known limits and risks
 
