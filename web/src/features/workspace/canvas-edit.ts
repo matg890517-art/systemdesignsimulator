@@ -1,4 +1,5 @@
 import { addEdge, type Connection, type Edge, type Node } from '@xyflow/react'
+import { hopRefusal } from './connect-rules.ts'
 import { kindForNode } from './compile.ts'
 import {
   classSummaryLabel,
@@ -51,10 +52,10 @@ export function connectRefusal(
   const sourceNode = asService(nodes.find((node) => node.id === source))
   const targetNode = asService(nodes.find((node) => node.id === target))
   if (!sourceNode || !targetNode) return 'Connect services, not zones'
+  const sourceKind = kindForNode(sourceNode)
   const targetKind = kindForNode(targetNode)
-  if (targetKind === 'traffic_generator') {
-    return 'Clients only send load. They cannot be a target.'
-  }
+  const kindError = hopRefusal(sourceKind, targetKind)
+  if (kindError) return kindError
   const hop = edges.some(
     (edge) =>
       (edge.source === source && edge.target === target) ||

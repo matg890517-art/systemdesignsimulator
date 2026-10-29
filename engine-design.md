@@ -78,7 +78,7 @@ Notes
 
 ## 5. Compile step (shared by both solvers)
 
-1. Drop edges whose endpoints do not exist; dedupe parallel A->B edges per class.
+1. Drop edges whose endpoints do not exist; dedupe parallel A->B edges per class. Canvas “can A connect to B?” is the F1 kind matrix; compile does not drop hops by kind. Jackson still conserves cycles on legal hops when loop gain < 1.
 2. Entry nodes = clients with outgoing edges. Disconnected nodes receive no traffic and are reported as "not wired".
 3. Async edges carry flow but are excluded from user-facing path latency; async chains get their own latency report.
 4. Detect cycles. A cycle is allowed only when the loop gain is below 1 (retry/feedback); otherwise report "infinite loop" and stop.

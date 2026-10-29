@@ -34,7 +34,7 @@ import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges, type WorkspaceEdgeData } from './edge-data.ts'
 import { flowPacketCount, flowPeriodSec } from './playback.ts'
-import { connectComponents } from './canvas-edit.ts'
+import { connectComponents, connectRefusal } from './canvas-edit.ts'
 import {
   absolutePosition,
   appendServiceInZone,
@@ -377,6 +377,9 @@ function CanvasInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={(connection) =>
+          !connectRefusal(nodes, edges, connection.source ?? '', connection.target ?? '')
+        }
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
         onDragOver={onDragOver}

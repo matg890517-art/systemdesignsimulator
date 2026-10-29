@@ -56,6 +56,21 @@ describe('canvas edit', () => {
     })
   })
 
+  it('refuses hops the kind matrix does not allow', () => {
+    expect(connectComponents(initialNodes, initialEdges, 'dynamodb', 'cloudfront')).toMatchObject({
+      error: 'Database cannot connect to CDN.',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'pubsub', 'cloudfront')).toMatchObject({
+      error: 'Queue cannot connect to CDN.',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'blob', 'elasticache')).toMatchObject({
+      error: 'Object store cannot connect to Cache.',
+    })
+    expect(connectComponents(initialNodes, initialEdges, 'elasticache', 'servicebus')).toMatchObject({
+      error: 'Cache cannot connect to Queue.',
+    })
+  })
+
   it('renames a service card without changing catalog kind', () => {
     const next = patchServiceTitle(initialNodes, 'viewers', 'Viewers (web)')
     const node = next.find((item) => item.id === 'viewers')
