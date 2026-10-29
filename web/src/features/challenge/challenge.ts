@@ -1,13 +1,15 @@
 import type { WorkspaceRun } from '../workspace/types.ts'
 
+const TRANSCODER_IDS = ['transcoder', 't240', 't720', 't1080', 't4k'] as const
+
 export const AKS_HEADROOM_CHALLENGE = {
   id: 'aks-headroom',
-  title: 'AKS headroom',
-  goal: 'Run the YouTube-style stack so AKS util is under 85%.',
+  title: 'Transcoder headroom',
+  goal: 'Type Estimated servers on the Transcoder API worker and Run so util is under 85%.',
   rules: [
-    'Type an Estimated slot count. Empty stays unknown and does not cap.',
-    'Do not fill n from the ECS 5,000-task quota. That ceiling is not AKS capacity.',
-    'Pass is engine util on AKS, not a Measured lab result.',
+    'Drop or Load the YouTube example from palette GCP tiles. Empty fields stay unknown and do not cap.',
+    'Do not fill n from a catalog quota. That ceiling is not Transcoder API capacity.',
+    'Pass is engine util on a capped Transcoder, not a Measured lab result.',
   ],
 } as const
 
@@ -18,25 +20,30 @@ export function scoreAksHeadroom(run: WorkspaceRun | undefined): {
   if (!run) {
     return { status: 'blocked', detail: 'Run the YouTube-style canvas first.' }
   }
-  const aks = run.nodeStats.aks
-  if (!aks) {
-    return { status: 'blocked', detail: 'AKS is not on this canvas. Load the YouTube-style template.' }
-  }
-  if (!aks.capped) {
+  const workers = TRANSCODER_IDS.map((id) => run.nodeStats[id]).filter(Boolean)
+  if (workers.length === 0) {
     return {
       status: 'blocked',
-      detail: 'AKS servers are unknown. Type slots in Config. Unknown does not cap the engine.',
+      detail: 'No Transcoder API worker on this canvas. Load the YouTube example.',
     }
   }
-  const pct = `${Math.round(aks.util * 100)}%`
-  if (aks.util < 0.85) {
+  const capped = workers.filter((row) => row.capped)
+  if (capped.length === 0) {
+    return {
+      status: 'blocked',
+      detail: 'Transcoder servers are unknown. Type n in Config. Unknown does not cap the engine.',
+    }
+  }
+  const hottest = capped.reduce((best, row) => (row.util > best.util ? row : best))
+  const pct = `${Math.round(hottest.util * 100)}%`
+  if (hottest.util < 0.85) {
     return {
       status: 'pass',
-      detail: `AKS util ${pct} with n = ${aks.servers ?? 'typed'}. Estimated · not Measured.`,
+      detail: `Transcoder util ${pct} with n = ${hottest.servers ?? 'typed'}. Estimated · not Measured.`,
     }
   }
   return {
     status: 'fail',
-    detail: `AKS util ${pct} ≥ 85%. Raise Estimated slots or lower bulk load, then Run again.`,
+    detail: `Transcoder util ${pct} ≥ 85%. Raise Estimated servers or lower bulk load, then Run again.`,
   }
 }

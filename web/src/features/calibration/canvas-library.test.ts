@@ -11,30 +11,23 @@ describe('calibration canvas library', () => {
   it('lists YouTube canvas cards, not the leftover seed profile names', () => {
     const rows = calibrationRowsForCanvas(initialNodes, youtubeSeedProfiles)
     expect(rows.map((row) => row.title)).toEqual([
-      'Viewers',
-      'CloudFront',
-      'Application LB',
-      'ECS ×60',
-      'ElastiCache',
-      'DynamoDB',
-      'GKE ×12',
-      'Pub/Sub',
-      'Cloud Run',
-      'Firestore',
-      'AKS ×84',
-      'Service Bus',
-      'Blob Storage',
-      'Front Door',
-      'Uploaders',
+      'Client',
+      'Cloud Load Balancing',
+      'Upload Service',
+      'Video Consumer',
+      'Media CDN',
+      'Cloud Storage',
+      'Transcoder',
+      'Metadata Processor',
+      'Bigtable',
     ])
     expect(rows.some((row) => row.title === 'AKS transcode workers')).toBe(false)
     expect(rows.some((row) => row.title === 'Azure to AWS copy link')).toBe(false)
-    const aks = rows.find((row) => row.nodeId === 'aks')
-    expect(aks?.profile.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
-      state: 'set',
-      value: 84,
+    const transcoder = rows.find((row) => row.nodeId === 'transcoder')
+    expect(transcoder?.profile.fields.find((field) => field.role === 'servers')?.value).toEqual({
+      state: 'unknown',
     })
-    expect(aks?.catalogId).toBe('azure-aks')
+    expect(transcoder?.catalogId).toBe('gcp-transcoder-api')
   })
 
   it('lists the Generic reference as Clients through Object store', () => {
@@ -55,24 +48,16 @@ describe('calibration canvas library', () => {
 
   it('uses the same catalog icons as the workspace cards', () => {
     const rows = calibrationRowsForCanvas(initialNodes, youtubeSeedProfiles)
-    const viewers = rows.find((row) => row.nodeId === 'viewers')
-    const uploaders = rows.find((row) => row.nodeId === 'uploaders')
-    const aks = rows.find((row) => row.nodeId === 'aks')
+    const client = rows.find((row) => row.nodeId === 'client')
+    const t240 = rows.find((row) => row.nodeId === 'transcoder')
     expect(
       iconGlyphFor({
         mode: 'service',
-        name: viewers?.title ?? '',
-        catalogId: viewers?.catalogId,
+        name: client?.title ?? '',
+        catalogId: client?.catalogId,
       }),
     ).toBe('clients')
-    expect(
-      iconGlyphFor({
-        mode: 'service',
-        name: uploaders?.title ?? '',
-        catalogId: uploaders?.catalogId,
-      }),
-    ).toBe('clients')
-    expect(serviceMarkSrc(aks?.catalogId)).toBeTruthy()
+    expect(serviceMarkSrc(t240?.catalogId)).toBeTruthy()
     for (const row of rows) {
       if (row.catalogId?.startsWith('generic-')) {
         expect(
@@ -87,7 +72,7 @@ describe('calibration canvas library', () => {
   it('falls back to the YouTube canvas when nothing is saved', () => {
     const canvas = currentCanvas()
     expect(canvas.name).toBe('Example: Video streaming platform (YouTube-style)')
-    expect(canvas.nodes.filter((node) => node.type === 'service')).toHaveLength(15)
+     expect(canvas.nodes.filter((node) => node.type === 'service')).toHaveLength(9)
   })
 
   it('C0 Results cost is 0 of 8 on Generic even if the in-memory library is YouTube seeds', () => {

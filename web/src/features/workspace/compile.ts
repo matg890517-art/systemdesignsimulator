@@ -51,12 +51,23 @@ export type CanvasGenerator = {
   classes: WorkspaceClassId[]
 }
 
-/** One run clock for every Clients card (Viewers, Uploaders, or Clients). */
+/** One run clock for every Clients card. */
 export const WORKLOAD_RUN_CLOCK = {
   durationSec: 60,
   dtSec: 0.1,
   seed: 4821,
 } as const
+
+/** Quoted on the YouTube design: 100M views/day and 1M uploads/day. Typed Estimated, not Measured. */
+export const SECONDS_PER_DAY = 86_400
+export const YOUTUBE_VIEWS_PER_DAY = 100_000_000
+export const YOUTUBE_UPLOADS_PER_DAY = 1_000_000
+export const youtubeViewsRps = YOUTUBE_VIEWS_PER_DAY / SECONDS_PER_DAY
+export const youtubeUploadsRps = YOUTUBE_UPLOADS_PER_DAY / SECONDS_PER_DAY
+
+function quotedDailyRps(perDay: number): number {
+  return Math.round((perDay / SECONDS_PER_DAY) * 100) / 100
+}
 
 export const defaultWorkloadDraft = (): WorkloadDraft => ({
   ...WORKLOAD_RUN_CLOCK,
@@ -68,15 +79,38 @@ export const defaultWorkloadDraft = (): WorkloadDraft => ({
   spikeAtSec: 20,
   spikeDurationSec: 5,
   spikeFactor: 5,
-  classes: { read: 50_000, write: 1_200, async: 2_600, bulk: 2 },
+  classes: {
+    read: quotedDailyRps(YOUTUBE_VIEWS_PER_DAY),
+    write: quotedDailyRps(YOUTUBE_UPLOADS_PER_DAY),
+    async: 0,
+    bulk: quotedDailyRps(YOUTUBE_UPLOADS_PER_DAY),
+  },
 })
 
 const notApplicable: Value<never> = { state: 'not_applicable' }
 
 const KIND_BY_NODE: Record<string, CanonicalKind> = {
+  client: 'traffic_generator',
   viewers: 'traffic_generator',
   uploaders: 'traffic_generator',
+  glb: 'load_balancer',
+  upload: 'service',
+  consumer: 'service',
+  mediacdn: 'cdn',
+  gcs: 'object_storage',
+  transcoder: 'worker',
+  metaproc: 'service',
+  bigtable: 'nosql_db',
   cloudfront: 'cdn',
+  apigw: 'gateway',
+  videosvc: 'service',
+  s3: 'object_storage',
+  metadata: 'nosql_db',
+  chunker: 'service',
+  t240: 'worker',
+  t720: 'worker',
+  t1080: 'worker',
+  t4k: 'worker',
   alb: 'load_balancer',
   ecs: 'service',
   elasticache: 'cache',
@@ -93,22 +127,30 @@ const KIND_BY_NODE: Record<string, CanonicalKind> = {
 
 const KIND_BY_CATALOG: Record<string, CanonicalKind> = {
   'aws-cloudfront': 'cdn',
+  'aws-api-gateway': 'gateway',
   'aws-application-load-balancer': 'load_balancer',
   'aws-ecs': 'service',
+  'aws-lambda': 'service',
   'aws-elasticache': 'cache',
   'aws-dynamodb': 'nosql_db',
   'aws-rds': 'relational_db',
   'aws-sqs': 'queue',
   'aws-batch': 'worker',
+  'aws-mediaconvert': 'worker',
   'aws-s3': 'object_storage',
   'gcp-gke': 'service',
   'gcp-pub-sub': 'event_bus',
   'gcp-cloud-run': 'service',
   'gcp-firestore': 'nosql_db',
   'gcp-cloud-cdn': 'cdn',
+  'gcp-media-cdn': 'cdn',
+  'gcp-api-gateway': 'gateway',
   'gcp-cloud-load-balancing': 'load_balancer',
   'gcp-memorystore': 'cache',
   'gcp-cloud-sql': 'relational_db',
+  'gcp-bigtable': 'nosql_db',
+  'gcp-spanner': 'relational_db',
+  'gcp-transcoder-api': 'worker',
   'gcp-cloud-storage': 'object_storage',
   'azure-aks': 'worker',
   'azure-service-bus': 'queue',
@@ -134,20 +176,34 @@ const KIND_BY_CATEGORY: Record<string, CanonicalKind> = {
 }
 
 const EDGE_CLASSES: Record<string, RequestClassId[]> = {
-  'v-cf': ['read', 'write', 'async'],
-  'cf-alb': ['read', 'write', 'async'],
-  'alb-ecs': ['read', 'write', 'async'],
-  'ecs-cache': ['read', 'async'],
-  'cache-ddb': ['read', 'async'],
-  'ddb-gke': ['read', 'async'],
-  'gke-ps': ['read', 'async'],
-  'ps-run': ['read', 'async'],
-  'run-fs': ['read', 'async'],
-  'up-aks': ['bulk'],
-  'aks-sb': ['bulk'],
-  'sb-blob': ['bulk'],
-  'blob-fd': ['bulk'],
-  'copy-link': ['bulk'],
+  'c-lb': ['read', 'write', 'bulk'],
+  'lb-upload': ['write', 'bulk'],
+  'lb-consumer': ['read'],
+  'upload-gcs': ['bulk'],
+  'gcs-transcoder': ['bulk'],
+  'transcoder-gcs': ['write'],
+  'transcoder-meta': ['bulk'],
+  'metaproc-bt': ['bulk'],
+  'consumer-cdn': ['read'],
+  'consumer-bt': ['read'],
+  'cdn-gcs': ['read'],
+  'c-cf': ['read'],
+  'c-apigw': ['write'],
+  'c-s3': ['bulk'],
+  'apigw-svc': ['write'],
+  'svc-s3': ['write'],
+  'svc-meta': ['write'],
+  'cf-s3': ['read'],
+  's3-chunk': ['bulk'],
+  'chunk-s3': ['write'],
+  'chunk-t240': ['bulk'],
+  'chunk-t720': ['bulk'],
+  'chunk-t1080': ['bulk'],
+  'chunk-t4k': ['bulk'],
+  't240-s3': ['write'],
+  't720-s3': ['write'],
+  't1080-s3': ['write'],
+  't4k-s3': ['write'],
   'c-cdn': ['read', 'write'],
   'cdn-lb': ['read', 'write'],
   'lb-svc': ['read', 'write'],
@@ -302,6 +358,14 @@ export function offeredClassTotals(
   return totals
 }
 
+function formatClassLoad(n: number): string {
+  if (!(n > 0)) return '0'
+  return n.toLocaleString('en-US', {
+    maximumFractionDigits: n >= 100 ? 0 : 2,
+    minimumFractionDigits: 0,
+  })
+}
+
 export function loadHintFromClassTotals(totals: Record<WorkspaceClassId, number>): {
   load: number
   hint: string
@@ -309,7 +373,7 @@ export function loadHintFromClassTotals(totals: Record<WorkspaceClassId, number>
   const load = REQUEST_CLASSES.reduce((sum, id) => sum + totals[id], 0)
   return {
     load,
-    hint: `R ${totals.read.toLocaleString('en-US')} · W ${totals.write.toLocaleString('en-US')} · A ${totals.async.toLocaleString('en-US')} · B ${totals.bulk}/s`,
+    hint: `R ${formatClassLoad(totals.read)} · W ${formatClassLoad(totals.write)} · A ${formatClassLoad(totals.async)} · B ${formatClassLoad(totals.bulk)}/s`,
   }
 }
 
@@ -435,11 +499,21 @@ function breakerFor(rfEdge: RfEdge): Edge['breaker'] {
 }
 
 function crashTarget(components: Component[]): string | undefined {
-  return components.find((item) => item.id === 'aks')?.id ?? components.find((item) => item.kind === 'worker')?.id
+  return (
+    components.find((item) => item.id === 'transcoder')?.id ??
+    components.find((item) => item.id === 't240')?.id ??
+    components.find((item) => item.id === 'aks')?.id ??
+    components.find((item) => item.kind === 'worker')?.id
+  )
 }
 
 function uploadEdge(edges: Edge[]): Edge | undefined {
-  return edges.find((item) => item.id === 'up-aks') ?? edges.find((item) => item.from === 'uploaders')
+  return (
+    edges.find((item) => item.id === 'c-lb') ??
+    edges.find((item) => item.id === 'c-s3') ??
+    edges.find((item) => item.id === 'up-aks') ??
+    edges.find((item) => item.from === 'client' || item.from === 'uploaders')
+  )
 }
 
 /** Two or more hops of the same class share by weight. Clients → two CDNs split; broadcast still copies. */

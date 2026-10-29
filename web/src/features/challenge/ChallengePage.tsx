@@ -30,7 +30,7 @@ export function ChallengePage() {
             </Box>
           ))}
           <Button variant="contained" onClick={start} sx={{ alignSelf: 'flex-start' }}>
-            Open YouTube-style canvas
+            Open YouTube example
           </Button>
         </Stack>
       </Box>

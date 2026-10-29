@@ -7,7 +7,7 @@ import { templateSnapshot, type TemplateId } from '../workspace/templates.ts'
 const steps = [
   {
     title: '1. Open a template',
-    body: 'Start from the YouTube-style example or the generic 9-block. AWS, Azure, and GCP maps bind catalog ids only. Capacities stay Estimated.',
+    body: 'Start from the YouTube example (palette GCP tiles plus Clients) or the generic 9-block. Capacities stay unknown until you type them.',
   },
   {
     title: '2. Type what you know',
@@ -22,13 +22,13 @@ const steps = [
     body: 'Bottlenecks come from Erlang-C wait, not from capacity ≥ load. Analytic p50/p95/p99 are labeled Analytic, never Measured. J12 A/B stay blocked until a real recorded test of the reference stack exists.',
   },
   {
-    title: '5. Try the AKS headroom challenge',
-    body: 'Type Estimated slots so engine util on AKS is under 85%. Pass is not Measured. Do not fill n from the ECS task quota.',
+    title: '5. Try the Transcoder headroom challenge',
+    body: 'Type Estimated servers on the Transcoder API card so engine util is under 85%. Pass is not Measured. Do not fill n from a catalog quota.',
   },
 ]
 
 const templates: { id: TemplateId; label: string; hint: string }[] = [
-  { id: 'youtube', label: 'YouTube-style example', hint: 'Mixed AWS / Azure / GCP · Estimated' },
+  { id: 'youtube', label: 'YouTube-style example', hint: 'Palette GCP tiles + Clients · 100M views/day, 1M uploads/day' },
   { id: 'generic', label: 'Generic 9-block', hint: 'No cloud vendor in the engine' },
   { id: 'aws', label: 'AWS mapping', hint: 'Catalog ids only' },
   { id: 'azure', label: 'Azure mapping', hint: 'Catalog ids only' },
@@ -67,7 +67,7 @@ export function LearnPage() {
             onClick={() => void navigate({ to: '/challenge' })}
             sx={{ alignSelf: 'flex-start' }}
           >
-            Open AKS headroom challenge
+            Open Transcoder headroom challenge
           </Button>
           <Typography sx={{ fontWeight: 600, fontSize: 14 }}>Templates</Typography>
           <Stack spacing={1}>

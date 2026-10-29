@@ -5,11 +5,12 @@ import { architectureInventory } from './inventory.ts'
 import { decodeSharePayload, encodeSharePayload, shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
 import { referenceStackGraph } from './reference-graph.ts'
+import { snapshotFrom } from './persistence.ts'
 import { youtubeTemplate } from './templates.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import type { WorkspaceRun } from './types.ts'
 
-function mockRun(aks?: Partial<WorkspaceRun['nodeStats'][string]>): WorkspaceRun {
+function mockRun(worker?: Partial<WorkspaceRun['nodeStats'][string]>): WorkspaceRun {
   return {
     mode: 'fluid',
     kpis: {
@@ -24,9 +25,9 @@ function mockRun(aks?: Partial<WorkspaceRun['nodeStats'][string]>): WorkspaceRun
       costHint: '',
     },
     bottlenecks: [],
-    nodeStats: aks
+    nodeStats: worker
       ? {
-          aks: {
+          transcoder: {
             util: 0.9,
             completed: 2,
             rejected: 0,
@@ -37,8 +38,8 @@ function mockRun(aks?: Partial<WorkspaceRun['nodeStats'][string]>): WorkspaceRun
             meta: 'Estimated',
             backlog: 0,
             loss: 0,
-            servers: 84,
-            ...aks,
+            servers: 8,
+            ...worker,
           },
         }
       : {},
@@ -68,11 +69,21 @@ describe('P1 leftover + P2', () => {
     expect(encoded.startsWith('sds1.')).toBe(true)
     const restored = decodeSharePayload(encoded)
     expect(restored?.nodes.map((node) => node.id)).toEqual(snapshot.nodes.map((node) => node.id))
-    const url = shareUrlFor(snapshot, 'http://localhost:3000/results#old')
+    const compact = snapshotFrom({
+      id: 'tmpl-share',
+      name: 'Share fixture',
+      scene: 'custom',
+      nodes: snapshot.nodes.filter((node) => node.id === 'client' || node.id === 'gcs'),
+      edges: snapshot.edges.filter((edge) => edge.id === 'c-lb'),
+      draft: snapshot.draft,
+      profiles: [],
+      fault: 'none',
+    })
+    const url = shareUrlFor(compact, 'http://localhost:3000/results#old')
     expect(url).toBeDefined()
     expect(url).toContain('?share=sds1.')
     expect(url).not.toContain('#')
-    expect(snapshotFromHref(url ?? '')?.name).toBe(snapshot.name)
+    expect(snapshotFromHref(url ?? '')?.name).toBe(compact.name)
   })
 
   it('F13 wraps two unzoned services in one nested generic zone', () => {
@@ -94,16 +105,17 @@ describe('P1 leftover + P2', () => {
     const inventory = architectureInventory(snapshot.name, snapshot.nodes, snapshot.edges)
     expect(inventory.kind).toBe('sds-inventory')
     expect(inventory.note).toMatch(/Not executable IaC/)
-    expect(inventory.services.some((item) => item.id === 'aks')).toBe(true)
+    expect(inventory.services.some((item) => item.id === 'gcs')).toBe(true)
+    expect(inventory.services.some((item) => item.id === 'transcoder')).toBe(true)
     expect(JSON.stringify(inventory)).not.toMatch(/terraform|cloudformation|pulumi/i)
   })
 
-  it('F21 scores AKS headroom from engine util, never as Measured', () => {
+  it('F21 scores transcoder headroom from engine util, never as Measured', () => {
     expect(scoreAksHeadroom(undefined).status).toBe('blocked')
     expect(scoreAksHeadroom(mockRun()).status).toBe('blocked')
     expect(scoreAksHeadroom(mockRun({ capped: false })).status).toBe('blocked')
     expect(scoreAksHeadroom(mockRun({ util: 0.9, capped: true })).status).toBe('fail')
-    const pass = scoreAksHeadroom(mockRun({ util: 0.8, capped: true, servers: 120 }))
+    const pass = scoreAksHeadroom(mockRun({ util: 0.8, capped: true, servers: 12 }))
     expect(pass.status).toBe('pass')
     expect(pass.detail).toMatch(/Estimated · not Measured/)
   })

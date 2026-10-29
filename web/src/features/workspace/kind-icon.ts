@@ -75,8 +75,8 @@ function serviceFallbackGlyph(label: string, category?: string): IconGlyph | und
   if (/\b(s3|blob|object|cloud storage|ebs|efs|fsx)\b/.test(label)) return 'object'
   if (/\b(redis|elasticache|memorystore|memcached|cache)\b/.test(label)) return 'cache'
   if (/\b(rds|sql|dynamo|cosmos|firestore|spanner|bigtable|database)\b/.test(label)) return 'db'
-  if (/\b(cloudfront|front door|cloud cdn|cdn|cloudflare)\b/.test(label)) return 'cdn'
-  if (/\b(load balancer|application lb|nlb|alb|application gateway)\b/.test(label)) return 'lb'
+  if (/\b(cloudfront|front door|cloud cdn|media cdn|cdn|cloudflare)\b/.test(label)) return 'cdn'
+  if (/\b(load balancer|load balancing|application lb|nlb|alb|application gateway)\b/.test(label)) return 'lb'
   if (/\b(client|viewer|uploader)\b/.test(label)) return 'clients'
   return undefined
 }

@@ -6,8 +6,11 @@ import {
   compileCanvas,
   defaultWorkloadDraft,
   DISCRETE_EVENT_GUARD,
+  youtubeUploadsRps,
+  youtubeViewsRps,
   edgeCarriesClass,
   kindForNode,
+  loadHintFromClassTotals,
   loadShapeFromDraft,
   nodeCarriesClass,
   visibleClassRate,
@@ -28,6 +31,15 @@ import { runWorkspace } from './simulate.ts'
 import type { ServiceNodeData } from './types.ts'
 import type { Node } from '@xyflow/react'
 
+describe('loadHintFromClassTotals', () => {
+  it('prints quoted YouTube rates without leftover Generic 290 rps', () => {
+    const classes = defaultWorkloadDraft().classes
+    const hint = loadHintFromClassTotals(classes)
+    expect(hint.load).toBe(classes.read + classes.write + classes.async + classes.bulk)
+    expect(hint.hint).toBe('R 1,157 · W 11.57 · A 0 · B 11.57/s')
+  })
+})
+
 describe('loadShapeFromDraft', () => {
   it('maps Simulated Ramp and keeps Constant as the Analytic default', () => {
     expect(loadShapeFromDraft(defaultWorkloadDraft())).toEqual({ kind: 'constant' })
@@ -38,7 +50,7 @@ describe('loadShapeFromDraft', () => {
 })
 
 describe('compileCanvas', () => {
-  it('maps the example graph, including AKS calibration and unknown copy-link bandwidth', () => {
+  it('maps the YouTube palette graph with quoted rates and unknown capacity', () => {
     const { topology, workload } = compileCanvas(
       initialNodes,
       initialEdges,
@@ -46,32 +58,43 @@ describe('compileCanvas', () => {
       getProfiles(),
       'none',
     )
-    const aks = topology.components.find((component) => component.id === 'aks')
-    const cf = topology.components.find((component) => component.id === 'cloudfront')
-    const copy = topology.edges.find((edge) => edge.id === 'copy-link')
-    const ecs = topology.components.find((component) => component.id === 'ecs')
-    expect(aks?.kind).toBe('worker')
-    expect(aks?.behavior.servers).toMatchObject({ state: 'set', value: 84 })
-    expect(cf?.behavior.cacheHitRate).toMatchObject({ state: 'set', value: 0.92 })
-    expect(copy?.network.bandwidthBps).toBeUndefined()
-    expect(ecs?.behavior.servers.state).toBe('unknown')
-    expect(workload.offered.viewers.read).toBe(50_000)
+    const cdn = topology.components.find((component) => component.id === 'mediacdn')
+    const gcs = topology.components.find((component) => component.id === 'gcs')
+    const transcoder = topology.components.find((component) => component.id === 'transcoder')
+    const lb = topology.components.find((component) => component.id === 'glb')
+    expect(lb?.kind).toBe('load_balancer')
+    expect(transcoder?.kind).toBe('worker')
+    expect(gcs?.kind).toBe('object_storage')
+    expect(cdn?.kind).toBe('cdn')
+    expect(cdn?.behavior.servers.state).toBe('unknown')
+    expect(cdn?.behavior.cacheHitRate).toBeUndefined()
+    expect(transcoder?.behavior.servers.state).toBe('unknown')
+    expect(workload.offered.client.read).toBeCloseTo(youtubeViewsRps)
     expect(workload.shape).toMatchObject({ kind: 'constant' })
-    expect(workload.offered.viewers.write).toBe(1_200)
-    expect(workload.offered.viewers.async).toBe(2_600)
-    expect(workload.offered.uploaders.bulk).toBe(2)
-    expect(topology.components.find((component) => component.id === 'viewers')?.kind).toBe(
+    expect(workload.offered.client.write).toBeCloseTo(youtubeUploadsRps)
+    expect(workload.offered.client.bulk).toBeCloseTo(youtubeUploadsRps)
+    expect(workload.offered.client.async).toBeUndefined()
+    expect(topology.components.find((component) => component.id === 'client')?.kind).toBe(
       'traffic_generator',
     )
-    expect(initialNodes.find((node) => node.id === 'viewers')?.data).toMatchObject({
+    expect(initialNodes.find((node) => node.id === 'client')?.data).toMatchObject({
       catalogId: 'generic-clients',
-      title: 'Viewers',
+      title: 'Client',
     })
-    expect(initialNodes.find((node) => node.id === 'uploaders')?.data).toMatchObject({
-      catalogId: 'generic-clients',
-      title: 'Uploaders',
+    expect(initialNodes.find((node) => node.id === 'gcs')?.data).toMatchObject({
+      catalogId: 'gcp-cloud-storage',
+      title: 'Cloud Storage',
     })
-    expect(expectedArrivals(workload)).toBe(53_802 * 60)
+    expect(topology.edges.find((edge) => edge.id === 'consumer-cdn')?.routing).toEqual({
+      mode: 'broadcast',
+    })
+    expect(topology.edges.find((edge) => edge.id === 'consumer-bt')?.routing).toEqual({
+      mode: 'broadcast',
+    })
+    expect(topology.edges.find((edge) => edge.id === 'cdn-gcs')?.routing).toBeDefined()
+    const draft = defaultWorkloadDraft()
+    const perSec = draft.classes.read + draft.classes.write + draft.classes.bulk
+    expect(expectedArrivals(workload)).toBeCloseTo(perSec * 60, 6)
     expect(expectedArrivals(workload)).toBeLessThan(DISCRETE_EVENT_GUARD)
     expect(expectedArrivals({ ...workload, durationSec: 86_400 })).toBeGreaterThan(
       DISCRETE_EVENT_GUARD,
@@ -117,27 +140,27 @@ describe('compileCanvas', () => {
     expect(extraId && run.run.edgeOffered[extraId]).toBeCloseTo(120, 0)
   })
 
-  it('splits two Application LB backends by equal weight', () => {
-    const next = connectComponents(initialNodes, initialEdges, 'alb', 'blob')
+  it('splits two load-balancer backends by equal weight', () => {
+    const graph = referenceStackGraph('generic')
+    const next = connectComponents(graph.nodes, graph.edges, 'lb', 'object')
     if ('error' in next) throw new Error(next.error)
     const { topology } = compileCanvas(
-      initialNodes,
+      graph.nodes,
       next.edges,
-      { ...defaultWorkloadDraft(), classes: { read: 100, write: 0, async: 0, bulk: 0 } },
-      getProfiles(),
+      { ...referenceWorkloadDraft(), classes: { read: 100, write: 0, async: 0, bulk: 0 } },
+      referenceStackProfiles,
       'none',
     )
-    const ecs = topology.edges.find((edge) => edge.id === 'alb-ecs')
-    const blob = topology.edges.find((edge) => edge.from === 'alb' && edge.to === 'blob')
-    expect(ecs?.routing).toEqual({ mode: 'weighted', weight: 1 })
-    expect(blob?.routing).toEqual({ mode: 'weighted', weight: 1 })
+    const svc = topology.edges.find((edge) => edge.id === 'lb-svc')
+    const object = topology.edges.find((edge) => edge.from === 'lb' && edge.to === 'object')
+    expect(svc?.routing).toEqual({ mode: 'weighted', weight: 1 })
+    expect(object?.routing).toEqual({ mode: 'weighted', weight: 1 })
   })
 
   it('lists one workload generator per Clients card', () => {
     const youtube = canvasGenerators(initialNodes, initialEdges)
-    expect(youtube.map((item) => item.title)).toEqual(['Viewers', 'Uploaders'])
-    expect(youtube[0]?.classes).toEqual(['read', 'write', 'async'])
-    expect(youtube[1]?.classes).toEqual(['bulk'])
+    expect(youtube.map((item) => item.title)).toEqual(['Client'])
+    expect(youtube[0]?.classes).toEqual(['read', 'write', 'bulk'])
     const graph = referenceStackGraph('generic')
     const generic = canvasGenerators(graph.nodes, graph.edges)
     expect(generic).toHaveLength(1)
@@ -148,12 +171,10 @@ describe('compileCanvas', () => {
   it('shows Read Write Async Bulk on every Clients card; unused stay 0', () => {
     const youtube = canvasGenerators(initialNodes, initialEdges)
     const draft = defaultWorkloadDraft()
-    expect(visibleClassRate(draft, youtube[0]!, 'read')).toBe(50_000)
-    expect(visibleClassRate(draft, youtube[0]!, 'write')).toBe(1_200)
-    expect(visibleClassRate(draft, youtube[0]!, 'async')).toBe(2_600)
-    expect(visibleClassRate(draft, youtube[0]!, 'bulk')).toBe(0)
-    expect(visibleClassRate(draft, youtube[1]!, 'read')).toBe(0)
-    expect(visibleClassRate(draft, youtube[1]!, 'bulk')).toBe(2)
+    expect(visibleClassRate(draft, youtube[0]!, 'read')).toBeCloseTo(youtubeViewsRps)
+    expect(visibleClassRate(draft, youtube[0]!, 'write')).toBeCloseTo(youtubeUploadsRps)
+    expect(visibleClassRate(draft, youtube[0]!, 'async')).toBe(0)
+    expect(visibleClassRate(draft, youtube[0]!, 'bulk')).toBeCloseTo(youtubeUploadsRps)
     const generic = canvasGenerators(
       referenceStackGraph('generic').nodes,
       referenceStackGraph('generic').edges,
@@ -174,16 +195,28 @@ describe('compileCanvas', () => {
   })
 
   it('keeps independent rates when two Clients cards exist', () => {
+    const extra = {
+      ...initialNodes.find((node) => node.id === 'client')!,
+      id: 'client-b',
+      parentId: undefined,
+      position: { x: 16, y: 240 },
+      data: {
+        ...(initialNodes.find((node) => node.id === 'client')!.data as ServiceNodeData),
+        title: 'Uploaders',
+      },
+    }
+    const hop = connectComponents([...initialNodes, extra], initialEdges, 'client-b', 'gcs')
+    if ('error' in hop) throw new Error(hop.error)
     const draft = withGeneratorClassRate(
-      withGeneratorClassRate(defaultWorkloadDraft(), 'viewers', 'read', 10),
-      'uploaders',
-      'bulk',
+      withGeneratorClassRate(defaultWorkloadDraft(), 'client', 'read', 10),
+      'client-b',
+      'write',
       4,
     )
-    const { workload } = compileCanvas(initialNodes, initialEdges, draft, getProfiles(), 'none')
-    expect(workload.offered.viewers.read).toBe(10)
-    expect(workload.offered.viewers.write).toBe(1_200)
-    expect(workload.offered.uploaders.bulk).toBe(4)
+    const { workload } = compileCanvas([...initialNodes, extra], hop.edges, draft, getProfiles(), 'none')
+    expect(workload.offered.client.read).toBe(10)
+    expect(workload.offered.client.write).toBeCloseTo(youtubeUploadsRps)
+    expect(workload.offered['client-b']?.write).toBe(4)
   })
 
   it('treats generic clients as a generator', () => {
@@ -211,14 +244,14 @@ describe('compileCanvas', () => {
       getProfiles(),
       'none',
     )
-    expect(topology.edges.find((item) => item.id === 'up-aks')?.breaker).toMatchObject({
+    expect(topology.edges.find((item) => item.id === 'c-lb')?.breaker).toMatchObject({
       errorThreshold: 0.5,
       minRequests: 4,
       probes: 1,
     })
   })
 
-  it('zeros AKS slots on crash and sets upload loss on packet drop', () => {
+  it('zeros the first transcoder on crash and sets upload loss on packet drop', () => {
     const crashed = compileCanvas(
       initialNodes,
       initialEdges,
@@ -226,9 +259,9 @@ describe('compileCanvas', () => {
       getProfiles(),
       'crash',
     )
-    expect(crashed.topology.components.find((item) => item.id === 'aks')?.behavior.servers).toMatchObject(
-      { state: 'set', value: 0 },
-    )
+    expect(
+      crashed.topology.components.find((item) => item.id === 'transcoder')?.behavior.servers,
+    ).toMatchObject({ state: 'set', value: 0 })
     const dropped = compileCanvas(
       initialNodes,
       initialEdges,
@@ -236,10 +269,10 @@ describe('compileCanvas', () => {
       getProfiles(),
       'packet-drop',
     )
-    expect(dropped.topology.edges.find((edge) => edge.id === 'up-aks')?.network.lossProb).toBe(0.1)
+    expect(dropped.topology.edges.find((edge) => edge.id === 'c-lb')?.network.lossProb).toBe(0.1)
   })
 
-  it('runs fluid on the full example and saturates calibrated AKS', () => {
+  it('runs fluid on the YouTube example without inventing capacity', () => {
     const draft = { ...defaultWorkloadDraft(), durationSec: 8 }
     const { topology, workload } = compileCanvas(
       initialNodes,
@@ -251,12 +284,11 @@ describe('compileCanvas', () => {
     const result = runFluid(topology, workload)
     const last = result.steps.at(-1)
     if (!last) throw new Error('no steps')
-    const mu = 84 / 40
-    expect(last.components.aks.bulk.completed / mu).toBeCloseTo(2 / mu, 3)
-    expect(last.components.cloudfront.read.completed).toBeGreaterThan(40_000)
-    const albRead = last.components.alb.read.completed
-    expect(albRead).toBeGreaterThan(3_000)
-    expect(albRead).toBeLessThan(6_000)
+    expect(last.components.client.read.completed).toBeGreaterThan(1_000)
+    expect(last.components.gcs.bulk.completed).toBeGreaterThan(0)
+    expect(topology.components.find((item) => item.id === 'transcoder')?.behavior.servers.state).toBe(
+      'unknown',
+    )
   })
 
   it('refuses a 1-day YouTube Simulated run and allows a short bulk-only run', () => {
@@ -284,8 +316,8 @@ describe('compileCanvas', () => {
     expect(ok.ok).toBe(true)
     if (ok.ok) {
       expect(ok.run.mode).toBe('simulated')
-      expect(ok.run.nodeStats.aks.offered).toBeGreaterThan(0)
-      expect(ok.run.nodeStats.viewers.loss).toBe(0)
+      expect(ok.run.nodeStats.gcs.offered).toBeGreaterThan(0)
+      expect(ok.run.nodeStats.client.loss).toBe(0)
     }
   })
 
@@ -366,7 +398,7 @@ describe('compileCanvas', () => {
     expect(simulated.run.nodeStats.cdn.offered).toBeGreaterThan(80)
   })
 
-  it('trips the upload breaker and lists the AKS blast radius after a crash', () => {
+  it('trips the upload breaker and lists the transcoder blast radius after a crash', () => {
     const result = runWorkspace(
       initialNodes,
       initialEdges,
@@ -381,11 +413,11 @@ describe('compileCanvas', () => {
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.run.breakerOpenEdges).toContain('up-aks')
+    expect(result.run.breakerOpenEdges).toContain('gcs-transcoder')
     expect(result.run.affectedComponentIds).toEqual(
-      expect.arrayContaining(['aks', 'servicebus', 'blob', 'frontdoor', 'cloudfront']),
+      expect.arrayContaining(['transcoder', 'gcs']),
     )
-    expect(result.run.blastOriginId).toBe('aks')
+    expect(result.run.blastOriginId).toBe('transcoder')
   })
 })
 
@@ -393,30 +425,36 @@ describe('F24 class filter', () => {
   const service = (id: string) =>
     initialNodes.find((node) => node.id === id) as Node<ServiceNodeData>
 
-  it('keeps read on the viewer path and bulk on the upload path', () => {
-    expect(edgeCarriesClass('v-cf', 'viewers', 'read')).toBe(true)
-    expect(edgeCarriesClass('v-cf', 'viewers', 'bulk')).toBe(false)
-    expect(edgeCarriesClass('up-aks', 'uploaders', 'bulk')).toBe(true)
-    expect(edgeCarriesClass('up-aks', 'uploaders', 'read')).toBe(false)
-    expect(nodeCarriesClass(service('aks'), initialEdges, 'bulk')).toBe(true)
-    expect(nodeCarriesClass(service('aks'), initialEdges, 'read')).toBe(false)
-    expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'read')).toBe(true)
-    expect(nodeCarriesClass(service('alb'), initialEdges, 'bulk')).toBe(false)
-    expect(nodeCarriesClass(service('cloudfront'), initialEdges, 'bulk')).toBe(true)
-    expect(nodeCarriesClass(service('viewers'), initialEdges, 'read')).toBe(true)
-    expect(nodeCarriesClass(service('viewers'), initialEdges, 'async')).toBe(true)
+  it('keeps read on the watch path and bulk on the upload path', () => {
+    expect(edgeCarriesClass('c-lb', 'client', 'read', initialEdges.find((edge) => edge.id === 'c-lb'))).toBe(
+      true,
+    )
+    expect(edgeCarriesClass('c-lb', 'client', 'bulk', initialEdges.find((edge) => edge.id === 'c-lb'))).toBe(
+      true,
+    )
+    expect(edgeCarriesClass('upload-gcs', 'upload', 'bulk', initialEdges.find((edge) => edge.id === 'upload-gcs'))).toBe(
+      true,
+    )
+    expect(edgeCarriesClass('upload-gcs', 'upload', 'read', initialEdges.find((edge) => edge.id === 'upload-gcs'))).toBe(
+      false,
+    )
+    expect(nodeCarriesClass(service('transcoder'), initialEdges, 'bulk')).toBe(true)
+    expect(nodeCarriesClass(service('transcoder'), initialEdges, 'read')).toBe(false)
+    expect(nodeCarriesClass(service('mediacdn'), initialEdges, 'read')).toBe(true)
+    expect(nodeCarriesClass(service('glb'), initialEdges, 'bulk')).toBe(true)
+    expect(nodeCarriesClass(service('gcs'), initialEdges, 'bulk')).toBe(true)
+    expect(nodeCarriesClass(service('client'), initialEdges, 'read')).toBe(true)
+    expect(nodeCarriesClass(service('client'), initialEdges, 'async')).toBe(false)
   })
 
-  it('exposes per-class util so a bulk filter can still see AKS saturation', () => {
+  it('exposes per-class offered so a bulk filter still sees the upload path', () => {
     const draft = { ...defaultWorkloadDraft(), durationSec: 8 }
     const result = runWorkspace(initialNodes, initialEdges, draft, getProfiles(), 'none')
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.run.classStats.aks.bulk.util).toBeCloseTo(0.95, 2)
-    expect(result.run.nodeStats.aks.citation).toContain('Estimated')
-    expect(result.run.nodeStats.aks.citation).toContain('AKS transcode workers')
-    expect(result.run.classStats.aks.read?.offered ?? 0).toBe(0)
-    expect(result.run.classStats.cloudfront.read.completed).toBeGreaterThan(40_000)
+    expect(result.run.classStats.gcs.bulk.offered).toBeGreaterThan(0)
+    expect(result.run.classStats.transcoder.read?.offered ?? 0).toBe(0)
+    expect(result.run.classStats.mediacdn.read.completed).toBeGreaterThan(1_000)
   })
 })
 
@@ -460,29 +498,24 @@ describe('F3 config profiles', () => {
     expect(cost.hint).toMatch(/1 of 8 nodes/)
   })
 
-  it('keeps bound AKS numbers and fills missing CloudFront capacity as unknown', () => {
-    const aks = configProfileForNode(
-      getProfiles().find((profile) => profile.bindsTo === 'aks'),
-      'aks',
-      'AKS ×84',
-      'azure-aks',
+  it('keeps YouTube palette profiles unknown and does not invent a CDN hit rate', () => {
+    const transcoder = configProfileForNode(
+      getProfiles().find((profile) => profile.bindsTo === 'transcoder'),
+      'transcoder',
+      'Transcoder',
+      'gcp-transcoder-api',
     )
-    expect(aks.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
-      state: 'set',
-      value: 84,
-      confidence: 'estimated',
-    })
-    const cf = configProfileForNode(
-      getProfiles().find((profile) => profile.bindsTo === 'cloudfront'),
-      'cloudfront',
-      'CloudFront',
-      'aws-cloudfront',
+    expect(transcoder.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+    const cdn = configProfileForNode(
+      getProfiles().find((profile) => profile.bindsTo === 'mediacdn'),
+      'mediacdn',
+      'Media CDN',
+      'gcp-media-cdn',
     )
-    expect(cf.fields.find((field) => field.role === 'cacheHitRate')?.value).toMatchObject({
-      state: 'set',
-      value: 0.92,
+    expect(cdn.fields.find((field) => field.role === 'cacheHitRate')?.value).toEqual({
+      state: 'unknown',
     })
-    expect(cf.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+    expect(cdn.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
   })
 })
 

@@ -5,83 +5,26 @@ import {
   parseCalibrationCsv,
   serializeCalibrationCsv,
 } from '@sds/engine'
+import { initialNodes } from '../workspace/graph.ts'
+import { blankProfileForNode } from '../workspace/node-profile.ts'
 import { browserStore, loadCurrent, patchCurrentLibrary } from '../workspace/persistence.ts'
+import type { ServiceNodeData } from '../workspace/types.ts'
 import type { CalibrationProfile, Confidence, FaultMode } from './types.ts'
 
 export type { CalibrationProfile, Confidence, FaultMode }
 
-export const youtubeSeedProfiles: CalibrationProfile[] = [
-  {
-    id: 'aks-transcode',
-    name: 'AKS transcode workers',
-    bindsTo: 'aks',
-    notes:
-      'Example design for the YouTube-style scenario. Not a lab measurement. Fluid mode uses service time as a constant mean; P95 stays unused until discrete-event.',
-    fields: [
-      {
-        id: 'servers',
-        label: 'Slots',
-        unit: 'count',
-        role: 'servers',
-        value: { state: 'set', value: 84, confidence: 'estimated', sourceId: 'example' },
-      },
-      {
-        id: 'serviceMs',
-        label: 'Service time (mean)',
-        unit: 'ms',
-        role: 'serviceMs',
-        value: { state: 'set', value: 40_000, confidence: 'estimated', sourceId: 'example' },
-      },
-      {
-        id: 'queue',
-        label: 'Queue capacity',
-        unit: 'jobs',
-        role: 'queue',
-        value: { state: 'set', value: 200, confidence: 'estimated', sourceId: 'example' },
-      },
-      {
-        id: 'p95Ms',
-        label: 'Service time P95',
-        unit: 'ms',
-        role: 'latencyP95Ms',
-        value: { state: 'unknown' },
-      },
-    ],
-  },
-  {
-    id: 'copy-link',
-    name: 'Azure to AWS copy link',
-    notes:
-      'Results may show 0.8 vs 0.88 GB/s as Estimated from the example. Bandwidth is unknown here, so it must not cap the engine.',
-    fields: [
-      {
-        id: 'bandwidthBps',
-        label: 'Bandwidth',
-        unit: 'bps',
-        role: 'bandwidthBps',
-        value: { state: 'unknown' },
-      },
-    ],
-  },
-  {
-    id: 'cloudfront-hit',
-    name: 'CloudFront cache hit',
-    bindsTo: 'cloudfront',
-    notes: 'Hit rate from the example canvas. Estimated, not a vendor quote or a measurement.',
-    fields: [
-      {
-        id: 'hitRate',
-        label: 'Cache hit rate',
-        unit: 'fraction',
-        role: 'cacheHitRate',
-        value: { state: 'set', value: 0.92, confidence: 'estimated', sourceId: 'example' },
-      },
-    ],
-  },
-]
+const youtubeExampleNote =
+  'Quoted YouTube example from GCP palette tiles. Unknown does not cap. Rates are 100M views/day and 1M uploads/day (Estimated). Cache hit is not typed. Not a lab measurement.'
+
+export const youtubeSeedProfiles: CalibrationProfile[] = initialNodes
+  .filter((node) => node.type !== 'zone')
+  .map((node) => {
+    const data = node.data as ServiceNodeData
+    return { ...blankProfileForNode(node.id, data.title, data.catalogId), notes: youtubeExampleNote }
+  })
 
 export const sampleCalibrationCsv = `profileId,name,bindsTo,notes,fieldId,label,unit,role,state,value,confidence,sourceId
-aks-transcode,AKS transcode workers,aks,Lab overwrite,servers,Slots,count,servers,set,97,measured,lab-1
+node-transcoder,Transcoder,transcoder,Lab overwrite,servers,Servers,count,servers,set,8,measured,lab-1
 `
 
 type LibraryState = {
@@ -232,21 +175,21 @@ export const FAULT_OPTIONS: { id: FaultMode; label: string; body: string }[] = [
   {
     id: 'packet-drop',
     label: 'Packet drop 10%',
-    body: 'Sets lossProb = 0.1 on the uploaders → AKS edge. Completions fall to 1.8 /s.',
+    body: 'Sets lossProb = 0.1 on the Client → Load Balancing upload hop. Phase 1 Analytic ignores faults.',
   },
   {
     id: 'link-cut',
     label: 'Link cut',
-    body: 'Sets lossProb = 1. AKS sees no delivered work.',
+    body: 'Sets lossProb = 1 on the Client → Load Balancing hop. Transcoders see no delivered uploads.',
   },
   {
     id: 'crash',
-    label: 'AKS crash',
-    body: 'Run with 0 slots. Calibration is unchanged; this is a temporary fault.',
+    label: 'Transcoder crash',
+    body: 'Run with 0 servers on the Transcoder API worker. Calibration is unchanged.',
   },
   {
     id: 'latency-spike',
     label: 'Upload latency spike',
-    body: 'Adds 200 ms on the uploaders → AKS edge in discrete-event mode. Fluid ignores it.',
+    body: 'Adds 200 ms on the Client → Load Balancing hop in discrete-event mode. Analytic ignores it.',
   },
 ]

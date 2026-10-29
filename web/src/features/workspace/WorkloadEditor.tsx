@@ -57,11 +57,15 @@ function NumberField({
   label,
   value,
   onChange,
+  digits,
 }: {
   label: string
   value: number
   onChange: (next: number) => void
+  digits?: number
 }) {
+  const shown =
+    digits == null || !Number.isFinite(value) ? value : Number(value.toFixed(digits))
   return (
     <Box>
       <Typography component="label" sx={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
@@ -72,13 +76,13 @@ function NumberField({
         type="number"
         hiddenLabel
         fullWidth
-        value={value}
+        value={shown}
         onChange={(event) => {
           const next = Number(event.target.value)
           if (!Number.isFinite(next)) return
           onChange(next)
         }}
-        slotProps={{ htmlInput: { 'aria-label': label } }}
+        slotProps={{ htmlInput: { 'aria-label': label, step: digits == null ? undefined : 10 ** -digits } }}
       />
     </Box>
   )
@@ -158,6 +162,7 @@ export function WorkloadEditor({
                   key={id}
                   label={`${CLASS_LABEL[id]} rps`}
                   value={visibleClassRate(draft, generator, id)}
+                  digits={2}
                   onChange={(next) => {
                     if (next < 0) return
                     patchGeneratorClassRate(generator.id, id, next)

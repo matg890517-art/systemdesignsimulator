@@ -94,6 +94,14 @@ export function activeRecord(history: RunHistory): RunRecord | undefined {
   return history.runs.find((record) => record.id === history.activeId) ?? history.runs[0]
 }
 
+/** Do not paint Generic 290 rps onto a freshly loaded YouTube canvas. */
+export function runFitsCanvas(run: WorkspaceRun, nodeIds: readonly string[]): boolean {
+  const ids = new Set(nodeIds)
+  const statIds = Object.keys(run.nodeStats)
+  if (statIds.length === 0) return false
+  return statIds.every((id) => ids.has(id))
+}
+
 type Store = {
   getItem(key: string): string | null
   setItem(key: string, value: string): void

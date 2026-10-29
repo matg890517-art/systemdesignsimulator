@@ -15,7 +15,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { catalogEntryById, PALETTE_PROVIDERS, paletteGroupsFor } from '../catalog/catalog.ts'
+import { catalogEntryById, PALETTE_PROVIDERS, paletteGroupsFor, youtubeCatalogIds } from '../catalog/catalog.ts'
 import { mappedProviders, referenceBindings, type MappedProvider } from '../catalog/provider-maps.ts'
 import type { PaletteGroup, PaletteProvider, PaletteTile } from '../catalog/types.ts'
 import { CatalogIcon } from './CatalogIcon.tsx'
@@ -31,6 +31,7 @@ import {
   categoryLabel,
   firstCategoryOpen,
   folderKey,
+  foldersFromCanvas,
   providersOpenOnly,
   searchOpenState,
 } from './palette-fold.ts'
@@ -86,19 +87,18 @@ export function Palette({
   onRestoreExample: () => void
 }) {
   const { mode, setMode } = useIconMode()
-  const [openProviders, setOpenProviders] = useState<Record<PaletteProvider, boolean>>({
-    generic: true,
-    aws: false,
-    azure: false,
-    gcp: false,
-    kubernetes: false,
-  })
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
-    [folderKey('generic', 'GENERIC')]: true,
-  })
+  const [bootFolders] = useState(() => foldersFromCanvas(canvasPaletteTiles(nodes), paletteGroupsFor))
+  const [openProviders, setOpenProviders] = useState<Record<PaletteProvider, boolean>>(
+    bootFolders.providers,
+  )
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(
+    bootFolders.categories,
+  )
   const [view, setView] = useState<'button' | 'list'>('list')
   const [query, setQuery] = useState('')
-  const [template, setTemplate] = useState<MappedProvider | 'youtube'>('generic')
+  const [template, setTemplate] = useState<MappedProvider | 'youtube'>(() =>
+    nodes.some((node) => node.id === 'transcoder' || node.id === 't240') ? 'youtube' : 'generic',
+  )
   const [canvasOpen, setCanvasOpen] = useState(false)
 
   const groupsByProvider = useMemo(() => {
@@ -561,8 +561,7 @@ export function Palette({
           variant="outlined"
           onClick={() => {
             if (template === 'youtube') {
-              setOpenProviders(providersOpenOnly('generic'))
-              setOpenCategories({ [folderKey('generic', 'GENERIC')]: true })
+              openLoadedProvider('gcp', youtubeCatalogIds)
               onRestoreExample()
               return
             }

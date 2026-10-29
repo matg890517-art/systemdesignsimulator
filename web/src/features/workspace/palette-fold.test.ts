@@ -9,9 +9,11 @@ import {
   categoryLabel,
   firstCategoryOpen,
   folderKey,
+  foldersFromCanvas,
   providersOpenOnly,
   searchOpenState,
 } from './palette-fold.ts'
+import { initialNodes } from './graph.ts'
 import { referenceStackGraph } from './reference-graph.ts'
 
 describe('palette folder explorer', () => {
@@ -74,6 +76,16 @@ describe('palette folder explorer', () => {
     expect(open[folderKey('azure', 'NETWORK AND CDN')]).toBe(true)
     expect(open[folderKey('azure', 'CONTAINERS')]).toBe(true)
     expect(open[folderKey('azure', 'COMPUTE')]).toBeUndefined()
+  })
+
+  it('opens GCP folders for the YouTube palette example', () => {
+    const folders = foldersFromCanvas(canvasPaletteTiles(initialNodes), paletteGroupsFor)
+    expect(folders.providers.gcp).toBe(true)
+    expect(folders.providers.generic).toBe(false)
+    expect(folders.categories[folderKey('gcp', 'NETWORK AND CDN')]).toBe(true)
+    expect(folders.categories[folderKey('gcp', 'STORAGE')]).toBe(true)
+    expect(folders.categories[folderKey('gcp', 'MEDIA')]).toBe(true)
+    expect(folders.categories[folderKey('gcp', 'CONTAINERS')]).toBe(true)
   })
 
   it('search opens only folders that match', () => {

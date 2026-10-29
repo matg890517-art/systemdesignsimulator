@@ -7,6 +7,7 @@ import {
   focusRun,
   rankingFromNodes,
   RUN_HISTORY_LIMIT,
+  runFitsCanvas,
   runMenuLabel,
 } from './run-history.ts'
 import type { ServiceNodeData, WorkspaceRun, ZoneNodeData } from './types.ts'
@@ -133,5 +134,52 @@ describe('run history', () => {
     )
     expect(rows.find((row) => row.id === 'aks')?.usdPerHour).toBe(40)
     expect(rows.find((row) => row.id === 'alb')?.usdPerHour).toBeUndefined()
+  })
+
+  it('does not restore a Generic run onto the YouTube canvas', () => {
+    const youtubeIds = ['client', 'gcp', 'mediacdn', 'gcs', 'transcoder']
+    expect(
+      runFitsCanvas(
+        run({
+          nodeStats: {
+            client: {
+              util: 0,
+              completed: 0,
+              rejected: 0,
+              offered: 1181,
+              mu: Infinity,
+              capped: false,
+              p99: '',
+              meta: 'generator',
+              backlog: 0,
+              loss: 0,
+            },
+          },
+        }),
+        youtubeIds,
+      ),
+    ).toBe(true)
+    expect(
+      runFitsCanvas(
+        run({
+          nodeStats: {
+            alb: {
+              util: 0.2,
+              completed: 1,
+              rejected: 0,
+              offered: 1,
+              mu: 5,
+              capped: true,
+              p99: '',
+              meta: 'analytic',
+              backlog: 0,
+              loss: 0,
+            },
+          },
+        }),
+        youtubeIds,
+      ),
+    ).toBe(false)
+    expect(runFitsCanvas(run(), youtubeIds)).toBe(false)
   })
 })

@@ -175,7 +175,7 @@ export const referenceStackProfiles: CalibrationProfile[] = [
   capacity('ref-object', 'Generic object store', 'object', 4, 5),
 ]
 
-/** Modest example load so 8×20 ms services are visible, not flooded by the YouTube 51k rps. */
+/** Modest example load so 8×20 ms services are visible, not flooded by YouTube view rps. */
 export function referenceWorkloadDraft(): WorkloadDraft {
   return {
     ...defaultWorkloadDraft(),

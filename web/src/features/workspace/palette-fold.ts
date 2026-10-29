@@ -74,6 +74,26 @@ export function categoriesOpenForCatalogIds(
   return next
 }
 
+const CLOUD_PROVIDERS = ['aws', 'azure', 'gcp', 'kubernetes'] as const
+
+/** Open the cloud folder that holds the dropped tiles so Load YouTube shows GCP, not Generic. */
+export function foldersFromCanvas(tiles: PaletteTile[], groupsFor: (provider: PaletteProvider) => PaletteGroup[]) {
+  const catalogIds = tiles
+    .map((tile) => tile.catalogId)
+    .filter((id): id is string => Boolean(id))
+  const cloud = CLOUD_PROVIDERS.find((provider) => tiles.some((tile) => tile.provider === provider))
+  if (!cloud) {
+    return {
+      providers: providersOpenOnly('generic'),
+      categories: { [folderKey('generic', 'GENERIC')]: true },
+    }
+  }
+  return {
+    providers: providersOpenOnly(cloud),
+    categories: categoriesOpenForCatalogIds(cloud, groupsFor(cloud), catalogIds),
+  }
+}
+
 export function canvasPaletteTiles(
   nodes: {
     id: string

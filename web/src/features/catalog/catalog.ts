@@ -46,24 +46,20 @@ const CATEGORY_ORDER = [
   'Kubernetes object',
 ]
 
-/** Example canvas node id → catalog row. Binding only; no quota numbers. */
+/** YouTube example node id → palette catalog row. Binding only; no quota numbers. */
 export const exampleNodeCatalogIds: Record<string, string> = {
-  viewers: 'generic-clients',
-  uploaders: 'generic-clients',
-  cloudfront: 'aws-cloudfront',
-  alb: 'aws-application-load-balancer',
-  ecs: 'aws-ecs',
-  elasticache: 'aws-elasticache',
-  dynamodb: 'aws-dynamodb',
-  gke: 'gcp-gke',
-  pubsub: 'gcp-pub-sub',
-  cloudrun: 'gcp-cloud-run',
-  firestore: 'gcp-firestore',
-  aks: 'azure-aks',
-  servicebus: 'azure-service-bus',
-  blob: 'azure-blob-storage',
-  frontdoor: 'azure-front-door',
+  client: 'generic-clients',
+  glb: 'gcp-cloud-load-balancing',
+  upload: 'gcp-gke',
+  consumer: 'gcp-gke',
+  mediacdn: 'gcp-media-cdn',
+  gcs: 'gcp-cloud-storage',
+  transcoder: 'gcp-transcoder-api',
+  metaproc: 'gcp-cloud-run',
+  bigtable: 'gcp-bigtable',
 }
+
+export const youtubeCatalogIds = [...new Set(Object.values(exampleNodeCatalogIds))]
 
 function environmentTile(provider: PaletteProvider): PaletteTile {
   return { name: 'Environment', provider, kind: 'environment' }

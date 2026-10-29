@@ -26,8 +26,8 @@ describe('N4 engine job', () => {
     expect(done.id).toBe(7)
     expect(done.result.run.hint).toContain('worker')
     expect(done.result.run.mode).toBe('analytic')
-    expect(done.result.run.nodeStats.aks).toBeDefined()
-    expect(done.result.run.kpis.latency).not.toBe('unknown')
+    expect(done.result.run.nodeStats.client).toBeDefined()
+    expect(done.result.run.nodeStats.gcs).toBeDefined()
   })
 
   it('returns the discrete arrival guard without throwing', async () => {

@@ -25,9 +25,11 @@ describe('remaining P0 requirements', () => {
     const { deleteSelection } = await import('./canvas-edit.ts')
     const { iconGlyphFor } = await import('./kind-icon.ts')
     const { initialEdges, initialNodes } = await import('./graph.ts')
-    const next = deleteSelection(initialNodes, initialEdges, ['ecs'], [])
-    expect(next.nodes.some((node) => node.id === 'ecs')).toBe(false)
-    expect(next.edges.some((edge) => edge.source === 'ecs' || edge.target === 'ecs')).toBe(false)
+    const next = deleteSelection(initialNodes, initialEdges, ['upload'], [])
+    expect(next.nodes.some((node) => node.id === 'upload')).toBe(false)
+    expect(next.edges.some((edge) => edge.source === 'upload' || edge.target === 'upload')).toBe(
+      false,
+    )
     expect(iconGlyphFor({ mode: 'service', name: 'EC2', catalogId: 'aws-ec2' })).toBe('compute')
     expect(iconGlyphFor({ mode: 'normal', name: 'Clients', catalogId: 'generic-clients' })).toBe(
       'clients',
@@ -35,31 +37,46 @@ describe('remaining P0 requirements', () => {
     expect(iconGlyphFor({ mode: 'normal', name: 'Environment', category: 'ENVIRONMENT' })).toBe('zone')
   })
 
-  it('YouTube AWS, GCP, and Azure environments share one box size', () => {
+  it('YouTube is one GCP environment of palette tiles', () => {
     const zones = initialNodes.filter((node) => node.type === 'zone')
-    expect(zones.map((node) => (node.data as { label: string }).label)).toEqual(['AWS', 'GCP', 'Azure'])
-    for (const node of zones) {
-      expect(node.position.x).toBe(zones[0]?.position.x)
-      expect(node.style?.width).toBe(youtubeEnvSize.width)
-      expect(node.style?.height).toBe(youtubeEnvSize.height)
-      expect(node.draggable).toBe(true)
-      expect(node.selectable).toBe(true)
-    }
+    expect(zones.map((node) => (node.data as { label: string }).label)).toEqual(['GCP'])
+    const gcp = zones[0]
+    expect(gcp?.style?.width).toBe(youtubeEnvSize.width)
+    expect(gcp?.style?.height).toBe(youtubeEnvSize.height)
+    expect(gcp?.draggable).toBe(true)
+    expect(gcp?.selectable).toBe(true)
     expect(initialNodes.filter((node) => node.parentId).every((node) => node.extent !== 'parent')).toBe(
       true,
     )
-    const viewersZ = initialNodes.find((node) => node.id === 'viewers')?.zIndex ?? 0
-    const awsZ = initialNodes.find((node) => node.id === 'aws')?.zIndex ?? 0
-    const cloudfrontZ = initialNodes.find((node) => node.id === 'cloudfront')?.zIndex ?? 0
-    expect(awsZ).toBeLessThan(viewersZ)
-    expect(awsZ).toBeLessThan(cloudfrontZ)
+    const clientZ = initialNodes.find((node) => node.id === 'client')?.zIndex ?? 0
+    const gcpZ = initialNodes.find((node) => node.id === 'gcp')?.zIndex ?? 0
+    const cdnZ = initialNodes.find((node) => node.id === 'mediacdn')?.zIndex ?? 0
+    expect(gcpZ).toBeLessThan(clientZ)
+    expect(gcpZ).toBeLessThan(cdnZ)
+    for (const node of initialNodes.filter((item) => item.type === 'service')) {
+      const data = node.data as { catalogId?: string; p99?: string; meta?: string }
+      expect(data.catalogId).toBeTruthy()
+      expect(data.p99).toBe('not run')
+      expect(data.meta).toMatch(/Dropped from catalog/)
+    }
   })
 
-  it('F29 marks Azure→AWS copy-link as a cross-provider edge', () => {
-    expect(isCrossProviderEdge(initialNodes, { source: 'blob', target: 'cloudfront' })).toBe(true)
-    expect(isCrossProviderEdge(initialNodes, { source: 'alb', target: 'ecs' })).toBe(false)
-    const copy = initialEdges.find((edge) => edge.id === 'copy-link')
-    expect(String(copy?.label)).toMatch(/cross · Estimated/)
+  it('F29 marks a hop that leaves a provider as Estimated', () => {
+    expect(isCrossProviderEdge(initialNodes, { source: 'upload', target: 'gcs' })).toBe(false)
+    const aws = {
+      id: 'aws-s3',
+      type: 'service' as const,
+      position: { x: 0, y: 0 },
+      data: {
+        title: 'S3',
+        util: 0,
+        p99: 'not run',
+        meta: 'Dropped from catalog · quotas unknown',
+        provider: 'aws' as const,
+        catalogId: 'aws-s3',
+      },
+    }
+    expect(isCrossProviderEdge([...initialNodes, aws], { source: 'gcs', target: 'aws-s3' })).toBe(true)
   })
 
   it('F4 turns Write off on an edge and relabels R/W to R', () => {
@@ -79,17 +96,22 @@ describe('remaining P0 requirements', () => {
   })
 
   it('edge labels are class types; hop rates come from a run, not baked copy', () => {
-    expect(initialEdges.find((edge) => edge.id === 'v-cf')?.label).toBe('R/W/A')
-    expect(initialEdges.find((edge) => edge.id === 'cf-alb')?.label).toBe('R/W/A')
-    expect(initialEdges.find((edge) => edge.id === 'ddb-gke')?.label).toBe('R/A')
-    expect(initialEdges.find((edge) => edge.id === 'up-aks')?.label).toBe('B')
-    expect(initialEdges.find((edge) => edge.id === 'copy-link')?.label).toBe('B · cross · Estimated')
+    expect(initialEdges.find((edge) => edge.id === 'c-lb')?.label).toBe('R/W/B')
+    expect(initialEdges.find((edge) => edge.id === 'lb-upload')?.label).toBe('W/B')
+    expect(initialEdges.find((edge) => edge.id === 'lb-consumer')?.label).toBe('R')
+    expect(initialEdges.find((edge) => edge.id === 'upload-gcs')?.label).toBe('B')
+    expect(initialEdges.find((edge) => edge.id === 'cdn-gcs')?.label).toBe('miss · R')
+    expect(initialEdges.find((edge) => edge.id === 'gcs-transcoder')?.label).toBe('B')
+    expect(initialEdges.find((edge) => edge.id === 'consumer-cdn')?.data).toMatchObject({
+      routing: { mode: 'broadcast' },
+    })
+    expect(initialEdges.find((edge) => edge.id === 'consumer-bt')?.data).toMatchObject({
+      routing: { mode: 'broadcast' },
+    })
     for (const edge of initialEdges) {
       expect(String(edge.label)).not.toMatch(/\d/)
     }
-    expect(hopTypeLabel(initialEdges.find((edge) => edge.id === 'copy-link')!)).toBe(
-      'B · cross · Estimated',
-    )
+    expect(hopTypeLabel(initialEdges.find((edge) => edge.id === 'cdn-gcs')!)).toBe('miss · R')
     expect(hopLabelWithRate('R/W', 50_000)).toBe('R/W · 50,000 /s')
     expect(hopLabelWithRate('miss · R/W', 20)).toBe('miss · R/W · 20.0 /s')
     expect(applyHopNoteLabel('R/W', true)).toBe('miss · R/W')
@@ -111,7 +133,7 @@ describe('remaining P0 requirements', () => {
 
   it('F4 compiles typed edge payload bytes and fan-out from canvas data', () => {
     const edges = initialEdges.map((edge) =>
-      edge.id === 'up-aks'
+      edge.id === 'upload-gcs'
         ? {
             ...edge,
             data: {
@@ -135,7 +157,7 @@ describe('remaining P0 requirements', () => {
       getProfiles(),
       'none',
     )
-    const link = topology.edges.find((item) => item.id === 'up-aks')
+    const link = topology.edges.find((item) => item.id === 'upload-gcs')
     expect(link?.fanOut).toBe(2)
     expect(link?.call.kind).toBe('async')
     expect(link?.classes.bulk?.requestBytes).toBe(1_000)

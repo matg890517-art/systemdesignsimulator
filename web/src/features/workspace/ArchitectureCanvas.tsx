@@ -50,6 +50,12 @@ import type { CanvasSelection, ServiceNodeData, WorkspaceNode, ZoneNodeData } fr
 
 export type { WorkspaceNode }
 
+/** Extra top inset so Fit View sits the graph under the KPI overlay, not behind it. */
+export const CANVAS_FIT_VIEW = {
+  padding: { top: '136px', right: '40px', bottom: '72px', left: '24px' },
+  duration: 200,
+} as const
+
 const nodeTypes = {
   service: ServiceNodeView,
   zone: ZoneNodeView,
@@ -187,8 +193,8 @@ function CanvasInner({
   useEffect(() => {
     if (!fitNonce) return
     const handle = window.setTimeout(() => {
-      void fitView({ padding: 0.12, duration: 200 })
-    }, 50)
+      void fitView({ ...CANVAS_FIT_VIEW })
+    }, 120)
     return () => window.clearTimeout(handle)
   }, [fitNonce, fitView])
 
@@ -388,8 +394,9 @@ function CanvasInner({
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         onSelectionChange={onSelectionChange}
+        fitViewOptions={CANVAS_FIT_VIEW}
         onInit={(instance) => {
-          void instance.fitView({ padding: 0.08 })
+          void instance.fitView({ ...CANVAS_FIT_VIEW })
         }}
         minZoom={0.2}
         snapToGrid

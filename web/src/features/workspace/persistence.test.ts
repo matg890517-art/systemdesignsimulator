@@ -74,7 +74,8 @@ describe('F12 topology snapshot', () => {
     expect(snapshotFilename(snapshot)).toMatch(/youtube/)
     const restored = parseSnapshot(serializeSnapshot(snapshot))
     expect(restored?.scene).toBe('youtube')
-    expect(restored?.nodes.some((node) => node.id === 'aks')).toBe(true)
+    expect(restored?.nodes.some((node) => node.id === 'gcs')).toBe(true)
+    expect(restored?.nodes.some((node) => node.id === 'transcoder')).toBe(true)
   })
 
   it('patches typed $/hr onto the saved canvas without needing Workspace mounted', () => {

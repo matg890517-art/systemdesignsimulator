@@ -145,7 +145,9 @@ export function parseSnapshot(raw: string): TopologySnapshot | undefined {
       const data = node.data as ServiceNodeData
       const catalogId =
         data?.catalogId ??
-        (node.id === 'viewers' || node.id === 'uploaders' ? 'generic-clients' : undefined)
+        (node.id === 'client' || node.id === 'viewers' || node.id === 'uploaders'
+          ? 'generic-clients'
+          : undefined)
       return {
         ...node,
         extent: undefined,

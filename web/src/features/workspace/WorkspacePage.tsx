@@ -86,6 +86,7 @@ import {
   getRunHistory,
   publishRun,
   rankingFromNodes,
+  runFitsCanvas,
   runMenuLabel,
   useRunHistory,
 } from './run-history.ts'
@@ -146,26 +147,7 @@ function challengeFromHref(): string | undefined {
   }
 }
 
-const seedBottlenecks: Bottleneck[] = [
-  {
-    id: 'aks',
-    title: 'Transcode workers (AKS)',
-    util: 0.95,
-    summary: '2 uploads/s. 84 slots at 40 s serve 2.1 uploads/s.',
-    suggestion: 'Run to confirm from the engine.',
-    fromEngine: false,
-    citation: 'Estimated · AKS transcode workers',
-  },
-  {
-    id: 'copy-link',
-    title: 'Azure to AWS copy link',
-    util: 0.91,
-    summary: '0.8 GB/s copies vs 0.88 GB/s on the link. Capacity is Estimated.',
-    suggestion: 'Measure this cross-provider link in Calibration.',
-    fromEngine: false,
-    citation: 'Estimated · Azure to AWS copy link',
-  },
-]
+const seedBottlenecks: Bottleneck[] = []
 
 function savedChipSx(hint: string) {
   if (
@@ -237,7 +219,7 @@ export function WorkspacePage() {
   const [playSpeed, setPlaySpeed] = useState<PlaybackSpeed>(1)
   const [livePaused, setLivePaused] = useState(false)
   const [showMode, setShowMode] = useState<ShowMode>('instant')
-  const [fitNonce, setFitNonce] = useState(0)
+  const [fitNonce, setFitNonce] = useState(1)
   const playSpeedRef = useRef<PlaybackSpeed>(1)
   const showModeRef = useRef<ShowMode>('instant')
   lastRunRef.current = lastRun
@@ -831,8 +813,9 @@ export function WorkspacePage() {
       setFault(snapshot.fault)
       setRunHint(`Loaded ${snapshot.name}`)
     }
+    const canvasIds = (boot.current?.nodes ?? []).map((node) => node.id)
     const active = activeRecord(getRunHistory())
-    if (active) {
+    if (active && runFitsCanvas(active.run, canvasIds)) {
       setLastRun(active.run)
       setKpis(active.run.kpis)
       setBottlenecks(active.run.bottlenecks)
