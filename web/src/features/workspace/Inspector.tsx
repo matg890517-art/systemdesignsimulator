@@ -36,7 +36,7 @@ import {
   ENV_MIN_WIDTH,
   environmentLabel,
 } from './environment.ts'
-import { blankProfileForNode, configProfileForNode } from './node-profile.ts'
+import { configProfileForNode, exampleProfileForNode } from './node-profile.ts'
 import type { FieldFocusRequest } from './bottleneck-focus.ts'
 import {
   inspectorFocusLabel,
@@ -125,7 +125,7 @@ function ConfigPanel({
   if (!nodeId || !draft) {
     return (
       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-        Select a service or environment box. Empty fields stay unknown and do not cap the engine.
+        Select a service or environment box. Cards start with Estimated n and S. Cost stays unknown.
       </Typography>
     )
   }
@@ -143,7 +143,7 @@ function ConfigPanel({
               : catalog.limitsOnPage === 'partial'
                 ? 'lists some limits.'
                 : 'does not list limits.'}{' '}
-            Quotas stay unknown until you type them.
+            Catalog quotas are not copied. Example Estimated n and S are a starting model.
           </Typography>
           <Typography
             component="a"
@@ -158,8 +158,8 @@ function ConfigPanel({
       ) : (
         <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
           {generic
-            ? 'Generic building block. No official limits page. Set capacity below as unknown or estimated.'
-            : `${title ?? nodeId} has no catalog page. Set capacity below; unknown does not cap the engine.`}
+            ? 'Generic building block. No official limits page. n and S below are Estimated examples. Cost stays unknown.'
+            : `${title ?? nodeId} has no catalog page. n and S below are Estimated examples. Cost stays unknown.`}
         </Typography>
       )}
       <TextField
@@ -248,11 +248,11 @@ function ConfigPanel({
       <Button
         size="small"
         onClick={() => {
-          const blank = blankProfileForNode(nodeId, title ?? nodeId, catalogId)
-          pending.current = { nodeId, draft: blank, dirty: false }
-          setDraft(blank)
-          upsertProfile(blank)
-          onNotice?.(`${title ?? nodeId} reset. Every field is unknown again.`, 'info')
+          const next = exampleProfileForNode(nodeId, title ?? nodeId, catalogId)
+          pending.current = { nodeId, draft: next, dirty: false }
+          setDraft(next)
+          upsertProfile(next)
+          onNotice?.(`${title ?? nodeId} reset to Estimated example n and S. Cost stays unknown.`, 'info')
         }}
       >
         Reset to default

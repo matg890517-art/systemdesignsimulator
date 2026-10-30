@@ -6,7 +6,7 @@ import {
   serializeCalibrationCsv,
 } from '@sds/engine'
 import { initialNodes } from '../workspace/graph.ts'
-import { blankProfileForNode } from '../workspace/node-profile.ts'
+import { exampleProfileForNode, profilesWithExampleCapacity } from '../workspace/node-profile.ts'
 import { browserStore, loadCurrent, patchCurrentLibrary } from '../workspace/persistence.ts'
 import type { ServiceNodeData } from '../workspace/types.ts'
 import type { CalibrationProfile, Confidence, FaultMode } from './types.ts'
@@ -14,13 +14,13 @@ import type { CalibrationProfile, Confidence, FaultMode } from './types.ts'
 export type { CalibrationProfile, Confidence, FaultMode }
 
 const youtubeExampleNote =
-  'Quoted YouTube example from GCP palette tiles. Unknown does not cap. Rates are 100M views/day and 1M uploads/day (Estimated). Cache hit is not typed. Not a lab measurement.'
+  'Quoted YouTube load (100M views/day, 1M uploads/day) with example Estimated n and S. Not a vendor quote, not a catalog quota, not Measured. Cost stays unknown.'
 
 export const youtubeSeedProfiles: CalibrationProfile[] = initialNodes
   .filter((node) => node.type !== 'zone')
   .map((node) => {
     const data = node.data as ServiceNodeData
-    return { ...blankProfileForNode(node.id, data.title, data.catalogId), notes: youtubeExampleNote }
+    return { ...exampleProfileForNode(node.id, data.title, data.catalogId), notes: youtubeExampleNote }
   })
 
 export const sampleCalibrationCsv = `profileId,name,bindsTo,notes,fieldId,label,unit,role,state,value,confidence,sourceId
@@ -55,7 +55,10 @@ export function hydrateLibraryFromSnapshot() {
   const store = browserStore()
   const snap = store ? loadCurrent(store) : undefined
   if (!snap) return
-  state = { profiles: snap.profiles, fault: snap.fault }
+  state = {
+    profiles: profilesWithExampleCapacity(snap.nodes, snap.profiles),
+    fault: snap.fault,
+  }
   for (const listener of listeners) listener()
 }
 

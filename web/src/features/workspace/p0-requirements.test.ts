@@ -57,7 +57,7 @@ describe('remaining P0 requirements', () => {
       const data = node.data as { catalogId?: string; p99?: string; meta?: string }
       expect(data.catalogId).toBeTruthy()
       expect(data.p99).toBe('not run')
-      expect(data.meta).toMatch(/Dropped from catalog/)
+      expect(data.meta).toMatch(/Estimated example/)
     }
   })
 

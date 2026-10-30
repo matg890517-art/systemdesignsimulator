@@ -109,6 +109,7 @@ import {
   type TopologySnapshot,
 } from './persistence.ts'
 import { hopLabelWithRate, hopTypeLabel, readEdgeData } from './edge-data.ts'
+import { HOP_FOLLOW_DEBOUNCE_MS, hopFlowSignature, hopFollowAction } from './graph-follow.ts'
 import { SimClock, TimePlaySnackbar } from './PlaybackBar.tsx'
 import {
   canPlayback,
@@ -119,7 +120,7 @@ import {
 import { architectureInventory } from './inventory.ts'
 import { shareUrlFor, snapshotFromHref } from './share.ts'
 import { wrapInSubsystem } from './subsystem.ts'
-import { blankProfileForNode, costFromCanvas } from './node-profile.ts'
+import { costFromCanvas, exampleProfileForNode, profilesWithExampleCapacity } from './node-profile.ts'
 import { AKS_HEADROOM_CHALLENGE, scoreAksHeadroom } from '../challenge/challenge.ts'
 import {
   patchZone,
@@ -222,10 +223,18 @@ export function WorkspacePage() {
   const [fitNonce, setFitNonce] = useState(1)
   const playSpeedRef = useRef<PlaybackSpeed>(1)
   const showModeRef = useRef<ShowMode>('instant')
+  const hopSigRef = useRef<string | undefined>(undefined)
+  const onRunRef = useRef<() => Promise<void>>(async () => {})
+  const ranRef = useRef(false)
+  const runningRef = useRef(false)
+  const modeRef = useRef(draft.mode)
   lastRunRef.current = lastRun
   classFilterRef.current = classFilter
   playSpeedRef.current = playSpeed
   showModeRef.current = showMode
+  ranRef.current = ran
+  runningRef.current = running
+  modeRef.current = draft.mode
   const [sessionReady, setSessionReady] = useState(false)
   const [history, setHistory] = useState<CanvasHistory>(emptyHistory)
   const [notice, setNotice] = useState<Notice>()
@@ -461,7 +470,7 @@ export function WorkspacePage() {
     setNodes(snapshot.nodes)
     setEdges(snapshot.edges)
     setWorkloadDraft(snapshot.draft)
-    replaceProfiles(snapshot.profiles)
+    replaceProfiles(profilesWithExampleCapacity(snapshot.nodes, snapshot.profiles))
     setFault(snapshot.fault)
     setScene(snapshot.scene)
     setProjectName(snapshot.name)
@@ -682,6 +691,56 @@ export function WorkspacePage() {
     onTogglePlayback()
   }
 
+  function stripRunPaint() {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.type === 'zone') return node
+        const data = node.data as ServiceNodeData
+        return {
+          ...node,
+          data: {
+            ...data,
+            util: 0,
+            p99: 'not run',
+            meta: 'Graph changed · Run Simulated',
+            live: false,
+            queueDepth: undefined,
+            loss: undefined,
+          },
+        }
+      }),
+    )
+    setEdges((current) =>
+      current.map((edge) => {
+        const extra = readEdgeData(edge)
+        const next = { ...extra }
+        delete next.flowRps
+        return {
+          ...edge,
+          animated: false,
+          data: next,
+          label: hopTypeLabel({ ...edge, data: next }),
+        }
+      }),
+    )
+  }
+
+  function invalidateSimulatedForHops() {
+    runGen.current += 1
+    cancelAnimationFrame(paintFrame.current)
+    stopPlayback()
+    stopWorkspaceRun()
+    lastRunRef.current = undefined
+    setLastRun(undefined)
+    setRunning(false)
+    setLivePaused(false)
+    setKpis(idleKpis)
+    setBottlenecks([])
+    stripRunPaint()
+    setRunHint('Graph changed · Run Simulated')
+    setRunError(undefined)
+  }
+
   function onStop() {
     // Bump the generation first so a result that was already in flight is ignored.
     runGen.current += 1
@@ -794,6 +853,26 @@ export function WorkspacePage() {
     }
   }
 
+  onRunRef.current = onRun
+
+  useEffect(() => {
+    if (!sessionReady) return
+    const sig = hopFlowSignature(edges)
+    if (hopSigRef.current === undefined) {
+      hopSigRef.current = sig
+      return
+    }
+    if (sig === hopSigRef.current) return
+    hopSigRef.current = sig
+    const handle = window.setTimeout(() => {
+      const action = hopFollowAction(ranRef.current, runningRef.current, modeRef.current)
+      if (action === 'ignore') return
+      if (action === 'analytic-run') void onRunRef.current()
+      else invalidateSimulatedForHops()
+    }, HOP_FOLLOW_DEBOUNCE_MS)
+    return () => window.clearTimeout(handle)
+  }, [sessionReady, edges])
+
   useEffect(() => {
     const run = lastRunRef.current
     if (!run) return
@@ -809,7 +888,7 @@ export function WorkspacePage() {
     const snapshot = boot.current?.snapshot
     if (snapshot) {
       setWorkloadDraft(snapshot.draft)
-      replaceProfiles(snapshot.profiles)
+      replaceProfiles(profilesWithExampleCapacity(snapshot.nodes, snapshot.profiles))
       setFault(snapshot.fault)
       setRunHint(`Loaded ${snapshot.name}`)
     }
@@ -1250,7 +1329,7 @@ export function WorkspacePage() {
                 onLoadReference={() => onLoadReference('generic')}
                 onServiceDropped={(node) => {
                   const data = node.data as ServiceNodeData
-                  upsertProfile(blankProfileForNode(node.id, data.title, data.catalogId))
+                  upsertProfile(exampleProfileForNode(node.id, data.title, data.catalogId))
                 }}
               />
             ) : (

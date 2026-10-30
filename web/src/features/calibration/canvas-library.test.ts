@@ -24,7 +24,12 @@ describe('calibration canvas library', () => {
     expect(rows.some((row) => row.title === 'AKS transcode workers')).toBe(false)
     expect(rows.some((row) => row.title === 'Azure to AWS copy link')).toBe(false)
     const transcoder = rows.find((row) => row.nodeId === 'transcoder')
-    expect(transcoder?.profile.fields.find((field) => field.role === 'servers')?.value).toEqual({
+    expect(transcoder?.profile.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
+    expect(transcoder?.profile.fields.find((field) => field.role === 'costUsdPerHour')?.value).toEqual({
       state: 'unknown',
     })
     expect(transcoder?.catalogId).toBe('gcp-transcoder-api')

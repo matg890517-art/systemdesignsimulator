@@ -19,7 +19,12 @@ import {
 } from './compile.ts'
 import { connectComponents } from './canvas-edit.ts'
 import { initialEdges, initialNodes } from './graph.ts'
-import { blankProfileForNode, configProfileForNode, costFromCanvas } from './node-profile.ts'
+import {
+  blankProfileForNode,
+  configProfileForNode,
+  costFromCanvas,
+  exampleProfileForNode,
+} from './node-profile.ts'
 import { readEdgeData, setEdgeClassActive } from './edge-data.ts'
 import {
   referenceStackGraph,
@@ -50,7 +55,7 @@ describe('loadShapeFromDraft', () => {
 })
 
 describe('compileCanvas', () => {
-  it('maps the YouTube palette graph with quoted rates and unknown capacity', () => {
+  it('maps the YouTube palette graph with quoted rates and Estimated example capacity', () => {
     const { topology, workload } = compileCanvas(
       initialNodes,
       initialEdges,
@@ -66,9 +71,13 @@ describe('compileCanvas', () => {
     expect(transcoder?.kind).toBe('worker')
     expect(gcs?.kind).toBe('object_storage')
     expect(cdn?.kind).toBe('cdn')
-    expect(cdn?.behavior.servers.state).toBe('unknown')
-    expect(cdn?.behavior.cacheHitRate).toBeUndefined()
-    expect(transcoder?.behavior.servers.state).toBe('unknown')
+    expect(cdn?.behavior.servers).toMatchObject({ state: 'set', value: 8, confidence: 'estimated' })
+    expect(cdn?.behavior.cacheHitRate).toMatchObject({ state: 'set', value: 0.9, confidence: 'estimated' })
+    expect(transcoder?.behavior.servers).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
     expect(workload.offered.client.read).toBeCloseTo(youtubeViewsRps)
     expect(workload.shape).toMatchObject({ kind: 'constant' })
     expect(workload.offered.client.write).toBeCloseTo(youtubeUploadsRps)
@@ -272,7 +281,7 @@ describe('compileCanvas', () => {
     expect(dropped.topology.edges.find((edge) => edge.id === 'c-lb')?.network.lossProb).toBe(0.1)
   })
 
-  it('runs fluid on the YouTube example without inventing capacity', () => {
+  it('runs fluid on the YouTube example with Estimated example capacity, not a catalog quota', () => {
     const draft = { ...defaultWorkloadDraft(), durationSec: 8 }
     const { topology, workload } = compileCanvas(
       initialNodes,
@@ -286,9 +295,11 @@ describe('compileCanvas', () => {
     if (!last) throw new Error('no steps')
     expect(last.components.client.read.completed).toBeGreaterThan(1_000)
     expect(last.components.gcs.bulk.completed).toBeGreaterThan(0)
-    expect(topology.components.find((item) => item.id === 'transcoder')?.behavior.servers.state).toBe(
-      'unknown',
-    )
+    expect(topology.components.find((item) => item.id === 'transcoder')?.behavior.servers).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
   })
 
   it('refuses a 1-day YouTube Simulated run and allows a short bulk-only run', () => {
@@ -459,7 +470,7 @@ describe('F24 class filter', () => {
 })
 
 describe('F3 config profiles', () => {
-  it('opens every selected node with unknown fields and does not invent numbers', () => {
+  it('keeps the blank skeleton unknown and fills Estimated n and S on the example default', () => {
     const ecs = blankProfileForNode('ecs', 'ECS ×60', 'aws-ecs')
     expect(ecs.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
     expect(ecs.fields.find((field) => field.role === 'serviceMs')?.value).toEqual({
@@ -468,8 +479,25 @@ describe('F3 config profiles', () => {
     expect(ecs.fields.find((field) => field.role === 'costUsdPerHour')?.value).toEqual({
       state: 'unknown',
     })
+    const example = exampleProfileForNode('ecs', 'ECS ×60', 'aws-ecs')
+    expect(example.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
+    expect(example.fields.find((field) => field.role === 'serviceMs')?.value).toMatchObject({
+      state: 'set',
+      value: 20,
+      confidence: 'estimated',
+    })
+    expect(example.fields.find((field) => field.role === 'costUsdPerHour')?.value).toEqual({
+      state: 'unknown',
+    })
     const clients = blankProfileForNode('clients', 'Clients', 'generic-clients')
     expect(clients.fields).toEqual([])
+    expect(exampleProfileForNode('consumer', 'Video Consumer', 'gcp-gke').fields.find((field) => field.role === 'servers')?.value).toMatchObject(
+      { state: 'set', value: 24, confidence: 'estimated' },
+    )
   })
 
   it('C0 cost is 0 of 8 until a node has typed $/hr, then rolls day and month', () => {
@@ -498,24 +526,37 @@ describe('F3 config profiles', () => {
     expect(cost.hint).toMatch(/1 of 8 nodes/)
   })
 
-  it('keeps YouTube palette profiles unknown and does not invent a CDN hit rate', () => {
+  it('fills YouTube palette profiles with Estimated n and S and leaves cost unknown', () => {
     const transcoder = configProfileForNode(
       getProfiles().find((profile) => profile.bindsTo === 'transcoder'),
       'transcoder',
       'Transcoder',
       'gcp-transcoder-api',
     )
-    expect(transcoder.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+    expect(transcoder.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
+    expect(transcoder.fields.find((field) => field.role === 'costUsdPerHour')?.value).toEqual({
+      state: 'unknown',
+    })
     const cdn = configProfileForNode(
       getProfiles().find((profile) => profile.bindsTo === 'mediacdn'),
       'mediacdn',
       'Media CDN',
       'gcp-media-cdn',
     )
-    expect(cdn.fields.find((field) => field.role === 'cacheHitRate')?.value).toEqual({
-      state: 'unknown',
+    expect(cdn.fields.find((field) => field.role === 'cacheHitRate')?.value).toMatchObject({
+      state: 'set',
+      value: 0.9,
+      confidence: 'estimated',
     })
-    expect(cdn.fields.find((field) => field.role === 'servers')?.value).toEqual({ state: 'unknown' })
+    expect(cdn.fields.find((field) => field.role === 'servers')?.value).toMatchObject({
+      state: 'set',
+      value: 8,
+      confidence: 'estimated',
+    })
   })
 })
 

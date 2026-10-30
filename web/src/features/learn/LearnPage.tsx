@@ -7,11 +7,11 @@ import { templateSnapshot, type TemplateId } from '../workspace/templates.ts'
 const steps = [
   {
     title: '1. Open a template',
-    body: 'Start from the YouTube example (palette GCP tiles plus Clients) or the generic 9-block. Capacities stay unknown until you type them.',
+    body: 'Start from the YouTube example (palette GCP tiles plus Clients) or the generic 9-block. Cards ship with Estimated n and service time so a Run has a queueing model. Cost stays unknown.',
   },
   {
     title: '2. Type what you know',
-    body: 'Select a node. Empty fields stay unknown and do not cap the engine. A typed number is Estimated. Hourly cost is optional and is never taken from Catalog.',
+    body: 'Select a node to edit n and S. Those defaults are Estimated examples, not vendor quotes. Hourly cost is optional and is never taken from Catalog.',
   },
   {
     title: '3. Set a workload and Run',
@@ -23,7 +23,7 @@ const steps = [
   },
   {
     title: '5. Try the Transcoder headroom challenge',
-    body: 'Type Estimated servers on the Transcoder API card so engine util is under 85%. Pass is not Measured. Do not fill n from a catalog quota.',
+    body: 'Run the YouTube example. Transcoder already has Estimated n. Raise n if util is ≥ 85%. Pass is not Measured. Do not copy n from a catalog quota.',
   },
 ]
 

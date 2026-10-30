@@ -330,8 +330,8 @@ export function serviceDraftFromDrop(
       util: 0,
       p99: 'not run',
       meta: payload.catalogId
-        ? 'Dropped from catalog · quotas unknown'
-        : 'Dropped from palette · Estimated',
+        ? 'Dropped from catalog · Estimated example n · S'
+        : 'Dropped from palette · Estimated example n · S',
       provider: payload.provider ?? 'generic',
       catalogId: payload.catalogId,
     },

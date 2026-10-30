@@ -5,10 +5,10 @@ const TRANSCODER_IDS = ['transcoder', 't240', 't720', 't1080', 't4k'] as const
 export const AKS_HEADROOM_CHALLENGE = {
   id: 'aks-headroom',
   title: 'Transcoder headroom',
-  goal: 'Type Estimated servers on the Transcoder API worker and Run so util is under 85%.',
+  goal: 'Run the YouTube example so Transcoder util stays under 85%. Raise Estimated n if it does not.',
   rules: [
-    'Drop or Load the YouTube example from palette GCP tiles. Empty fields stay unknown and do not cap.',
-    'Do not fill n from a catalog quota. That ceiling is not Transcoder API capacity.',
+    'Load the YouTube example. Cards already have Estimated n and S so the engine can cap util.',
+    'Do not copy n from a catalog quota. That ceiling is not Transcoder API capacity.',
     'Pass is engine util on a capped Transcoder, not a Measured lab result.',
   ],
 } as const

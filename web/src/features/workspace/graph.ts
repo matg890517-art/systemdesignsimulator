@@ -23,7 +23,7 @@ export const youtubeEnvSize = {
   height: ENV_GRID.padTop + 2 * ENV_GRID.cardH + ENV_GRID.gap + ENV_GRID.padBottom,
 }
 
-const PALETTE_DROP_META = 'Dropped from catalog · quotas unknown'
+const PALETTE_DROP_META = 'Estimated example n · S · not a catalog quota'
 
 function envCell(col: number, row: number): { x: number; y: number } {
   return {
@@ -50,7 +50,7 @@ function paletteService(
       util: 0,
       p99: 'not run',
       meta: PALETTE_DROP_META,
-      provider: entry?.provider ?? (catalogId.startsWith('generic-') ? 'generic' : 'gcp'),
+      provider: entry?.provider ?? (catalogId?.startsWith('generic-') ? 'generic' : 'gcp'),
       catalogId,
     },
   }
