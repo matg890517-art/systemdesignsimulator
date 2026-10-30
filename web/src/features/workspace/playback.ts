@@ -2,8 +2,11 @@ import { normalizeShowMode, type ShowMode } from './display-mode.ts'
 import { isSimulatedMode } from './run-mode.ts'
 import type { NodeRunStat, RunTick, TickRates, WorkspaceRun } from './types.ts'
 
-export const PLAYBACK_SPEEDS = [0.5, 1, 2, 5, 10] as const
+export const PLAYBACK_SPEEDS = [0, 0.5, 1, 2, 5, 10] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
+
+/** Hop label prints `0 rps` at or below this; traveling dots match. */
+export const FLOW_ZERO_RPS = 0.05
 
 export function canPlayback(run: WorkspaceRun | undefined): boolean {
   return Boolean(run && isSimulatedMode(run.mode) && run.ticks.length > 1)
@@ -39,16 +42,40 @@ export function playbackWallMs(durationSec: number): number {
 /** Canvas paint cadence while the slider moves every animation frame. Not a 60 FPS claim. */
 export const PLAY_PAINT_MS = 32
 
-/** One trip along the hop. Busier hops move faster. View of offered rate, not a second engine. */
+/** One trip along the hop at 1×. Busier hops move faster. View of offered rate, not a second engine. */
 export function flowPeriodSec(rps: number): number {
-  if (rps <= 0) return 2.4
+  if (rps <= FLOW_ZERO_RPS) return 2.4
   return Math.max(0.7, Math.min(2.4, 2.15 - Math.log10(1 + rps) / 2.4))
 }
 
 /** Traveling dots on a hop. A view of rate, not one circle per request. */
 export function flowPacketCount(rps: number): number {
-  if (rps <= 0) return 0
+  if (rps <= FLOW_ZERO_RPS) return 0
   return Math.min(5, Math.max(2, Math.round(1.5 + Math.log10(1 + rps))))
+}
+
+/** SMIL duration at the current player speed. 0× has no trip. */
+export function flowMotionPeriodSec(rps: number, speed: number): number {
+  if (!(speed > 0) || rps <= FLOW_ZERO_RPS) return 0
+  return flowPeriodSec(rps) / speed
+}
+
+/** 0×, Pause, and 0 rps all mean no circles. */
+export function flowCirclesOn(rps: number, speed: number, playing: boolean): boolean {
+  return playing && speed > 0 && rps > FLOW_ZERO_RPS
+}
+
+/** Dots follow 0× / Pause. A finished Simulated run at 1×–10× still shows them. */
+export function hopDotsPlaying(input: {
+  speed: number
+  running: boolean
+  livePaused: boolean
+  simulated: boolean
+  playingBack: boolean
+}): boolean {
+  if (!(input.speed > 0)) return false
+  if (input.running && input.livePaused) return false
+  return true
 }
 
 export function pickTick(ticks: RunTick[] | undefined, t: number): RunTick | undefined {

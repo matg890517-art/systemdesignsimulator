@@ -115,7 +115,7 @@ export function TimePlaySnackbar({
             size="small"
             value={speed}
             onChange={(_, next: PlaybackSpeed | null) => {
-              if (next) onSpeed(next)
+              if (next != null) onSpeed(next)
             }}
             aria-label="Simulated speed"
             sx={{
@@ -124,7 +124,7 @@ export function TimePlaySnackbar({
                 px: 0.75,
                 py: 0.25,
                 fontSize: 10,
-                minWidth: 36,
+                minWidth: 32,
                 minHeight: 24,
               },
             }}

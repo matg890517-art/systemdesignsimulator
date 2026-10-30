@@ -113,6 +113,7 @@ import { HOP_FOLLOW_DEBOUNCE_MS, hopFlowSignature, hopFollowAction } from './gra
 import { SimClock, TimePlaySnackbar } from './PlaybackBar.tsx'
 import {
   canPlayback,
+  hopDotsPlaying,
   PLAY_PAINT_MS,
   type PlaybackSpeed,
   viewRunAt,
@@ -222,6 +223,7 @@ export function WorkspacePage() {
   const [showMode, setShowMode] = useState<ShowMode>('instant')
   const [fitNonce, setFitNonce] = useState(1)
   const playSpeedRef = useRef<PlaybackSpeed>(1)
+  const lastNonZeroSpeedRef = useRef<PlaybackSpeed>(1)
   const showModeRef = useRef<ShowMode>('instant')
   const hopSigRef = useRef<string | undefined>(undefined)
   const onRunRef = useRef<() => Promise<void>>(async () => {})
@@ -630,7 +632,11 @@ export function WorkspacePage() {
     }
     const duration = Math.max(run.durationSec, 1e-9)
     const startAt = Math.min(Math.max(0, from), duration)
-    const speed = Math.max(0.25, playSpeedRef.current)
+    const speed = playSpeedRef.current
+    if (!(speed > 0)) {
+      paintPlayhead(run, startAt, performance.now(), true)
+      return
+    }
     const origin = performance.now() - (startAt / speed) * 1000
     lastRunRef.current = run
     playingBackRef.current = true
@@ -659,21 +665,56 @@ export function WorkspacePage() {
     paintPlayhead(run, t, performance.now(), true)
   }
 
+  function rememberSpeed(speed: PlaybackSpeed) {
+    if (speed > 0) lastNonZeroSpeedRef.current = speed
+  }
+
+  function applySpeed(speed: PlaybackSpeed) {
+    rememberSpeed(speed)
+    setPlaySpeed(speed)
+    playSpeedRef.current = speed
+  }
+
+  function freezeToZeroSpeed() {
+    rememberSpeed(playSpeedRef.current)
+    applySpeed(0)
+  }
+
+  function resumeNonZeroSpeed(): PlaybackSpeed {
+    const resume = playSpeedRef.current > 0 ? playSpeedRef.current : lastNonZeroSpeedRef.current
+    applySpeed(resume)
+    return resume
+  }
+
   function onTogglePlayback() {
     const run = lastRunRef.current
     if (!run || !canPlayback(run)) return
     if (playingBackRef.current) {
+      freezeToZeroSpeed()
       stopPlayback()
       return
     }
+    resumeNonZeroSpeed()
     const atEnd = playheadRef.current >= (run.durationSec || 0) - 1e-6
     startPlayback(run, atEnd ? 0 : playheadRef.current)
   }
 
   function onPlaybackSpeed(next: PlaybackSpeed) {
-    setPlaySpeed(next)
-    playSpeedRef.current = next
+    applySpeed(next)
+    if (!(next > 0)) {
+      if (running) {
+        setLivePaused(true)
+        setWorkspaceLivePaused(true)
+      } else if (playingBackRef.current) {
+        stopPlayback()
+      }
+      return
+    }
     if (running) {
+      if (livePaused) {
+        setLivePaused(false)
+        setWorkspaceLivePaused(false)
+      }
       setWorkspaceLivePace(next)
       return
     }
@@ -684,6 +725,8 @@ export function WorkspacePage() {
   function onTogglePause() {
     if (running) {
       const next = !livePaused
+      if (next) freezeToZeroSpeed()
+      else setWorkspaceLivePace(resumeNonZeroSpeed())
       setLivePaused(next)
       setWorkspaceLivePaused(next)
       return
@@ -766,7 +809,9 @@ export function WorkspacePage() {
     stopWorkspaceRun()
     playheadRef.current = 0
     setPlayhead(0)
-    setLivePaused(false)
+    const simulated = isSimulatedMode(getWorkloadDraft().mode)
+    const frozen = simulated && !(playSpeedRef.current > 0)
+    setLivePaused(frozen)
     setRunning(true)
     setRunError(undefined)
     setRunHint('worker · running')
@@ -780,14 +825,14 @@ export function WorkspacePage() {
     )
     let live = true
     try {
-      const result = await runWorkspaceAsync(
+      const job = runWorkspaceAsync(
         {
           nodes,
           edges,
           draft: getWorkloadDraft(),
           profiles: getProfiles(),
           fault: getFault(),
-          pace: isSimulatedMode(getWorkloadDraft().mode) ? playSpeedRef.current : undefined,
+          pace: simulated ? (playSpeedRef.current > 0 ? playSpeedRef.current : 1) : undefined,
         },
         (progress) => {
           if (!live || runGen.current !== id) return
@@ -823,6 +868,8 @@ export function WorkspacePage() {
           })
         },
       )
+      if (frozen) setWorkspaceLivePaused(true)
+      const result = await job
       live = false
       cancelAnimationFrame(paintFrame.current)
       if (runGen.current !== id) return
@@ -1331,6 +1378,14 @@ export function WorkspacePage() {
                   const data = node.data as ServiceNodeData
                   upsertProfile(exampleProfileForNode(node.id, data.title, data.catalogId))
                 }}
+                flowPlaying={hopDotsPlaying({
+                  speed: playSpeed,
+                  running,
+                  livePaused,
+                  simulated: isSimulatedMode(draft.mode),
+                  playingBack,
+                })}
+                flowSpeed={playSpeed}
               />
             ) : (
               <Box

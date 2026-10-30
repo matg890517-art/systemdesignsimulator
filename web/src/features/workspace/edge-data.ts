@@ -1,6 +1,7 @@
 import type { Routing } from '@sds/engine'
 import type { Edge as RfEdge, Node } from '@xyflow/react'
 import { heatStroke } from './heat.ts'
+import { FLOW_ZERO_RPS } from './playback.ts'
 import type { ProviderId, ServiceNodeData, ZoneNodeData } from './types.ts'
 
 const CLASS_IDS = ['read', 'write', 'async', 'bulk'] as const
@@ -69,7 +70,7 @@ export function activeClassMap(active: readonly WorkspaceClassId[]): WorkspaceEd
 }
 
 export function formatHopRate(n: number): string {
-  if (!(n > 0.05)) return '0 rps'
+  if (!(n > FLOW_ZERO_RPS)) return '0 rps'
   if (n >= 1000) return `${Math.round(n).toLocaleString('en-US')} /s`
   return `${n.toFixed(1)} /s`
 }

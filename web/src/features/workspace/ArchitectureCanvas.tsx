@@ -1,6 +1,8 @@
 import {
+  createContext,
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -34,7 +36,12 @@ import { ClassFilterProvider, useClassFilter, type ClassFilter } from './class-f
 import { edgeCarriesClass } from './compile.ts'
 import { canvasSelectionKey } from './canvas-selection.ts'
 import { decorateEdges, type WorkspaceEdgeData } from './edge-data.ts'
-import { flowPacketCount, flowPeriodSec } from './playback.ts'
+import {
+  flowCirclesOn,
+  flowMotionPeriodSec,
+  flowPacketCount,
+  type PlaybackSpeed,
+} from './playback.ts'
 import { connectComponents, connectRefusal } from './canvas-edit.ts'
 import {
   absolutePosition,
@@ -61,6 +68,10 @@ const nodeTypes = {
   zone: ZoneNodeView,
 }
 
+type FlowMotion = { playing: boolean; speed: number }
+
+const FlowMotionContext = createContext<FlowMotion>({ playing: true, speed: 1 })
+
 function packetFill(stroke: string): string {
   if (stroke === '#7B8794' || stroke === '#D5DBE3') return '#2744C7'
   return stroke
@@ -68,6 +79,7 @@ function packetFill(stroke: string): string {
 
 function ClassAwareEdge(props: EdgeProps) {
   const { filter } = useClassFilter()
+  const { playing, speed } = useContext(FlowMotionContext)
   const visible =
     filter === 'all' ||
     edgeCarriesClass(props.id, props.source, filter, {
@@ -76,7 +88,7 @@ function ClassAwareEdge(props: EdgeProps) {
       data: props.data,
     })
   const flowRps = (props.data as WorkspaceEdgeData | undefined)?.flowRps ?? 0
-  const flowing = visible && flowRps > 0
+  const flowing = visible && flowCirclesOn(flowRps, speed, playing)
   const [path, labelX, labelY] = getSmoothStepPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
@@ -90,7 +102,7 @@ function ClassAwareEdge(props: EdgeProps) {
       ? props.style.stroke
       : '#7B8794'
     : '#D5DBE3'
-  const period = Math.round(flowPeriodSec(flowRps) * 5) / 5
+  const period = Math.round(flowMotionPeriodSec(flowRps, speed) * 5) / 5
   const packets = flowing ? flowPacketCount(flowRps) : 0
   const fill = packetFill(stroke)
   return (
@@ -498,14 +510,21 @@ function ArchitectureCanvasView(props: {
   fitNonce?: number
   onLoadReference?: () => void
   onServiceDropped?: (node: Node<ServiceNodeData>) => void
+  flowPlaying?: boolean
+  flowSpeed?: PlaybackSpeed
 }) {
   const filterValue = useMemo(
     () => ({ filter: props.classFilter, edges: props.edges }),
     [props.classFilter, props.edges],
   )
+  const flowMotion = useMemo(
+    () => ({ playing: props.flowPlaying ?? true, speed: props.flowSpeed ?? 1 }),
+    [props.flowPlaying, props.flowSpeed],
+  )
   return (
     <ReactFlowProvider>
       <ClassFilterProvider value={filterValue}>
+        <FlowMotionContext.Provider value={flowMotion}>
         <CanvasInner
           nodes={props.nodes}
           edges={props.edges}
@@ -526,6 +545,7 @@ function ArchitectureCanvasView(props: {
           onLoadReference={props.onLoadReference}
           onServiceDropped={props.onServiceDropped}
         />
+        </FlowMotionContext.Provider>
       </ClassFilterProvider>
     </ReactFlowProvider>
   )

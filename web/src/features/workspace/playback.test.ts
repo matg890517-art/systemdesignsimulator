@@ -4,8 +4,11 @@ import {
   formatSimClock,
   PLAYBACK_SPEEDS,
   emitEvery,
+  flowCirclesOn,
+  flowMotionPeriodSec,
   flowPacketCount,
   flowPeriodSec,
+  hopDotsPlaying,
   pickInstantTick,
   pickTick,
   pickTickSpan,
@@ -139,8 +142,43 @@ describe('F30 playback view', () => {
     expect(flowPacketCount(10_000)).toBeLessThanOrEqual(5)
   })
 
-  it('offers 0.5× through 10× for the Simulated player', () => {
-    expect(PLAYBACK_SPEEDS).toEqual([0.5, 1, 2, 5, 10])
+  it('offers 0× through 10× for the Simulated player', () => {
+    expect(PLAYBACK_SPEEDS).toEqual([0, 0.5, 1, 2, 5, 10])
+  })
+
+  it('hides hop circles at 0 rps, 0×, and pause', () => {
+    expect(flowPacketCount(0)).toBe(0)
+    expect(flowPacketCount(0.05)).toBe(0)
+    expect(flowCirclesOn(100, 0, true)).toBe(false)
+    expect(flowCirclesOn(100, 1, false)).toBe(false)
+    expect(flowCirclesOn(0.05, 1, true)).toBe(false)
+    expect(flowCirclesOn(20, 1, true)).toBe(true)
+    expect(hopDotsPlaying({ speed: 0, running: true, livePaused: false, simulated: true, playingBack: true })).toBe(
+      false,
+    )
+    expect(hopDotsPlaying({ speed: 1, running: true, livePaused: true, simulated: true, playingBack: true })).toBe(
+      false,
+    )
+    expect(hopDotsPlaying({ speed: 1, running: true, livePaused: false, simulated: true, playingBack: false })).toBe(
+      true,
+    )
+    expect(
+      hopDotsPlaying({ speed: 1, running: false, livePaused: false, simulated: true, playingBack: false }),
+    ).toBe(true)
+    expect(
+      hopDotsPlaying({ speed: 1, running: false, livePaused: false, simulated: false, playingBack: false }),
+    ).toBe(true)
+  })
+
+  it('maps hop rps to trip time and scales that by player speed', () => {
+    expect(flowPeriodSec(20)).toBeCloseTo(1.599, 2)
+    expect(flowPacketCount(20)).toBe(3)
+    expect(flowPeriodSec(500)).toBeCloseTo(1.025, 2)
+    expect(flowPacketCount(500)).toBe(4)
+    expect(flowPeriodSec(1157)).toBeCloseTo(0.874, 2)
+    expect(flowPacketCount(1157)).toBe(5)
+    expect(flowMotionPeriodSec(20, 2)).toBeCloseTo(flowPeriodSec(20) / 2, 5)
+    expect(flowMotionPeriodSec(20, 0)).toBe(0)
   })
 
   it('prints current simulated time against Workload Duration', () => {
